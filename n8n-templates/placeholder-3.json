@@ -1,0 +1,17 @@
+{
+  "name": "Placeholder n8n workflow 3",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "position": [200, 200],
+      "parameters": {
+        "values": [
+          {"key": "example", "value": "hello"}
+        ]
+      }
+    }
+  ],
+  "connections": {}
+}

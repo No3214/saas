@@ -1,0 +1,16 @@
+{
+  "name": "Placeholder n8n workflow 2",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [300, 300],
+      "parameters": {
+        "url": "https://example.com",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {}
+}
