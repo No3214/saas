@@ -1,0 +1,709 @@
+{
+  "name": "Arcads Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://external-api.arcads.ai/v1/folders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "=Klasör-{{ $now.format('dd-MM-yyyy') }}"
+            },
+            {
+              "name": "productId",
+              "value": "={{ $json.workspace_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -208,
+        -608
+      ],
+      "id": "278b512b-16af-48be-8d11-fe773f22c3c9",
+      "name": "Klasör Oluştur",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "JJfIYWBt9KFEE8Br",
+          "name": "Arcads"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a helpful assistant.\n\n\nŞuna uygun bir aktör verisi çek get actors ile ve bunu output olarak ver.\n\n{{ $('When Executed by Another Workflow').item.json.gender_age }}\n\nTooldaki id çıktısını (actor.id DEĞİL, üstteki id değeri), çıktıda id olarak, defaultVoiceId değerini de defaultVoiceId olarak ver."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        -608
+      ],
+      "id": "d99fc73c-3cfa-4e9e-9ee7-aed5f5ef332f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        160,
+        -720
+      ],
+      "id": "4281c79e-2b4a-4470-8cd5-346f71465fe8",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "yULUzfG7RC6WaY9a",
+          "name": "Burhan API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "=Bu aracı bütün aktör verilerini çekmek için kullan.\n\nactorGender = Filter by actor gender (case-insensitive). Values: male, female\n\nactorAge = Filter by actor age (case-insensitive). Values: adult, senior, young adult",
+        "url": "https://external-api.arcads.ai/v1/situations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "pageSize",
+              "value": "1"
+            },
+            {
+              "name": "ispro",
+              "value": "true"
+            },
+            {
+              "name": "actorGender",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters3_Value', ``, 'string') }}"
+            },
+            {
+              "name": "actorAge",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters4_Value', ``, 'string') }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        48,
+        -416
+      ],
+      "id": "a4d064da-0220-4446-b643-a12ece6366ae",
+      "name": "Get Actors",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "JJfIYWBt9KFEE8Br",
+          "name": "Arcads"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n\t\"id\": \"\",\n\t\"defaultVoiceId\": \"\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        -400
+      ],
+      "id": "5c88afb0-0afe-4bad-8cb1-46e8b99a15e5",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ed6b3544-518d-4ff5-85d4-f9ac623ee89e",
+              "leftValue": "={{ $json.videoUrl }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -608
+      ],
+      "id": "6486a8ee-f058-4541-8a8e-9b9d93024e53",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1088,
+        -608
+      ],
+      "id": "5649fbbc-5aab-460d-a4db-62ca23447a2f",
+      "name": "Wait",
+      "webhookId": "430de2a0-a5b9-4ee2-bf98-f13134c5d840"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://external-api.arcads.ai/v1/scripts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"folderId\": \"{{ $('Klasör Oluştur').item.json.id }}\",\n  \"name\": \"string\",\n  \"text\": \"{{ $('When Executed by Another Workflow').item.json.script }}\",\n  \"videos\": [\n    {\n      \"situationId\": \"{{ $json.output.id }}\",\n      \"voiceId\": \"{{ $json.output.defaultVoiceId }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        -608
+      ],
+      "id": "6ff0452a-2dc3-4bf5-8f04-827a17fed76d",
+      "name": "Script",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "JJfIYWBt9KFEE8Br",
+          "name": "Arcads"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://external-api.arcads.ai/v1/scripts/{{ $json.id }}/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        -608
+      ],
+      "id": "b614f6c5-b4a8-4a51-bab9-7d0fa1bcb162",
+      "name": "Üretim",
+      "retryOnFail": true,
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "JJfIYWBt9KFEE8Br",
+          "name": "Arcads"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "=Background Removed UGC - {{ $now }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1KaKd8b0fmT2ug3PUWZDGbmtH0OKFd9hW",
+          "mode": "list",
+          "cachedResultName": "Marketing Team",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1KaKd8b0fmT2ug3PUWZDGbmtH0OKFd9hW"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2192,
+        -624
+      ],
+      "id": "2fa71906-c47b-4213-acd6-be720348b4dd",
+      "name": "Upload file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YuJeLDU2kzOhnjsq",
+          "name": "49 Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Videoyu Al').item.json.videoUrl }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1952,
+        -624
+      ],
+      "id": "6df524e7-8084-44ba-9778-bdbbe66d4faa",
+      "name": "İndir"
+    },
+    {
+      "parameters": {
+        "url": "=https://external-api.arcads.ai/v1/scripts/{{ $('Script').item.json.id }}/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1312,
+        -608
+      ],
+      "id": "4507141e-7342-4662-88a1-636111a4a355",
+      "name": "Videoyu Al",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "JJfIYWBt9KFEE8Br",
+          "name": "Arcads"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "workspace_id"
+            },
+            {
+              "name": "gender_age"
+            },
+            {
+              "name": "script"
+            },
+            {
+              "name": "telegram_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -496,
+        -608
+      ],
+      "id": "14c3ba88-cbcd-4824-b437-8324381f38a3",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10tfLIcw-bnOaiQhlPTE9TGVboqtiX7KPz1mHb9t_zKA",
+          "mode": "list",
+          "cachedResultName": "Marketing Team",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10tfLIcw-bnOaiQhlPTE9TGVboqtiX7KPz1mHb9t_zKA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sayfa1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10tfLIcw-bnOaiQhlPTE9TGVboqtiX7KPz1mHb9t_zKA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Type": "UGC",
+            "Link": "={{ $json.webViewLink }}",
+            "Title": "=UGC - {{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Type",
+              "displayName": "Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Request",
+              "displayName": "Request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2400,
+        -624
+      ],
+      "id": "88a35404-518c-482a-babf-5c81dd8291d3",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8cw6xg8w0MZaVeCC",
+          "name": "PROTOTIPAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('When Executed by Another Workflow').item.json.telegram_id }}",
+        "text": "=Your UGC video is ready and uploaded to Drive and added to sheet.\n\n{{ $('Upload file').item.json.webViewLink }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2608,
+        -624
+      ],
+      "id": "ea1f7e91-a3b6-40d8-8ae6-7ffc20911c28",
+      "name": "Send a text message",
+      "webhookId": "6e00ae5d-a407-4b83-aae6-1e0193bfe16e",
+      "credentials": {
+        "telegramApi": {
+          "id": "uXHAFQk49G65Euci",
+          "name": "marketing_team"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{ $('When Executed by Another Workflow').item.json.telegram_id }}",
+        "binaryData": true,
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2176,
+        -832
+      ],
+      "id": "55b8c28e-c478-495f-b3d4-96b2f5286d22",
+      "name": "Send a video",
+      "webhookId": "51205aed-04f4-474b-9d02-0423d0c30b9a",
+      "credentials": {
+        "telegramApi": {
+          "id": "czT9blrJemMNoklz",
+          "name": "Telegram account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "workspace_id": "0c98d250-7dae-4dbb-9531-8351f79b844e",
+          "gender_age": "50 yaşında kadın",
+          "script": "Bu ürünü tamamen tesadüfen keşfettim ve iyi ki keşfetmişim! İlk kullandığım andan itibaren farkı hissettim. Hem kullanımı çok pratik hem de gerçekten işe yarıyor. Günlük rutinimin vazgeçilmezi haline geldi. Daha önce neden denememişim diye kendime kızıyorum! Eğer siz de benim gibi sürekli yeni şeyler denemeyi seviyorsanız, bu ürünü mutlaka bir deneyin derim. Bayıldım!"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Klasör Oluştur": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Actors": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "İndir",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Videoyu Al",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Script": {
+      "main": [
+        [
+          {
+            "node": "Üretim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Üretim": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "İndir": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Videoyu Al": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Klasör Oluştur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c6089ea8-e60c-44d1-a94b-6baa0f3cb66b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a70a0b6d837a52eddab3f5d152c26cd8b8d05813e4f6e6bc4039667124542103"
+  },
+  "id": "ylEqhRhAd9V0Bghk",
+  "tags": []
+}

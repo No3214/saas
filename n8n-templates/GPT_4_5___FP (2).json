@@ -1,0 +1,1854 @@
+{
+  "name": "GPT 4.5 - FP",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an interior-design copywriter.\nTask\nFor the style {{ $json.Style_name }}, {{ $json.Style_category }}, {{ $json.style_description_short }}\n\nWrite **seven separate paragraphs**, 150-200 words each, in this order:\n1. Living room (~300 ft²)\n2. Bedroom   (~180 ft²)\n3. Dining room (~150 ft²)\n4. Kitchen   (~140 ft²)\n5. Bathroom   (~80 ft²)\n6. Hallway   (~60 ft²)\n7. Home office (~120 ft²)\nGuidelines\n• Rooms should feel right for a modern American suburban house—not a mansion, not a tiny city loft.\n• Tone: clear, informal, no marketing fluff or superlatives.\n• Weave in the style’s essentials:\n – Core idea: **{style_description_short}**\n – 4-5 signatures (choose from): **{style_characteristic_1}**, **{style_characteristic_2}**, **{style_characteristic_3}**, **{style_characteristic_4}**, **{style_characteristic_5}**, **{style_characteristic_6}**\n• Mention layout, surfaces/materials, colour palette, and two or three key furniture or fixture pieces that anchor the space.\n• Do **not** repeat the style name inside every paragraph; once is enough.\n• Steer clear of clichés like “stunning”, “breathtaking”, or “ultimate”.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "="
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        200,
+        260
+      ],
+      "id": "917d6bfd-2492-4c2b-b720-7a3248ea7879",
+      "name": "AI Agent",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -500,
+        -580
+      ],
+      "id": "67ca565a-020e-47fd-9871-82bd97648a13",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"Style Name\": {\n        \"type\": \"string\",\n        \"description\": \"Name of the interior design style\"\n      },\n      \"Room description\": {\n        \"type\": \"string\",\n        \"description\": \"Detailed description of the room style\"\n      },\n      \"Color profile\": {\n        \"type\": \"string\",\n        \"description\": \"Comma-separated hex color codes\"\n      },\n      \"Color story\": {\n        \"type\": \"string\",\n        \"description\": \"Narrative description of color usage\"\n      },\n      \"Style1\": {\n        \"type\": \"string\",\n        \"description\": \"Primary style influence\"\n      },\n      \"Likeliness\": {\n        \"type\": \"string\",\n        \"description\": \"Percentage likelihood of Style1\"\n      },\n      \"Style2\": {\n        \"type\": \"string\",\n        \"description\": \"Secondary style influence\"\n      },\n      \"Likeliness_1\": {\n        \"type\": \"string\",\n        \"description\": \"Percentage likelihood of Style2\"\n      },\n      \"Style3\": {\n        \"type\": \"string\",\n        \"description\": \"Tertiary style influence\"\n      },\n      \"Likeliness_2\": {\n        \"type\": \"string\",\n        \"description\": \"Percentage likelihood of Style3\"\n      },\n      \"Characteristics Style1\": {\n        \"type\": \"string\",\n        \"description\": \"Detailed characteristics of primary style\"\n      },\n      \"Characteristics Style2\": {\n        \"type\": \"string\",\n        \"description\": \"Detailed characteristics of secondary style\"\n      },\n      \"Characteristics Style3\": {\n        \"type\": \"string\",\n        \"description\": \"Detailed characteristics of tertiary style\"\n      },\n      \"Overall Atmosphere\": {\n        \"type\": \"string\",\n        \"description\": \"Description of overall room atmosphere\"\n      },\n      \"Comparable designers/brands\": {\n        \"type\": \"string\",\n        \"description\": \"List of comparable designers and brands\"\n      }\n    },\n    \"required\": [\n      \"Style Name\",\n      \"Room description\",\n      \"Color profile\",\n      \"Color story\",\n      \"Style1\",\n      \"Likeliness\",\n      \"Style2\",\n      \"Likeliness_1\",\n      \"Style3\",\n      \"Likeliness_2\",\n      \"Characteristics Style1\",\n      \"Characteristics Style2\",\n      \"Characteristics Style3\",\n      \"Overall Atmosphere\",\n      \"Comparable designers/brands\"\n    ]\n  }\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        -60,
+        400
+      ],
+      "id": "8dcbec8e-fb78-4a22-80da-c564808cc768",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "19wuJHb_0ehxe0QkwG4o4Ag2Ec6Pu7mw_tMA5OdCJB1E",
+          "mode": "list",
+          "cachedResultName": "STYLES 24 jun",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19wuJHb_0ehxe0QkwG4o4Ag2Ec6Pu7mw_tMA5OdCJB1E/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 117246598,
+          "mode": "list",
+          "cachedResultName": "OUTPUT",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19wuJHb_0ehxe0QkwG4o4Ag2Ec6Pu7mw_tMA5OdCJB1E/edit#gid=117246598"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Bedroom": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Bedroom', ``, 'string') }}",
+            "Dining": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Dining', ``, 'string') }}",
+            "Kitchen": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Kitchen', ``, 'string') }}",
+            "Bathroom": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Bathroom', ``, 'string') }}",
+            "Hallway": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Hallway', ``, 'string') }}",
+            "home_office": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('home_office', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Bedroom",
+              "displayName": "Bedroom",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dining",
+              "displayName": "Dining",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Kitchen",
+              "displayName": "Kitchen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bathroom",
+              "displayName": "Bathroom",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hallway",
+              "displayName": "Hallway",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "home_office",
+              "displayName": "home_office",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        380,
+        520
+      ],
+      "id": "d658bb89-6c5d-4279-bab5-640ae9cca6ed",
+      "name": "Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "M32X9MdR3aDzj0jE",
+          "name": "Google Sheets account 12"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-opus-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Opus 4"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        200,
+        540
+      ],
+      "id": "bb5075ba-d282-42c4-98c8-e5f7b3a5d705",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "NjI4xLsh97XiJNzu",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE",
+          "mode": "list",
+          "cachedResultName": "new styles  - Minimalist (2)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1781463620,
+          "mode": "list",
+          "cachedResultName": "new styles  - Minimalist (2)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE/edit#gid=1781463620"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -300,
+        -580
+      ],
+      "id": "f6aae27a-e786-4607-a374-d1979614aa88",
+      "name": "Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "M32X9MdR3aDzj0jE",
+          "name": "Google Sheets account 12"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "736cdddf-657c-46b7-8f88-6c19755eb164",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1000,
+        -600
+      ],
+      "id": "01a27822-221a-4070-91ef-bc5e92498464",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -460
+      ],
+      "id": "64bcfb59-9bef-44b1-9a0b-1219b9330ca4",
+      "name": "Wait",
+      "webhookId": "a5b55bd6-4bf1-44a4-9233-507240579e30"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/flux-pro/kontext/max/text-to-image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json['Living room'] }}\",\n  \"guidance_scale\": 3.5,\n  \"num_images\": 4,\n  \"safety_tolerance\": \"2\",\n  \"output_format\": \"jpeg\",\n  \"aspect_ratio\": \"16:9\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -600
+      ],
+      "id": "34291a6d-aa79-458d-9796-da053898dd81",
+      "name": "request"
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/flux-pro/requests/{{ $json.request_id }}/status ",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        -600
+      ],
+      "id": "676a7129-7710-43e9-af60-faf5a78b3856",
+      "name": "POST"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE",
+          "mode": "list",
+          "cachedResultName": "new styles  - Minimalist (2)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1781463620,
+          "mode": "list",
+          "cachedResultName": "new styles  - Minimalist (2)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE/edit#gid=1781463620"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "living room image 1": "={{ $json.images[0].url }}",
+            "living room image 2": "={{ $json.images[1].url }}",
+            "living room image 3": "={{ $json.images[2].url }}",
+            "living room image 4": "={{ $json.images[3].url }}",
+            "Living room": "={{ $json.prompt }}"
+          },
+          "matchingColumns": [
+            "Living room"
+          ],
+          "schema": [
+            {
+              "id": "Style_name",
+              "displayName": "Style_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Style_category",
+              "displayName": "Style_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_short",
+              "displayName": "style_description_short",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_long",
+              "displayName": "style_description_long",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_extensive",
+              "displayName": "style_description_extensive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_1",
+              "displayName": "style_characteristic_1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_2",
+              "displayName": "style_characteristic_2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_3",
+              "displayName": "style_characteristic_3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_4",
+              "displayName": "style_characteristic_4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_5",
+              "displayName": "style_characteristic_5",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_6",
+              "displayName": "style_characteristic_6",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_tags",
+              "displayName": "style_tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_designers",
+              "displayName": "style_designers",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Living room",
+              "displayName": "Living room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "living room image 1",
+              "displayName": "living room image 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "living room image 2",
+              "displayName": "living room image 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "living room image 3",
+              "displayName": "living room image 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "living room image 4",
+              "displayName": "living room image 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room",
+              "displayName": "Bed room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 1",
+              "displayName": "Bed room image 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 2",
+              "displayName": "Bed room image 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 3",
+              "displayName": "Bed room image 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 4",
+              "displayName": "Bed room image 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dining room",
+              "displayName": "Dining room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Kitchen",
+              "displayName": "Kitchen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bath room",
+              "displayName": "Bath room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hallway",
+              "displayName": "Hallway",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Home office",
+              "displayName": "Home office",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1540,
+        -660
+      ],
+      "id": "cd9059af-cdc0-4d0d-a66a-c9184b336deb",
+      "name": "Google Sheets2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "M32X9MdR3aDzj0jE",
+          "name": "Google Sheets account 12"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/flux-pro/requests/{{ $json.request_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        -660
+      ],
+      "id": "54028a1f-d356-4ddd-bf21-fe8206d08b03",
+      "name": "RESULT"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "736cdddf-657c-46b7-8f88-6c19755eb164",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1000,
+        -1160
+      ],
+      "id": "e2b04765-a636-46ca-bcf9-db19256b5906",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -1000
+      ],
+      "id": "7ab9424c-ca4f-4fe1-92aa-6a6d3d433983",
+      "name": "Wait1",
+      "webhookId": "a5b55bd6-4bf1-44a4-9233-507240579e30"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/flux-pro/kontext/max/text-to-image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json['Bed room'] }}\",\n  \"guidance_scale\": 3.5,\n  \"num_images\": 4,\n  \"safety_tolerance\": \"2\",\n  \"output_format\": \"jpeg\",\n  \"aspect_ratio\": \"16:9\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -1160
+      ],
+      "id": "506fed03-1227-4b59-a8e1-1101d06b273c",
+      "name": "request1"
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/flux-pro/requests/{{ $json.request_id }}/status ",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        -1160
+      ],
+      "id": "08fd5f98-60a9-4420-bb91-3c25cfabf5f0",
+      "name": "POST1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE",
+          "mode": "list",
+          "cachedResultName": "new styles  - Minimalist (2)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1781463620,
+          "mode": "list",
+          "cachedResultName": "new styles  - Minimalist (2)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE/edit#gid=1781463620"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "living room image 2": "=",
+            "living room image 3": "=",
+            "living room image 4": "=",
+            "Living room": "=",
+            "Bed room": "={{ $json.prompt }}",
+            "Bed room image 1": "={{ $json.images[0].url }}",
+            "Bed room image 2": "={{ $json.images[1] }}",
+            "Bed room image 3": "={{ $json.images[2] }}",
+            "Bed room image 4": "={{ $json.images[3] }}"
+          },
+          "matchingColumns": [
+            "Bed room"
+          ],
+          "schema": [
+            {
+              "id": "Style_name",
+              "displayName": "Style_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Style_category",
+              "displayName": "Style_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_short",
+              "displayName": "style_description_short",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_long",
+              "displayName": "style_description_long",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_extensive",
+              "displayName": "style_description_extensive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_1",
+              "displayName": "style_characteristic_1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_2",
+              "displayName": "style_characteristic_2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_3",
+              "displayName": "style_characteristic_3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_4",
+              "displayName": "style_characteristic_4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_5",
+              "displayName": "style_characteristic_5",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_6",
+              "displayName": "style_characteristic_6",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_tags",
+              "displayName": "style_tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_designers",
+              "displayName": "style_designers",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Living room",
+              "displayName": "Living room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "living room image 1",
+              "displayName": "living room image 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "living room image 2",
+              "displayName": "living room image 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "living room image 3",
+              "displayName": "living room image 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "living room image 4",
+              "displayName": "living room image 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room",
+              "displayName": "Bed room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Bed room image 1",
+              "displayName": "Bed room image 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 2",
+              "displayName": "Bed room image 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 3",
+              "displayName": "Bed room image 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 4",
+              "displayName": "Bed room image 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dining room",
+              "displayName": "Dining room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Kitchen",
+              "displayName": "Kitchen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bath room",
+              "displayName": "Bath room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hallway",
+              "displayName": "Hallway",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Home office",
+              "displayName": "Home office",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1540,
+        -1220
+      ],
+      "id": "5297ca8c-89cd-4eb7-9523-8cd99160963c",
+      "name": "Google Sheets3",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "M32X9MdR3aDzj0jE",
+          "name": "Google Sheets account 12"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/flux-pro/requests/{{ $json.request_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        -1220
+      ],
+      "id": "a3a9e570-451b-4e0f-b349-9753e41bdbe3",
+      "name": "RESULT1"
+    },
+    {
+      "parameters": {
+        "content": "## Bedroom",
+        "height": 600,
+        "width": 1660
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -1380
+      ],
+      "id": "a68af58e-f5c0-4239-a977-73fe00961b52",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "736cdddf-657c-46b7-8f88-6c19755eb164",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        -1860
+      ],
+      "id": "00251f42-8e0e-4e82-9b0c-6c36dca3b89f",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        -1700
+      ],
+      "id": "4abd2246-9900-46ca-97b2-253e643fc30d",
+      "name": "Wait2",
+      "webhookId": "a5b55bd6-4bf1-44a4-9233-507240579e30"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/flux-pro/kontext/max/text-to-image",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json['Dining room'] }}\",\n  \"guidance_scale\": 3.5,\n  \"num_images\": 4,\n  \"safety_tolerance\": \"2\",\n  \"output_format\": \"jpeg\",\n  \"aspect_ratio\": \"16:9\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        -1860
+      ],
+      "id": "1cdfa1b4-221f-4326-bd88-4cb12f145726",
+      "name": "request2"
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/flux-pro/requests/{{ $json.request_id }}/status ",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -1860
+      ],
+      "id": "88e28c43-e54c-4c8f-b50b-afecdb80d91a",
+      "name": "POST2"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE",
+          "mode": "list",
+          "cachedResultName": "new styles  - Minimalist (2)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1781463620,
+          "mode": "list",
+          "cachedResultName": "new styles  - Minimalist (2)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vBLAB2KhD5ub55GsRp22vPSkpYdNOirqB7R_W2JdrQE/edit#gid=1781463620"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "living room image 2": "=",
+            "living room image 3": "=",
+            "living room image 4": "=",
+            "Living room": "=",
+            "Bed room": "=",
+            "Bed room image 1": "=",
+            "Bed room image 2": "={{ $json.images[1] }}",
+            "Bed room image 3": "={{ $json.images[2] }}",
+            "Bed room image 4": "={{ $json.images[3] }}"
+          },
+          "matchingColumns": [
+            "Dining room"
+          ],
+          "schema": [
+            {
+              "id": "Style_name",
+              "displayName": "Style_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Style_category",
+              "displayName": "Style_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_short",
+              "displayName": "style_description_short",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_long",
+              "displayName": "style_description_long",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_description_extensive",
+              "displayName": "style_description_extensive",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_1",
+              "displayName": "style_characteristic_1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_2",
+              "displayName": "style_characteristic_2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_3",
+              "displayName": "style_characteristic_3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_4",
+              "displayName": "style_characteristic_4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_5",
+              "displayName": "style_characteristic_5",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_characteristic_6",
+              "displayName": "style_characteristic_6",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_tags",
+              "displayName": "style_tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "style_designers",
+              "displayName": "style_designers",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Living room",
+              "displayName": "Living room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "living room image 1",
+              "displayName": "living room image 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "living room image 2",
+              "displayName": "living room image 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "living room image 3",
+              "displayName": "living room image 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "living room image 4",
+              "displayName": "living room image 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room",
+              "displayName": "Bed room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Bed room image 1",
+              "displayName": "Bed room image 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 2",
+              "displayName": "Bed room image 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 3",
+              "displayName": "Bed room image 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bed room image 4",
+              "displayName": "Bed room image 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Dining room",
+              "displayName": "Dining room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Kitchen",
+              "displayName": "Kitchen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Bath room",
+              "displayName": "Bath room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Hallway",
+              "displayName": "Hallway",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Home office",
+              "displayName": "Home office",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1440,
+        -1920
+      ],
+      "id": "e0736c84-2024-4025-b0d4-068fa3e570c0",
+      "name": "Google Sheets4",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "M32X9MdR3aDzj0jE",
+          "name": "Google Sheets account 12"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/flux-pro/requests/{{ $json.request_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Key 31acfaa9-c0f1-4318-a6fc-f4667826623f:c6fd2dc6d2ce106938ea916f518016f9"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        -1920
+      ],
+      "id": "ba16e031-2734-4bcc-b137-3ad9ecf80f08",
+      "name": "RESULT2"
+    },
+    {
+      "parameters": {
+        "content": "## Dining room",
+        "height": 600,
+        "width": 1660
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -2040
+      ],
+      "id": "2648d113-9ff3-4b5c-93a1-c961316e3673",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Living room\n",
+        "height": 600,
+        "width": 1660
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -740
+      ],
+      "id": "16d44a23-affc-46b1-97c0-2b4f97916711",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets1": {
+      "main": [
+        [
+          {
+            "node": "request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "request1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "RESULT",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "POST",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "request": {
+      "main": [
+        [
+          {
+            "node": "POST",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RESULT": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets2": {
+      "main": [
+        []
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "RESULT1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "POST1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "request1": {
+      "main": [
+        [
+          {
+            "node": "POST1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RESULT1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "RESULT2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "POST2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "request2": {
+      "main": [
+        [
+          {
+            "node": "POST2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST2": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RESULT2": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "467ebf3e-ff3a-4cb7-9db2-080313a5e4f0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a70a0b6d837a52eddab3f5d152c26cd8b8d05813e4f6e6bc4039667124542103"
+  },
+  "id": "mfvoX89hgo4NoQAv",
+  "tags": []
+}

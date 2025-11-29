@@ -1,0 +1,617 @@
+{
+  "name": "Edit Image",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "image"
+            },
+            {
+              "name": "request"
+            },
+            {
+              "name": "chatID"
+            },
+            {
+              "name": "pictureID"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -944,
+        208
+      ],
+      "id": "92ed5928-57c2-4cbd-8f52-c3b23162e9e1",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "10tfLIcw-bnOaiQhlPTE9TGVboqtiX7KPz1mHb9t_zKA",
+          "mode": "list",
+          "cachedResultName": "Marketing Team",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10tfLIcw-bnOaiQhlPTE9TGVboqtiX7KPz1mHb9t_zKA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sayfa1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/10tfLIcw-bnOaiQhlPTE9TGVboqtiX7KPz1mHb9t_zKA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Request": "={{ $('When Executed by Another Workflow').item.json.request }}",
+            "ID": "={{ $json.id }}",
+            "Link": "={{ $json.webViewLink }}",
+            "Title": "={{ $('When Executed by Another Workflow').item.json.image }}",
+            "Type": "Edit"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Type",
+              "displayName": "Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Request",
+              "displayName": "Request",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1744,
+        352
+      ],
+      "id": "f59273ca-3354-467f-83c5-5a412eff5daa",
+      "name": "Image Log",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8cw6xg8w0MZaVeCC",
+          "name": "PROTOTIPAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{ $('When Executed by Another Workflow').item.json.image }} (Edited).png",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1KaKd8b0fmT2ug3PUWZDGbmtH0OKFd9hW",
+          "mode": "list",
+          "cachedResultName": "Marketing Team",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1KaKd8b0fmT2ug3PUWZDGbmtH0OKFd9hW"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1504,
+        352
+      ],
+      "id": "fa399421-3cab-4116-aada-39bc202f4e3d",
+      "name": "Upload Image",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YuJeLDU2kzOhnjsq",
+          "name": "49 Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Send Content",
+        "height": 240,
+        "width": 300,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "4a80b2d8-bb9b-4f96-96ed-2c6b4dfd7fa8",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "# Write to Drive & Sheets",
+        "height": 240,
+        "width": 540,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        272
+      ],
+      "id": "8c3cd61a-a790-47a1-9c87-9905774e93fc",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "# Trigger\n",
+        "height": 260,
+        "width": 260,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1024,
+        128
+      ],
+      "id": "4e4ec594-f49a-4bd5-8c85-10f1dc9bb618",
+      "name": "Sticky Note5",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "# Download\n",
+        "height": 260,
+        "width": 220,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        128
+      ],
+      "id": "605e772b-ef64-44e8-abdd-6a34cdd3d475",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $('When Executed by Another Workflow').item.json.chatID }}",
+        "binaryData": true,
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1504,
+        80
+      ],
+      "id": "0e27e979-165c-4a65-9951-d1be5b016e1b",
+      "name": "Send Photo",
+      "webhookId": "85dc0064-e5c5-45a9-91a5-60e5b2bc4f1e",
+      "credentials": {
+        "telegramApi": {
+          "id": "uXHAFQk49G65Euci",
+          "name": "marketing_team"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.pictureID }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -688,
+        208
+      ],
+      "id": "cb769c81-ad57-44ce-b829-3b1d3a36c31c",
+      "name": "Download",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YuJeLDU2kzOhnjsq",
+          "name": "49 Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5a719e80-f0ed-4fb9-9d73-244dff5f6a62",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        688,
+        208
+      ],
+      "id": "799dc2a0-9994-4119-ba8a-f151fb5d7fbf",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "amount": 4
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        208
+      ],
+      "id": "8dc6dec4-e44b-4537-8e1b-b39ad9cf8b75",
+      "name": "Wait",
+      "webhookId": "3b863d29-a179-401b-88a1-1cca8ca9a676"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/nano-banana/edit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n\"prompt\": \"{{ $('When Executed by Another Workflow').item.json.request }}\",\n     \"image_urls\": [\n       \"{{ $json.data }}\"\n     ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        112,
+        208
+      ],
+      "id": "5d8d5d46-1c96-4b12-9d6f-31085fdda742",
+      "name": "İstek",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "HWrf6X4nsntv8BlR",
+          "name": "fal.ai"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/nano-banana/requests/{{ $('İstek').item.json.request_id }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        208
+      ],
+      "id": "c4a03faf-66d1-447f-948c-5eb60a67b94a",
+      "name": "Kontrol",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "HWrf6X4nsntv8BlR",
+          "name": "fal.ai"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/nano-banana/requests/{{ $json.request_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        192
+      ],
+      "id": "93c5f264-b311-4f0e-9f72-3b258c3469d0",
+      "name": "Sonuç",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "HWrf6X4nsntv8BlR",
+          "name": "fal.ai"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.images[0].url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1168,
+        192
+      ],
+      "id": "4f477fc1-d380-4d94-bf26-a1b0e2f1dfc1",
+      "name": "Download1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://litterbox.catbox.moe/resources/internals/api.php",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "reqtype",
+              "value": "fileupload"
+            },
+            {
+              "name": "time",
+              "value": "1h"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "fileToUpload",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -272,
+        208
+      ],
+      "id": "159348a0-b2e6-4117-962b-ca942f17c2a5",
+      "name": "catbox clouda yükle"
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "image": null,
+          "request": "havayı karanlık yap",
+          "chatID": "5181466144",
+          "pictureID": "1h5d2JsYCW0A5AZtCAn6ockfLePLMw6NH"
+        }
+      }
+    ],
+    "catbox clouda yükle": [
+      {
+        "json": {
+          "data": "https://litter.catbox.moe/1qvz2w.png"
+        }
+      }
+    ],
+    "İstek": [
+      {
+        "json": {
+          "status": "IN_QUEUE",
+          "request_id": "904c99da-e774-4da4-a70d-600d450bc79f",
+          "response_url": "https://queue.fal.run/fal-ai/nano-banana/requests/904c99da-e774-4da4-a70d-600d450bc79f",
+          "status_url": "https://queue.fal.run/fal-ai/nano-banana/requests/904c99da-e774-4da4-a70d-600d450bc79f/status",
+          "cancel_url": "https://queue.fal.run/fal-ai/nano-banana/requests/904c99da-e774-4da4-a70d-600d450bc79f/cancel",
+          "logs": null,
+          "metrics": {},
+          "queue_position": 1
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Image": {
+      "main": [
+        [
+          {
+            "node": "Image Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download": {
+      "main": [
+        [
+          {
+            "node": "catbox clouda yükle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Sonuç",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Kontrol",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "İstek": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kontrol": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sonuç": {
+      "main": [
+        [
+          {
+            "node": "Download1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download1": {
+      "main": [
+        [
+          {
+            "node": "Send Photo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upload Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "catbox clouda yükle": {
+      "main": [
+        [
+          {
+            "node": "İstek",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8f421857-9f45-4816-8c09-219e265cea1c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a70a0b6d837a52eddab3f5d152c26cd8b8d05813e4f6e6bc4039667124542103"
+  },
+  "id": "DiMxRX341M6KdK1E",
+  "tags": []
+}

@@ -1,0 +1,469 @@
+{
+  "name": "Gorsel + VIDEO otomasyonu PAYLAS",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/gpt-image-1/edit-image/byok",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={  \n  \"image_urls\": [\"{{ $json[\"Urun URLsi\"] }}\"], \n     \"prompt\": \"Bu koltugu bir oturma odasi icerisine yerlestir, urunu bozma\",\n     \"openai_api_key\": \"\"\n   } ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        -120
+      ],
+      "id": "009b4acd-5cfe-4f3b-bf3c-1175a635d507",
+      "name": "Istek"
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/gpt-image-1/requests/{{ $json.request_id }}/status ",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        -120
+      ],
+      "id": "5f3e5878-c59d-408b-8946-a6780901362d",
+      "name": "Durum degerlendirmesi"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "736cdddf-657c-46b7-8f88-6c19755eb164",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        -100
+      ],
+      "id": "93bb71d9-bfdc-4871-a041-dd436d581a51",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        60
+      ],
+      "id": "ae9e653e-5395-496e-af50-51fdb32f9623",
+      "name": "Wait",
+      "webhookId": "ea096210-5980-4678-aeec-8671eede688f"
+    },
+    {
+      "parameters": {
+        "content": "## URUN GORSELI OLUSTURMA\n"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        -440
+      ],
+      "id": "8433cacd-2a40-4410-bfc6-05aca39eba4c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## VIDEO OLUSTURMA\n"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        -440
+      ],
+      "id": "0f9e855e-c093-403d-874b-aec89057f9b6",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/gpt-image-1/requests/{{ $json.request_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -240
+      ],
+      "id": "c9ee7640-d700-424e-9b40-ccc046240645",
+      "name": "URUN GORSELI SONUC"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/kling-video/v2/master/image-to-video",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n     \"prompt\": \"Camera is moving around the product slowly\",\n     \"image_url\": \"{{ $json.images[0].url }}\"\n   } ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        -240
+      ],
+      "id": "b9260c61-e65b-4e9f-b67e-17ca45c100d8",
+      "name": "VIDEO ICIN ISTEK"
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/kling-video/requests/{{ $json.request_id }}/status ",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        -240
+      ],
+      "id": "7a9fa206-1dd2-485b-906c-44384a0bdbc9",
+      "name": "VIDEO DURUM"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "736cdddf-657c-46b7-8f88-6c19755eb164",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1900,
+        -260
+      ],
+      "id": "30353317-00ba-4890-b26b-582b22f5b352",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1940,
+        -20
+      ],
+      "id": "9e0647d2-4e4a-4ed2-bf5f-1b0aa58d6d2c",
+      "name": "Wait1",
+      "webhookId": "5e4e0972-9b9a-45f5-8ae7-32f687215f1b"
+    },
+    {
+      "parameters": {
+        "url": "=https://queue.fal.run/fal-ai/kling-video/requests/{{ $json.request_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2120,
+        -260
+      ],
+      "id": "18d48b2b-48f7-4b87-b2dc-281082683f9d",
+      "name": "VIDEO SONUC"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "sendTo": "burhan.kocabiyik@coremgnetb2b.com",
+        "subject": "Yeni mobilya Videosu",
+        "message": "=Merhabalar, \n\nBunu olusturduk, onaylayabilir misiniz? \n\n{{ $json.video.url }}\n\nDonuslerinizi bekliyorum. ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2340,
+        -260
+      ],
+      "id": "46909509-ee23-4958-8bf1-df9bba850482",
+      "name": "Gmail",
+      "webhookId": "5a69a5cd-1f07-46bf-adb7-88353ababd4d",
+      "credentials": {
+        "googleApi": {
+          "id": "oSvTNPjflafrbgti",
+          "name": "Gmail account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "VIDEO FORMU",
+        "formDescription": "Istediginiz urun gorselini paylasin",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Urun URLsi",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0b252c0e-7716-4809-b448-d2b21951f908",
+      "name": "On form submission",
+      "webhookId": "2b406af3-ea6f-4bb0-b838-08d2d37bac0c"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Istek": {
+      "main": [
+        [
+          {
+            "node": "Durum degerlendirmesi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Durum degerlendirmesi": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "URUN GORSELI SONUC",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Durum degerlendirmesi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URUN GORSELI SONUC": {
+      "main": [
+        [
+          {
+            "node": "VIDEO ICIN ISTEK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VIDEO ICIN ISTEK": {
+      "main": [
+        [
+          {
+            "node": "VIDEO DURUM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VIDEO DURUM": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "VIDEO SONUC",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "VIDEO DURUM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VIDEO SONUC": {
+      "main": [
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Istek",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d89f44d0-d946-41f5-89fe-a6e10626d4b5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a70a0b6d837a52eddab3f5d152c26cd8b8d05813e4f6e6bc4039667124542103"
+  },
+  "id": "lRFDIgyEWAXV0JMV",
+  "tags": []
+}
