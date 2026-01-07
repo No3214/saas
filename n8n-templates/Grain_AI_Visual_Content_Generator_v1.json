@@ -1,0 +1,453 @@
+{
+  "name": "Grain AI Visual Content Generator v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-content",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Generate Content Request",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "typeVersion": 2,
+      "webhookId": "generate-content"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Content_Requests" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-requests",
+      "name": "Get Pending Requests",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [250, 500],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
+      },
+      "id": "schedule-trigger",
+      "name": "Check Queue (15 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [50, 500],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            { "id": "pending", "leftValue": "={{ $json.status }}", "rightValue": "pending", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-pending",
+      "name": "Filter Pending",
+      "type": "n8n-nodes-base.filter",
+      "position": [450, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize request from webhook or sheet\nconst input = $input.item.json;\n\nconst request = {\n  request_id: input.request_id || `REQ-${Date.now()}`,\n  prompt: input.prompt,\n  content_type: input.content_type || 'image', // image, video, image_to_video\n  style: input.style || 'realistic',\n  aspect_ratio: input.aspect_ratio || '1:1',\n  duration: input.duration || 5, // for video, in seconds\n  provider: input.provider || 'auto', // auto, flux, kling, runway, pika, luma, higgsfield, veo\n  source_image_url: input.source_image_url || null, // for image-to-video\n  client_name: input.client_name || 'Unknown',\n  priority: input.priority || 'normal'\n};\n\nreturn { json: request };"
+      },
+      "id": "normalize-request",
+      "name": "Normalize Request",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir AI gorsel/video uretimi icin prompt muhendisisin. Kullanicinin talebini analiz et ve en uygun provider'i sec.\n\nPROVIDER'LAR:\n- FLUX: En iyi text-to-image, photorealistic, hizli\n- KLING: Image-to-video, motion control, 5-10s video\n- RUNWAY: Text-to-video, cinematic, uzun video\n- PIKA: Cartoon/animated style, kisa video\n- LUMA: 3D, dreamlike, artistic\n- HIGGSFIELD: Realistic human video, lip-sync\n- VEO: Google, en kaliteli video, yavas\n\nJSON dondur:\n{\n  \"recommended_provider\": \"provider_name\",\n  \"reasoning\": \"neden bu provider\",\n  \"optimized_prompt\": \"provider icin optimize edilmis prompt\",\n  \"negative_prompt\": \"kacinilacak seyler\",\n  \"style_tags\": [\"tag1\", \"tag2\"],\n  \"estimated_quality\": \"1-10\",\n  \"estimated_time_seconds\": 30\n}"
+            },
+            {
+              "role": "user",
+              "content": "Talep: {{ $json.prompt }}\nIcerik tipi: {{ $json.content_type }}\nStil: {{ $json.style }}\nEn-boy: {{ $json.aspect_ratio }}\nSure: {{ $json.duration }}s\nTercih edilen provider: {{ $json.provider }}\nKaynak gorsel: {{ $json.source_image_url ? 'VAR' : 'YOK' }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.3 }
+      },
+      "id": "ai-prompt-optimizer",
+      "name": "AI Prompt Optimizer",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [850, 400],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet optimization;\n\ntry {\n  optimization = JSON.parse(aiResponse);\n} catch (e) {\n  optimization = {\n    recommended_provider: $input.item.json.provider === 'auto' ? 'flux' : $input.item.json.provider,\n    optimized_prompt: $input.item.json.prompt,\n    negative_prompt: 'blurry, low quality, distorted',\n    style_tags: [],\n    estimated_quality: 7,\n    estimated_time_seconds: 30\n  };\n}\n\n// Override if user specified provider\nconst finalProvider = $input.item.json.provider !== 'auto' \n  ? $input.item.json.provider \n  : optimization.recommended_provider;\n\nreturn {\n  json: {\n    ...$input.item.json,\n    provider: finalProvider,\n    optimized_prompt: optimization.optimized_prompt,\n    negative_prompt: optimization.negative_prompt,\n    style_tags: optimization.style_tags,\n    estimated_quality: optimization.estimated_quality,\n    reasoning: optimization.reasoning\n  }\n};"
+      },
+      "id": "parse-optimization",
+      "name": "Parse Optimization",
+      "type": "n8n-nodes-base.code",
+      "position": [1050, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            { "outputKey": "flux", "conditions": { "conditions": [{ "leftValue": "={{ $json.provider }}", "rightValue": "flux", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputKey": "kling", "conditions": { "conditions": [{ "leftValue": "={{ $json.provider }}", "rightValue": "kling", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputKey": "runway", "conditions": { "conditions": [{ "leftValue": "={{ $json.provider }}", "rightValue": "runway", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputKey": "pika", "conditions": { "conditions": [{ "leftValue": "={{ $json.provider }}", "rightValue": "pika", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputKey": "luma", "conditions": { "conditions": [{ "leftValue": "={{ $json.provider }}", "rightValue": "luma", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputKey": "higgsfield", "conditions": { "conditions": [{ "leftValue": "={{ $json.provider }}", "rightValue": "higgsfield", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputKey": "veo", "conditions": { "conditions": [{ "leftValue": "={{ $json.provider }}", "rightValue": "veo", "operator": { "type": "string", "operation": "equals" } }] } }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-provider",
+      "name": "Route to Provider",
+      "type": "n8n-nodes-base.switch",
+      "position": [1250, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.piapi.ai/api/flux/v1/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.PIAPI_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"flux-1.1-pro\",\n  \"prompt\": \"{{ $json.optimized_prompt }}\",\n  \"negative_prompt\": \"{{ $json.negative_prompt }}\",\n  \"width\": {{ $json.aspect_ratio === '16:9' ? 1920 : ($json.aspect_ratio === '9:16' ? 1080 : 1024) }},\n  \"height\": {{ $json.aspect_ratio === '16:9' ? 1080 : ($json.aspect_ratio === '9:16' ? 1920 : 1024) }},\n  \"num_inference_steps\": 30,\n  \"guidance_scale\": 7.5\n}",
+        "options": {}
+      },
+      "id": "flux-generate",
+      "name": "FLUX Generate Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 0],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.piapi.ai/api/kling/v1/video/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.PIAPI_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"kling-v1\",\n  \"prompt\": \"{{ $json.optimized_prompt }}\",\n  \"image_url\": \"{{ $json.source_image_url || '' }}\",\n  \"duration\": {{ $json.duration }},\n  \"aspect_ratio\": \"{{ $json.aspect_ratio }}\",\n  \"mode\": \"{{ $json.source_image_url ? 'image_to_video' : 'text_to_video' }}\"\n}",
+        "options": {}
+      },
+      "id": "kling-generate",
+      "name": "KLING Generate Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 150],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.runwayml.com/v1/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.RUNWAY_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gen-3-alpha\",\n  \"prompt\": \"{{ $json.optimized_prompt }}\",\n  \"duration\": {{ $json.duration }},\n  \"aspect_ratio\": \"{{ $json.aspect_ratio }}\",\n  \"watermark\": false\n}",
+        "options": {}
+      },
+      "id": "runway-generate",
+      "name": "RUNWAY Generate Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 300],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pika.art/v1/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.PIKA_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json.optimized_prompt }}\",\n  \"style\": \"{{ $json.style }}\",\n  \"duration\": {{ $json.duration }},\n  \"aspect_ratio\": \"{{ $json.aspect_ratio }}\"\n}",
+        "options": {}
+      },
+      "id": "pika-generate",
+      "name": "PIKA Generate Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 450],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.lumalabs.ai/dream-machine/v1/generations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LUMA_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json.optimized_prompt }}\",\n  \"aspect_ratio\": \"{{ $json.aspect_ratio }}\",\n  \"keyframes\": {\n    \"frame0\": {\n      \"type\": \"{{ $json.source_image_url ? 'image' : 'generation' }}\",\n      \"url\": \"{{ $json.source_image_url || '' }}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "luma-generate",
+      "name": "LUMA Dream Machine",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 600],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.higgsfield.ai/v1/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.HIGGSFIELD_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json.optimized_prompt }}\",\n  \"mode\": \"{{ $json.source_image_url ? 'animate' : 'generate' }}\",\n  \"source_image\": \"{{ $json.source_image_url || '' }}\",\n  \"duration\": {{ $json.duration }},\n  \"style\": \"realistic\",\n  \"aspect_ratio\": \"{{ $json.aspect_ratio }}\"\n}",
+        "options": {}
+      },
+      "id": "higgsfield-generate",
+      "name": "HIGGSFIELD Generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 750],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/veo-001:generateVideo",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [{ "name": "key", "value": "={{ $env.GOOGLE_AI_API_KEY }}" }] },
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json.optimized_prompt }}\",\n  \"aspectRatio\": \"{{ $json.aspect_ratio }}\",\n  \"durationSeconds\": {{ $json.duration }},\n  \"personGeneration\": \"allow\"\n}",
+        "options": {}
+      },
+      "id": "veo-generate",
+      "name": "VEO (Google) Generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 900],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize response from different providers\nconst input = $input.item.json;\nconst provider = $input.item.json.provider || 'unknown';\n\nlet result = {\n  request_id: input.request_id,\n  provider: provider,\n  status: 'processing',\n  media_url: null,\n  task_id: null,\n  error: null\n};\n\n// Parse based on provider response structure\ntry {\n  if (provider === 'flux') {\n    result.media_url = input.data?.image_url || input.output?.url;\n    result.status = result.media_url ? 'completed' : 'processing';\n  } else if (provider === 'kling' || provider === 'runway' || provider === 'pika' || provider === 'luma' || provider === 'higgsfield' || provider === 'veo') {\n    result.task_id = input.id || input.task_id || input.generation_id;\n    result.status = input.status || 'processing';\n    result.media_url = input.video_url || input.output_url || input.result?.url;\n  }\n} catch (e) {\n  result.error = e.message;\n  result.status = 'error';\n}\n\nreturn {\n  json: {\n    ...input,\n    result: result\n  }\n};"
+      },
+      "id": "parse-result",
+      "name": "Parse Generation Result",
+      "type": "n8n-nodes-base.code",
+      "position": [1650, 450],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-processing", "leftValue": "={{ $json.result.status }}", "rightValue": "processing", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-processing",
+      "name": "If Still Processing",
+      "type": "n8n-nodes-base.if",
+      "position": [1850, 450],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "id": "wait-polling",
+      "name": "Wait 30s",
+      "type": "n8n-nodes-base.wait",
+      "position": [2050, 350],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.provider === 'kling' ? 'https://api.piapi.ai/api/kling/v1/video/' + $json.result.task_id : ($json.provider === 'runway' ? 'https://api.runwayml.com/v1/tasks/' + $json.result.task_id : ($json.provider === 'luma' ? 'https://api.lumalabs.ai/dream-machine/v1/generations/' + $json.result.task_id : '')) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env[$json.provider.toUpperCase() + '_API_KEY'] || $env.PIAPI_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "poll-status",
+      "name": "Poll Generation Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2250, 350],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Content_Requests" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "={{ $json.result.status }}",
+            "provider_used": "={{ $json.provider }}",
+            "media_url": "={{ $json.result.media_url || '' }}",
+            "task_id": "={{ $json.result.task_id || '' }}",
+            "completed_at": "={{ $json.result.status === 'completed' ? $now.format('YYYY-MM-DD HH:mm:ss') : '' }}",
+            "error": "={{ $json.result.error || '' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-request-status",
+      "name": "Update Request Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2050, 550],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-completed", "leftValue": "={{ $json.result.status }}", "rightValue": "completed", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-completed",
+      "name": "If Completed",
+      "type": "n8n-nodes-base.if",
+      "position": [2250, 550],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#content-generated",
+        "text": "=*AI Icerik Uretildi!*\n\n*Request ID:* {{ $json.request_id }}\n*Musteri:* {{ $json.client_name }}\n*Provider:* {{ $json.provider }}\n*Icerik Tipi:* {{ $json.content_type }}\n\n*Prompt:* {{ $json.optimized_prompt.substring(0, 200) }}...\n\n*Media URL:* {{ $json.result.media_url }}\n\n*Kalite Tahmini:* {{ $json.estimated_quality }}/10",
+        "otherOptions": {}
+      },
+      "id": "slack-notify-complete",
+      "name": "Notify Complete",
+      "type": "n8n-nodes-base.slack",
+      "position": [2450, 450],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "channel": "#content-errors",
+        "text": "=*AI Icerik Uretim Hatasi*\n\n*Request ID:* {{ $json.request_id }}\n*Provider:* {{ $json.provider }}\n*Hata:* {{ $json.result.error || 'Bilinmeyen hata' }}\n\n*Prompt:* {{ $json.prompt }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify-error",
+      "name": "Notify Error",
+      "type": "n8n-nodes-base.slack",
+      "position": [2450, 650],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    }
+  ],
+  "connections": {
+    "Generate Content Request": { "main": [[{ "node": "Normalize Request", "type": "main", "index": 0 }]] },
+    "Check Queue (15 min)": { "main": [[{ "node": "Get Pending Requests", "type": "main", "index": 0 }]] },
+    "Get Pending Requests": { "main": [[{ "node": "Filter Pending", "type": "main", "index": 0 }]] },
+    "Filter Pending": { "main": [[{ "node": "Normalize Request", "type": "main", "index": 0 }]] },
+    "Normalize Request": { "main": [[{ "node": "AI Prompt Optimizer", "type": "main", "index": 0 }]] },
+    "AI Prompt Optimizer": { "main": [[{ "node": "Parse Optimization", "type": "main", "index": 0 }]] },
+    "Parse Optimization": { "main": [[{ "node": "Route to Provider", "type": "main", "index": 0 }]] },
+    "Route to Provider": {
+      "main": [
+        [{ "node": "FLUX Generate Image", "type": "main", "index": 0 }],
+        [{ "node": "KLING Generate Video", "type": "main", "index": 0 }],
+        [{ "node": "RUNWAY Generate Video", "type": "main", "index": 0 }],
+        [{ "node": "PIKA Generate Video", "type": "main", "index": 0 }],
+        [{ "node": "LUMA Dream Machine", "type": "main", "index": 0 }],
+        [{ "node": "HIGGSFIELD Generate", "type": "main", "index": 0 }],
+        [{ "node": "VEO (Google) Generate", "type": "main", "index": 0 }]
+      ]
+    },
+    "FLUX Generate Image": { "main": [[{ "node": "Parse Generation Result", "type": "main", "index": 0 }]] },
+    "KLING Generate Video": { "main": [[{ "node": "Parse Generation Result", "type": "main", "index": 0 }]] },
+    "RUNWAY Generate Video": { "main": [[{ "node": "Parse Generation Result", "type": "main", "index": 0 }]] },
+    "PIKA Generate Video": { "main": [[{ "node": "Parse Generation Result", "type": "main", "index": 0 }]] },
+    "LUMA Dream Machine": { "main": [[{ "node": "Parse Generation Result", "type": "main", "index": 0 }]] },
+    "HIGGSFIELD Generate": { "main": [[{ "node": "Parse Generation Result", "type": "main", "index": 0 }]] },
+    "VEO (Google) Generate": { "main": [[{ "node": "Parse Generation Result", "type": "main", "index": 0 }]] },
+    "Parse Generation Result": { "main": [[{ "node": "If Still Processing", "type": "main", "index": 0 }]] },
+    "If Still Processing": {
+      "main": [
+        [{ "node": "Wait 30s", "type": "main", "index": 0 }],
+        [{ "node": "Update Request Status", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait 30s": { "main": [[{ "node": "Poll Generation Status", "type": "main", "index": 0 }]] },
+    "Poll Generation Status": { "main": [[{ "node": "Parse Generation Result", "type": "main", "index": 0 }]] },
+    "Update Request Status": { "main": [[{ "node": "If Completed", "type": "main", "index": 0 }]] },
+    "If Completed": {
+      "main": [
+        [{ "node": "Notify Complete", "type": "main", "index": 0 }],
+        [{ "node": "Notify Error", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "grain-automation" }, { "name": "ai-content" }, { "name": "video-generation" }],
+  "meta": {
+    "templateId": "grain-avcg-v1",
+    "version": "1.0.0",
+    "description": "Multi-provider AI visual content generator. Supports FLUX, Kling, Runway, Pika, Luma, Higgsfield, Veo. Auto-selects best provider based on prompt.",
+    "requiredCredentials": ["Google Sheets OAuth2", "OpenAI API", "Slack"],
+    "requiredEnvVars": [
+      "PIAPI_KEY", "RUNWAY_API_KEY", "PIKA_API_KEY", "LUMA_API_KEY",
+      "HIGGSFIELD_API_KEY", "GOOGLE_AI_API_KEY"
+    ],
+    "supportedProviders": {
+      "flux": { "type": "image", "api": "PiAPI", "speed": "fast", "quality": "high" },
+      "kling": { "type": "video", "api": "PiAPI", "speed": "medium", "quality": "high", "features": ["image-to-video"] },
+      "runway": { "type": "video", "api": "RunwayML", "speed": "slow", "quality": "cinematic" },
+      "pika": { "type": "video", "api": "Pika", "speed": "fast", "quality": "stylized" },
+      "luma": { "type": "video", "api": "Luma Labs", "speed": "medium", "quality": "artistic", "features": ["3D", "dreamlike"] },
+      "higgsfield": { "type": "video", "api": "Higgsfield", "speed": "medium", "quality": "realistic", "features": ["human-video", "lip-sync"] },
+      "veo": { "type": "video", "api": "Google AI", "speed": "slow", "quality": "best" }
+    }
+  }
+}

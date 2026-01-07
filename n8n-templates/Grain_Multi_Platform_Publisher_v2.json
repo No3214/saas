@@ -1,0 +1,555 @@
+{
+  "name": "Grain Multi-Platform Publisher v2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Content_Calendar" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "google-sheets-read",
+      "name": "Get Content Calendar",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "condition-status", "leftValue": "={{ $json.status }}", "rightValue": "approved", "operator": { "type": "string", "operation": "equals" } },
+            { "id": "condition-published", "leftValue": "={{ $json.published }}", "rightValue": "FALSE", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-approved",
+      "name": "Filter Approved & Unpublished",
+      "type": "n8n-nodes-base.filter",
+      "position": [650, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst scheduledTime = new Date($input.item.json.scheduled_datetime);\nif (scheduledTime <= now) { return $input.item; }\nreturn [];"
+      },
+      "id": "check-time",
+      "name": "Check If Time Ready",
+      "type": "n8n-nodes-base.code",
+      "position": [850, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "loop-posts",
+      "name": "Process Each Post",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [1050, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir sosyal medya uzmanisın. Tek bir icerik icin 9 FARKLI platforma ozel caption ureteceksin.\n\nPLATFORM KURALLARI:\n\n📸 INSTAGRAM:\n- Max 2,200 karakter, ilk 125 kritik\n- Emoji kullan, 20-30 hashtag sonda\n- CTA ekle\n\n📘 FACEBOOK:\n- Max 500 karakter, samimi ton\n- 3-5 hashtag, soru sor\n\n🐦 TWITTER/X:\n- MAX 280 karakter (KESIN!)\n- Punchy, 1-2 hashtag\n\n💼 LINKEDIN:\n- Profesyonel ton, 1,000 karakter\n- Istatistik ekle, 3-5 hashtag\n\n🎵 TIKTOK:\n- Max 150 karakter, Gen-Z dili\n- Trending hashtag, hook baslangic\n\n🧵 THREADS:\n- Max 500 karakter, konusmaci ton\n- Emoji az, 2-3 hashtag\n\n🔴 REDDIT:\n- Baslik: Max 300 karakter, clickbait YASAK\n- Icerik: Detayli, degerli bilgi\n- Subreddit uyumlu ton\n- Self-promotion dikkatli\n\n❓ QUORA:\n- Soru-cevap formati\n- Uzman tonu, kaynak goster\n- 500-1000 karakter ideal\n\n📌 PINTEREST:\n- SEO odakli baslik (max 100)\n- Aciklama: 500 karakter, keyword zengin\n\nJSON formatinda dondur:\n{\n  \"instagram\": \"caption + hashtags\",\n  \"facebook\": \"caption\",\n  \"twitter\": \"max 280 char\",\n  \"linkedin\": \"professional caption\",\n  \"tiktok\": \"short hook + hashtags\",\n  \"threads\": \"conversational caption\",\n  \"reddit\": { \"title\": \"baslik\", \"body\": \"icerik\" },\n  \"quora\": { \"question\": \"soru\", \"answer\": \"cevap\" },\n  \"pinterest\": { \"title\": \"SEO title\", \"description\": \"keyword rich desc\" }\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Icerik: {{ $json.original_caption }}\nMarka: {{ $json.client_name }}\nSektor: {{ $json.industry }}\nIcerik turu: {{ $json.content_type }}\nHedef kitle: {{ $json.target_audience || 'genel' }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.7 }
+      },
+      "id": "openai-captions",
+      "name": "AI Generate Captions (9 Platform)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1250, 300],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet captions;\n\ntry {\n  captions = JSON.parse(aiResponse);\n} catch (e) {\n  const orig = $input.item.json.original_caption || '';\n  captions = {\n    instagram: orig, facebook: orig, twitter: orig.substring(0, 280),\n    linkedin: orig, tiktok: orig.substring(0, 150), threads: orig,\n    reddit: { title: orig.substring(0, 100), body: orig },\n    quora: { question: 'Soru?', answer: orig },\n    pinterest: { title: orig.substring(0, 100), description: orig }\n  };\n}\n\nconst platforms = ($input.item.json.platforms || '').split(',').map(p => p.trim().toLowerCase());\n\nreturn {\n  json: {\n    ...$input.item.json,\n    captions: captions,\n    platform_list: platforms,\n    post_to_instagram: platforms.includes('instagram') || platforms.includes('ig'),\n    post_to_facebook: platforms.includes('facebook') || platforms.includes('fb'),\n    post_to_twitter: platforms.includes('twitter') || platforms.includes('tw') || platforms.includes('x'),\n    post_to_linkedin: platforms.includes('linkedin') || platforms.includes('li'),\n    post_to_tiktok: platforms.includes('tiktok') || platforms.includes('tt'),\n    post_to_threads: platforms.includes('threads') || platforms.includes('thr'),\n    post_to_reddit: platforms.includes('reddit') || platforms.includes('rd'),\n    post_to_quora: platforms.includes('quora') || platforms.includes('qa'),\n    post_to_pinterest: platforms.includes('pinterest') || platforms.includes('pin')\n  }\n};"
+      },
+      "id": "parse-captions",
+      "name": "Parse AI Captions",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-ig", "leftValue": "={{ $json.post_to_instagram }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-instagram",
+      "name": "If Instagram",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, -100],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.IG_BUSINESS_ID }}/media",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "image_url", "value": "={{ $json.media_url }}" },
+            { "name": "caption", "value": "={{ $json.captions.instagram }}" },
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "instagram-create-media",
+      "name": "Instagram Create Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, -200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.IG_BUSINESS_ID }}/media_publish",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "creation_id", "value": "={{ $json.id }}" },
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "instagram-publish",
+      "name": "Instagram Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2050, -200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-fb", "leftValue": "={{ $json.post_to_facebook }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-facebook",
+      "name": "If Facebook",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 100],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.FB_PAGE_ID }}/photos",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "url", "value": "={{ $json.media_url }}" },
+            { "name": "message", "value": "={{ $json.captions.facebook }}" },
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "facebook-post",
+      "name": "Facebook Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 100],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-li", "leftValue": "={{ $json.post_to_linkedin }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-linkedin",
+      "name": "If LinkedIn",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-Restli-Protocol-Version", "value": "2.0.0" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"author\": \"urn:li:organization:{{ $env.LINKEDIN_ORG_ID }}\",\n  \"lifecycleState\": \"PUBLISHED\",\n  \"specificContent\": {\n    \"com.linkedin.ugc.ShareContent\": {\n      \"shareCommentary\": { \"text\": \"{{ $json.captions.linkedin }}\" },\n      \"shareMediaCategory\": \"IMAGE\",\n      \"media\": [{ \"status\": \"READY\", \"originalUrl\": \"{{ $json.media_url }}\" }]\n    }\n  },\n  \"visibility\": { \"com.linkedin.ugc.MemberNetworkVisibility\": \"PUBLIC\" }\n}",
+        "options": {}
+      },
+      "id": "linkedin-post",
+      "name": "LinkedIn Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 300],
+      "typeVersion": 4.2,
+      "credentials": { "oAuth2Api": { "id": "", "name": "LinkedIn OAuth2" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-tw", "leftValue": "={{ $json.post_to_twitter }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-twitter",
+      "name": "If Twitter/X",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.captions.twitter }}",
+        "additionalFields": {}
+      },
+      "id": "twitter-post",
+      "name": "Twitter Post",
+      "type": "n8n-nodes-base.twitter",
+      "position": [1850, 500],
+      "typeVersion": 2,
+      "credentials": { "twitterOAuth2Api": { "id": "", "name": "Twitter OAuth2" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-tt", "leftValue": "={{ $json.post_to_tiktok }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-tiktok",
+      "name": "If TikTok",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 700],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/post/publish/content/init/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"post_info\": {\n    \"title\": \"{{ $json.captions.tiktok }}\",\n    \"privacy_level\": \"PUBLIC_TO_EVERYONE\",\n    \"disable_duet\": false,\n    \"disable_comment\": false,\n    \"disable_stitch\": false\n  },\n  \"source_info\": {\n    \"source\": \"PULL_FROM_URL\",\n    \"video_url\": \"{{ $json.media_url }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "tiktok-post",
+      "name": "TikTok Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 700],
+      "typeVersion": 4.2,
+      "credentials": { "oAuth2Api": { "id": "", "name": "TikTok OAuth2" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-thr", "leftValue": "={{ $json.post_to_threads }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-threads",
+      "name": "If Threads",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 900],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.threads.net/v1.0/{{ $env.THREADS_USER_ID }}/threads",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "media_type", "value": "IMAGE" },
+            { "name": "image_url", "value": "={{ $json.media_url }}" },
+            { "name": "text", "value": "={{ $json.captions.threads }}" },
+            { "name": "access_token", "value": "={{ $env.THREADS_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "threads-create",
+      "name": "Threads Create",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 900],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.threads.net/v1.0/{{ $env.THREADS_USER_ID }}/threads_publish",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "creation_id", "value": "={{ $json.id }}" },
+            { "name": "access_token", "value": "={{ $env.THREADS_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "threads-publish",
+      "name": "Threads Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2050, 900],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-rd", "leftValue": "={{ $json.post_to_reddit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-reddit",
+      "name": "If Reddit",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 1100],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://oauth.reddit.com/api/submit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "User-Agent", "value": "GrainAutomation/1.0" }] },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "sr", "value": "={{ $json.subreddit || $env.DEFAULT_SUBREDDIT }}" },
+            { "name": "kind", "value": "link" },
+            { "name": "title", "value": "={{ $json.captions.reddit.title }}" },
+            { "name": "url", "value": "={{ $json.media_url }}" },
+            { "name": "api_type", "value": "json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "reddit-post",
+      "name": "Reddit Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 1100],
+      "typeVersion": 4.2,
+      "credentials": { "oAuth2Api": { "id": "", "name": "Reddit OAuth2" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-qa", "leftValue": "={{ $json.post_to_quora }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-quora",
+      "name": "If Quora",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 1300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.quora.com/api/logged_in_user/answers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Quora-Formkey", "value": "={{ $env.QUORA_FORMKEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"question_text\": \"{{ $json.captions.quora.question }}\",\n  \"answer_text\": \"{{ $json.captions.quora.answer }}\",\n  \"topics\": [\"{{ $json.industry }}\"]\n}",
+        "options": {}
+      },
+      "id": "quora-post",
+      "name": "Quora Answer",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 1300],
+      "typeVersion": 4.2,
+      "credentials": { "httpHeaderAuth": { "id": "", "name": "Quora Auth" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-pin", "leftValue": "={{ $json.post_to_pinterest }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-pinterest",
+      "name": "If Pinterest",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 1500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pinterest.com/v5/pins",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"board_id\": \"{{ $env.PINTEREST_BOARD_ID }}\",\n  \"media_source\": {\n    \"source_type\": \"image_url\",\n    \"url\": \"{{ $json.media_url }}\"\n  },\n  \"title\": \"{{ $json.captions.pinterest.title }}\",\n  \"description\": \"{{ $json.captions.pinterest.description }}\",\n  \"link\": \"{{ $json.link_url || '' }}\"\n}",
+        "options": {}
+      },
+      "id": "pinterest-post",
+      "name": "Pinterest Pin",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 1500],
+      "typeVersion": 4.2,
+      "credentials": { "oAuth2Api": { "id": "", "name": "Pinterest OAuth2" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge all platform results\nconst results = {\n  post_id: $input.item.json.post_id,\n  client_name: $input.item.json.client_name,\n  row_number: $input.item.json.row_number,\n  published_platforms: [],\n  post_ids: {},\n  errors: []\n};\n\n// Check each platform result\nconst platformChecks = [\n  { key: 'instagram', result: 'instagram_result' },\n  { key: 'facebook', result: 'facebook_result' },\n  { key: 'linkedin', result: 'linkedin_result' },\n  { key: 'twitter', result: 'twitter_result' },\n  { key: 'tiktok', result: 'tiktok_result' },\n  { key: 'threads', result: 'threads_result' },\n  { key: 'reddit', result: 'reddit_result' },\n  { key: 'quora', result: 'quora_result' },\n  { key: 'pinterest', result: 'pinterest_result' }\n];\n\nplatformChecks.forEach(({ key, result }) => {\n  if ($input.item.json[result]) {\n    results.published_platforms.push(key);\n    results.post_ids[key] = $input.item.json[result].id || $input.item.json[result].data?.id || 'posted';\n  }\n});\n\nreturn { json: results };"
+      },
+      "id": "merge-results",
+      "name": "Merge All Results",
+      "type": "n8n-nodes-base.code",
+      "position": [2250, 600],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Content_Calendar" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "published": "TRUE",
+            "published_at": "={{ $now.format('YYYY-MM-DD HH:mm:ss') }}",
+            "instagram_post_id": "={{ $json.post_ids.instagram || '' }}",
+            "facebook_post_id": "={{ $json.post_ids.facebook || '' }}",
+            "linkedin_post_id": "={{ $json.post_ids.linkedin || '' }}",
+            "twitter_post_id": "={{ $json.post_ids.twitter || '' }}",
+            "tiktok_post_id": "={{ $json.post_ids.tiktok || '' }}",
+            "threads_post_id": "={{ $json.post_ids.threads || '' }}",
+            "reddit_post_id": "={{ $json.post_ids.reddit || '' }}",
+            "quora_post_id": "={{ $json.post_ids.quora || '' }}",
+            "pinterest_post_id": "={{ $json.post_ids.pinterest || '' }}",
+            "published_platforms": "={{ $json.published_platforms.join(', ') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-sheet",
+      "name": "Update Sheet Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2450, 600],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "channel": "#social-posts",
+        "text": "=*Icerik {{ $json.published_platforms.length }} Platforma Paylasildi*\n\n*Musteri:* {{ $json.client_name }}\n*Post ID:* {{ $json.post_id }}\n*Zaman:* {{ $now.format('DD.MM.YYYY HH:mm') }}\n\n*Paylasilan Platformlar:*\n{{ $json.published_platforms.map(p => '✅ ' + p).join('\\n') }}\n\n*Post IDler:*\n{{ Object.entries($json.post_ids).map(([k,v]) => '• ' + k + ': ' + v).join('\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [2650, 600],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": { "main": [[{ "node": "Get Content Calendar", "type": "main", "index": 0 }]] },
+    "Get Content Calendar": { "main": [[{ "node": "Filter Approved & Unpublished", "type": "main", "index": 0 }]] },
+    "Filter Approved & Unpublished": { "main": [[{ "node": "Check If Time Ready", "type": "main", "index": 0 }]] },
+    "Check If Time Ready": { "main": [[{ "node": "Process Each Post", "type": "main", "index": 0 }]] },
+    "Process Each Post": { "main": [[{ "node": "AI Generate Captions (9 Platform)", "type": "main", "index": 0 }]] },
+    "AI Generate Captions (9 Platform)": { "main": [[{ "node": "Parse AI Captions", "type": "main", "index": 0 }]] },
+    "Parse AI Captions": {
+      "main": [[
+        { "node": "If Instagram", "type": "main", "index": 0 },
+        { "node": "If Facebook", "type": "main", "index": 0 },
+        { "node": "If LinkedIn", "type": "main", "index": 0 },
+        { "node": "If Twitter/X", "type": "main", "index": 0 },
+        { "node": "If TikTok", "type": "main", "index": 0 },
+        { "node": "If Threads", "type": "main", "index": 0 },
+        { "node": "If Reddit", "type": "main", "index": 0 },
+        { "node": "If Quora", "type": "main", "index": 0 },
+        { "node": "If Pinterest", "type": "main", "index": 0 }
+      ]]
+    },
+    "If Instagram": { "main": [[{ "node": "Instagram Create Media", "type": "main", "index": 0 }], []] },
+    "Instagram Create Media": { "main": [[{ "node": "Instagram Publish", "type": "main", "index": 0 }]] },
+    "Instagram Publish": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "If Facebook": { "main": [[{ "node": "Facebook Post", "type": "main", "index": 0 }], []] },
+    "Facebook Post": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "If LinkedIn": { "main": [[{ "node": "LinkedIn Post", "type": "main", "index": 0 }], []] },
+    "LinkedIn Post": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "If Twitter/X": { "main": [[{ "node": "Twitter Post", "type": "main", "index": 0 }], []] },
+    "Twitter Post": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "If TikTok": { "main": [[{ "node": "TikTok Post", "type": "main", "index": 0 }], []] },
+    "TikTok Post": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "If Threads": { "main": [[{ "node": "Threads Create", "type": "main", "index": 0 }], []] },
+    "Threads Create": { "main": [[{ "node": "Threads Publish", "type": "main", "index": 0 }]] },
+    "Threads Publish": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "If Reddit": { "main": [[{ "node": "Reddit Post", "type": "main", "index": 0 }], []] },
+    "Reddit Post": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "If Quora": { "main": [[{ "node": "Quora Answer", "type": "main", "index": 0 }], []] },
+    "Quora Answer": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "If Pinterest": { "main": [[{ "node": "Pinterest Pin", "type": "main", "index": 0 }], []] },
+    "Pinterest Pin": { "main": [[{ "node": "Merge All Results", "type": "main", "index": 0 }]] },
+    "Merge All Results": { "main": [[{ "node": "Update Sheet Status", "type": "main", "index": 0 }]] },
+    "Update Sheet Status": { "main": [[{ "node": "Notify Slack", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "grain-automation" }, { "name": "social-media" }, { "name": "multi-platform" }],
+  "meta": {
+    "templateId": "grain-mpp-v2",
+    "version": "2.0.0",
+    "description": "9-platform content publisher: Instagram, Facebook, LinkedIn, Twitter/X, TikTok, Threads, Reddit, Quora, Pinterest. AI-generated platform-specific captions.",
+    "requiredCredentials": [
+      "Google Sheets OAuth2", "OpenAI API", "Meta Access Token", "LinkedIn OAuth2",
+      "Twitter OAuth2", "TikTok OAuth2", "Reddit OAuth2", "Pinterest OAuth2", "Slack"
+    ],
+    "requiredEnvVars": [
+      "IG_BUSINESS_ID", "FB_PAGE_ID", "META_ACCESS_TOKEN", "LINKEDIN_ORG_ID",
+      "THREADS_USER_ID", "THREADS_ACCESS_TOKEN", "DEFAULT_SUBREDDIT",
+      "QUORA_FORMKEY", "PINTEREST_BOARD_ID"
+    ],
+    "supportedPlatforms": [
+      "instagram", "facebook", "linkedin", "twitter", "tiktok",
+      "threads", "reddit", "quora", "pinterest"
+    ]
+  }
+}

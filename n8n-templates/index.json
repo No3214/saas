@@ -1,5 +1,5 @@
 {
-  "count": 34,
+  "count": 36,
   "files": [
     {
       "filename": "0 - MARKETING TEAM.json",
@@ -104,6 +104,12 @@
       "notes": ""
     },
     {
+      "filename": "Grain_AI_Visual_Content_Generator_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Visual_Content_Generator_v1.json",
+      "size_bytes": 23422,
+      "notes": ""
+    },
+    {
       "filename": "Grain_Competitive_Intelligence_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Competitive_Intelligence_v1.json",
       "size_bytes": 17114,
@@ -125,6 +131,12 @@
       "filename": "Grain_Multi_Platform_Publisher_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Multi_Platform_Publisher_v1.json",
       "size_bytes": 20401,
+      "notes": ""
+    },
+    {
+      "filename": "Grain_Multi_Platform_Publisher_v2.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Multi_Platform_Publisher_v2.json",
+      "size_bytes": 26797,
       "notes": ""
     },
     {
@@ -184,7 +196,7 @@
     {
       "filename": "index.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/index.json",
-      "size_bytes": 6740,
+      "size_bytes": 7958,
       "notes": ""
     },
     {
