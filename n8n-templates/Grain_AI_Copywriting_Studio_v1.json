@@ -1,0 +1,297 @@
+{
+  "name": "Grain AI Copywriting Studio v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "copywriting-request",
+        "options": {}
+      },
+      "id": "request-webhook",
+      "name": "Copy Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "ai-copywriting"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate copy request\nconst request = $input.first().json.body;\n\nconst copyRequest = {\n  requestId: `COPY-${Date.now().toString(36).toUpperCase()}`,\n  type: request.copyType || 'ad_copy',\n  platform: request.platform || 'general',\n  product: request.product,\n  audience: request.targetAudience || 'general',\n  tone: request.tone || 'professional',\n  goals: request.goals || [],\n  constraints: {\n    characterLimit: request.characterLimit || null,\n    wordLimit: request.wordLimit || null,\n    hashtags: request.includeHashtags || false,\n    emoji: request.includeEmoji || false,\n    cta: request.ctaRequired || true\n  },\n  brand: request.brand || {},\n  competitors: request.competitors || [],\n  existingCopy: request.existingCopy || null,\n  variations: request.variationsCount || 3,\n  createdAt: new Date().toISOString()\n};\n\n// Map copy types to specific requirements\nconst typeConfigs = {\n  ad_copy: { maxLength: 150, variations: 5, focusOn: 'conversion' },\n  social_post: { maxLength: 280, variations: 3, focusOn: 'engagement' },\n  email_subject: { maxLength: 60, variations: 10, focusOn: 'open_rate' },\n  email_body: { maxLength: 500, variations: 3, focusOn: 'click_rate' },\n  landing_page: { maxLength: null, variations: 2, focusOn: 'conversion' },\n  tagline: { maxLength: 10, variations: 10, focusOn: 'memorability' },\n  product_description: { maxLength: 200, variations: 3, focusOn: 'benefits' },\n  video_script: { maxLength: null, variations: 2, focusOn: 'engagement' },\n  push_notification: { maxLength: 50, variations: 5, focusOn: 'urgency' }\n};\n\ncopyRequest.config = typeConfigs[copyRequest.type] || typeConfigs.ad_copy;\n\nreturn [{ json: copyRequest }];"
+      },
+      "id": "parse-request",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an elite copywriter AI with expertise in {{ $json.type.replace('_', ' ') }}.\n\nBrand Guidelines:\n{{ JSON.stringify($json.brand, null, 2) || 'None specified - use best practices' }}\n\nTone: {{ $json.tone }}\nTarget Audience: {{ $json.audience }}\nPlatform: {{ $json.platform }}\n\nCopywriting Principles:\n1. Lead with benefits, not features\n2. Use power words that trigger emotion\n3. Create urgency without being pushy\n4. Speak directly to the reader (use \"you\")\n5. Keep it simple and scannable\n6. Include a clear call-to-action\n7. Test different angles and hooks\n\nGenerate {{ $json.variations }} unique variations.",
+              "role": "system"
+            },
+            {
+              "content": "=Create {{ $json.type.replace('_', ' ') }} copy for:\n\n**Product/Service:** {{ $json.product }}\n\n**Goals:** {{ $json.goals.join(', ') || 'Drive conversions' }}\n\n**Constraints:**\n{{ $json.constraints.characterLimit ? `- Character limit: ${$json.constraints.characterLimit}` : '' }}\n{{ $json.constraints.wordLimit ? `- Word limit: ${$json.constraints.wordLimit}` : '' }}\n{{ $json.constraints.hashtags ? '- Include relevant hashtags' : '' }}\n{{ $json.constraints.emoji ? '- Use appropriate emojis' : '' }}\n{{ $json.constraints.cta ? '- Must include call-to-action' : '' }}\n\n{{ $json.existingCopy ? `**Existing copy to improve:** ${$json.existingCopy}` : '' }}\n\nGenerate {{ $json.variations }} distinct variations with different hooks and angles.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 2500
+        }
+      },
+      "id": "generate-copy",
+      "name": "Generate Copy Variations",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [750, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Copy Editor and Quality Analyst. Review the generated copy and score each variation on:\n\n1. Clarity (1-10): Is the message clear and easy to understand?\n2. Persuasion (1-10): How compelling is the copy?\n3. Relevance (1-10): How well does it match the target audience?\n4. Brand Fit (1-10): Does it align with brand guidelines?\n5. CTA Strength (1-10): Is the call-to-action effective?\n\nProvide specific improvement suggestions for each variation.\nSelect the top performing variation based on total score.",
+              "role": "system"
+            },
+            {
+              "content": "=Review these copy variations:\n\n**Original Request:**\n- Type: {{ $('Parse Request').first().json.type }}\n- Audience: {{ $('Parse Request').first().json.audience }}\n- Tone: {{ $('Parse Request').first().json.tone }}\n\n**Generated Variations:**\n{{ JSON.stringify($json, null, 2) }}\n\nScore each variation and provide improvement suggestions.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2000
+        }
+      },
+      "id": "review-copy",
+      "name": "Review & Score",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an A/B Testing Specialist. Based on the copy variations and scores, design an A/B testing strategy.\n\nProvide:\n1. Which variations to test first (control vs challenger)\n2. Sample size recommendations\n3. Test duration estimates\n4. Key metrics to track\n5. Statistical significance thresholds\n6. Expected performance hypotheses",
+              "role": "system"
+            },
+            {
+              "content": "=Design A/B test strategy for:\n\n**Copy Type:** {{ $('Parse Request').first().json.type }}\n**Platform:** {{ $('Parse Request').first().json.platform }}\n\n**Scored Variations:**\n{{ JSON.stringify($json, null, 2) }}\n\nProvide a structured A/B testing plan.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 1500
+        }
+      },
+      "id": "ab-test-plan",
+      "name": "Create A/B Test Plan",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final copy package\nconst request = $('Parse Request').first().json;\nconst generated = $('Generate Copy Variations').first().json;\nconst reviewed = $('Review & Score').first().json;\nconst abPlan = $('Create A/B Test Plan').first().json;\n\nconst copyPackage = {\n  requestId: request.requestId,\n  type: request.type,\n  platform: request.platform,\n  variations: [],\n  topPick: null,\n  abTestPlan: abPlan,\n  metadata: {\n    product: request.product,\n    audience: request.audience,\n    tone: request.tone,\n    createdAt: request.createdAt,\n    completedAt: new Date().toISOString()\n  }\n};\n\n// Combine variations with scores\nconst variations = generated.variations || generated.copy || [];\nconst scores = reviewed.scores || reviewed.variations || [];\n\n(Array.isArray(variations) ? variations : [variations]).forEach((variation, index) => {\n  const score = scores[index] || {};\n  const totalScore = (score.clarity || 7) + (score.persuasion || 7) + \n    (score.relevance || 7) + (score.brandFit || 7) + (score.ctaStrength || 7);\n  \n  copyPackage.variations.push({\n    id: `V${index + 1}`,\n    copy: typeof variation === 'string' ? variation : variation.copy || variation.text || variation,\n    scores: score,\n    totalScore,\n    improvements: score.suggestions || score.improvements || []\n  });\n});\n\n// Sort by total score and pick winner\ncopyPackage.variations.sort((a, b) => b.totalScore - a.totalScore);\ncopyPackage.topPick = copyPackage.variations[0];\n\nreturn [{ json: copyPackage }];"
+      },
+      "id": "compile-package",
+      "name": "Compile Package",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CONTENT_DB_URL }}/copy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-copy",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "content-db-api",
+          "name": "Content DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.CONTENT_SLACK_CHANNEL }}",
+        "text": "=✍️ *Copy Generated - {{ $json.type.replace('_', ' ').toUpperCase() }}*\n\n*Request ID:* {{ $json.requestId }}\n*Platform:* {{ $json.platform }}\n*Product:* {{ $json.metadata.product }}\n\n⭐ *Top Performing Variation:*\n```\n{{ typeof $json.topPick.copy === 'string' ? $json.topPick.copy : JSON.stringify($json.topPick.copy) }}\n```\n*Score:* {{ $json.topPick.totalScore }}/50\n\n📊 *All Variations:* {{ $json.variations.length }} generated\n🧪 *A/B Test Plan:* Ready\n\n_View all variations in the content database_",
+        "otherOptions": {}
+      },
+      "id": "notify-complete",
+      "name": "Notify Completion",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1500, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1750, 400]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.COPYWRITING_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Generation Log",
+          "mode": "list",
+          "cachedResultName": "Generation Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Request ID": "={{ $json.requestId }}",
+            "Type": "={{ $json.type }}",
+            "Platform": "={{ $json.platform }}",
+            "Product": "={{ $json.metadata.product }}",
+            "Variations": "={{ $json.variations.length }}",
+            "Top Score": "={{ $json.topPick.totalScore }}",
+            "Created At": "={{ $json.metadata.completedAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-generation",
+      "name": "Log Generation",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1750, 600],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Copy Request": {
+      "main": [
+        [{ "node": "Parse Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [{ "node": "Generate Copy Variations", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Copy Variations": {
+      "main": [
+        [
+          { "node": "Review & Score", "type": "main", "index": 0 },
+          { "node": "Create A/B Test Plan", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Review & Score": {
+      "main": [
+        [{ "node": "Compile Package", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create A/B Test Plan": {
+      "main": [
+        [{ "node": "Compile Package", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Package": {
+      "main": [
+        [
+          { "node": "Save to Database", "type": "main", "index": 0 },
+          { "node": "Notify Completion", "type": "main", "index": 0 },
+          { "node": "Respond to Request", "type": "main", "index": 0 },
+          { "node": "Log Generation", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "copywriting", "name": "copywriting" },
+    { "id": "ai", "name": "ai" },
+    { "id": "content", "name": "content" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

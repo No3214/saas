@@ -1,0 +1,505 @@
+{
+  "name": "Grain Influencer Marketing Hub v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-discovery",
+      "name": "Weekly Discovery",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "influencer-campaign",
+        "options": {}
+      },
+      "id": "campaign-webhook",
+      "name": "Campaign Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 500],
+      "webhookId": "influencer-campaign"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.modash.io/v1/instagram/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "niches",
+              "value": "={{ $vars.TARGET_NICHES }}"
+            },
+            {
+              "name": "followers_min",
+              "value": "10000"
+            },
+            {
+              "name": "followers_max",
+              "value": "500000"
+            },
+            {
+              "name": "engagement_rate_min",
+              "value": "3"
+            },
+            {
+              "name": "location",
+              "value": "={{ $vars.TARGET_LOCATIONS }}"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "discover-instagram",
+      "name": "Discover Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "modash-api",
+          "name": "Modash API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.modash.io/v1/tiktok/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "niches",
+              "value": "={{ $vars.TARGET_NICHES }}"
+            },
+            {
+              "name": "followers_min",
+              "value": "10000"
+            },
+            {
+              "name": "followers_max",
+              "value": "1000000"
+            },
+            {
+              "name": "engagement_rate_min",
+              "value": "5"
+            },
+            {
+              "name": "location",
+              "value": "={{ $vars.TARGET_LOCATIONS }}"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "discover-tiktok",
+      "name": "Discover TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "modash-api",
+          "name": "Modash API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.modash.io/v1/youtube/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "niches",
+              "value": "={{ $vars.TARGET_NICHES }}"
+            },
+            {
+              "name": "subscribers_min",
+              "value": "5000"
+            },
+            {
+              "name": "subscribers_max",
+              "value": "500000"
+            },
+            {
+              "name": "avg_views_min",
+              "value": "1000"
+            },
+            {
+              "name": "location",
+              "value": "={{ $vars.TARGET_LOCATIONS }}"
+            },
+            {
+              "name": "limit",
+              "value": "30"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "discover-youtube",
+      "name": "Discover YouTube",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "modash-api",
+          "name": "Modash API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate and score influencers from all platforms\nconst instagram = $('Discover Instagram').first().json.influencers || [];\nconst tiktok = $('Discover TikTok').first().json.influencers || [];\nconst youtube = $('Discover YouTube').first().json.influencers || [];\n\nconst allInfluencers = [];\n\n// Process Instagram\ninstagram.forEach(inf => {\n  const score = calculateScore(inf, 'instagram');\n  allInfluencers.push({\n    platform: 'instagram',\n    id: inf.id,\n    username: inf.username,\n    displayName: inf.full_name,\n    followers: inf.followers,\n    engagementRate: inf.engagement_rate,\n    avgLikes: inf.avg_likes,\n    avgComments: inf.avg_comments,\n    bio: inf.bio,\n    email: inf.email,\n    location: inf.location,\n    niche: inf.niche,\n    audienceDemo: inf.audience_demographics,\n    score,\n    tier: getTier(inf.followers),\n    estimatedCPM: getEstimatedCPM(inf.followers, inf.engagement_rate, 'instagram')\n  });\n});\n\n// Process TikTok\ntiktok.forEach(inf => {\n  const score = calculateScore(inf, 'tiktok');\n  allInfluencers.push({\n    platform: 'tiktok',\n    id: inf.id,\n    username: inf.username,\n    displayName: inf.nickname,\n    followers: inf.followers,\n    engagementRate: inf.engagement_rate,\n    avgViews: inf.avg_views,\n    avgLikes: inf.avg_likes,\n    bio: inf.bio,\n    email: inf.email,\n    location: inf.location,\n    niche: inf.niche,\n    score,\n    tier: getTier(inf.followers),\n    estimatedCPM: getEstimatedCPM(inf.followers, inf.engagement_rate, 'tiktok')\n  });\n});\n\n// Process YouTube\nyoutube.forEach(inf => {\n  const score = calculateScore(inf, 'youtube');\n  allInfluencers.push({\n    platform: 'youtube',\n    id: inf.id,\n    username: inf.channel_name,\n    displayName: inf.channel_name,\n    followers: inf.subscribers,\n    avgViews: inf.avg_views,\n    engagementRate: inf.engagement_rate,\n    bio: inf.description,\n    email: inf.email,\n    location: inf.location,\n    niche: inf.niche,\n    score,\n    tier: getTier(inf.subscribers),\n    estimatedCPM: getEstimatedCPM(inf.subscribers, inf.engagement_rate, 'youtube')\n  });\n});\n\nfunction calculateScore(inf, platform) {\n  let score = 0;\n  \n  // Engagement rate scoring (max 40 points)\n  const er = inf.engagement_rate || 0;\n  if (platform === 'tiktok') {\n    score += Math.min(er * 4, 40);\n  } else {\n    score += Math.min(er * 10, 40);\n  }\n  \n  // Follower count scoring (max 20 points)\n  const followers = inf.followers || inf.subscribers || 0;\n  if (followers >= 100000) score += 20;\n  else if (followers >= 50000) score += 15;\n  else if (followers >= 25000) score += 10;\n  else score += 5;\n  \n  // Authenticity indicators (max 20 points)\n  if (inf.is_verified) score += 5;\n  if (inf.has_email) score += 5;\n  if (inf.fake_followers_percent < 10) score += 10;\n  else if (inf.fake_followers_percent < 20) score += 5;\n  \n  // Content quality (max 20 points)\n  if (inf.post_frequency && inf.post_frequency >= 3) score += 10;\n  if (inf.brand_mentions < 30) score += 10; // Not over-sponsored\n  \n  return Math.round(score);\n}\n\nfunction getTier(followers) {\n  if (followers >= 1000000) return 'mega';\n  if (followers >= 100000) return 'macro';\n  if (followers >= 10000) return 'micro';\n  return 'nano';\n}\n\nfunction getEstimatedCPM(followers, er, platform) {\n  let baseCPM = 0;\n  if (platform === 'instagram') baseCPM = 10;\n  else if (platform === 'tiktok') baseCPM = 8;\n  else if (platform === 'youtube') baseCPM = 15;\n  \n  // Adjust for engagement\n  const erMultiplier = 1 + (er / 10);\n  \n  return Math.round(baseCPM * erMultiplier);\n}\n\n// Sort by score\nallInfluencers.sort((a, b) => b.score - a.score);\n\nreturn [{\n  json: {\n    influencers: allInfluencers,\n    summary: {\n      total: allInfluencers.length,\n      byPlatform: {\n        instagram: instagram.length,\n        tiktok: tiktok.length,\n        youtube: youtube.length\n      },\n      byTier: {\n        nano: allInfluencers.filter(i => i.tier === 'nano').length,\n        micro: allInfluencers.filter(i => i.tier === 'micro').length,\n        macro: allInfluencers.filter(i => i.tier === 'macro').length,\n        mega: allInfluencers.filter(i => i.tier === 'mega').length\n      },\n      avgScore: Math.round(allInfluencers.reduce((a, b) => a + b.score, 0) / allInfluencers.length)\n    },\n    discoveryDate: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "aggregate-influencers",
+      "name": "Aggregate & Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an Influencer Marketing Analyst AI. Analyze the discovered influencers and provide strategic recommendations.\n\nYour analysis should include:\n1. Top recommended influencers with justification\n2. Campaign strategy suggestions based on influencer mix\n3. Budget allocation recommendations by platform\n4. Content collaboration ideas\n5. Risk assessment (fake followers, brand safety)\n6. Estimated ROI projections\n\nProvide actionable insights for the marketing team.",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze these discovered influencers:\n\n**Summary:**\n{{ JSON.stringify($json.summary, null, 2) }}\n\n**Top 20 Influencers by Score:**\n{{ JSON.stringify($json.influencers.slice(0, 20), null, 2) }}\n\nProvide strategic recommendations for influencer campaign planning.",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 2500
+        }
+      },
+      "id": "ai-analysis",
+      "name": "AI Strategic Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1050, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CRM_API_URL }}/influencers/bulk",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ influencers: $('Aggregate & Score').first().json.influencers }) }}",
+        "options": {}
+      },
+      "id": "save-to-crm",
+      "name": "Save to CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.MARKETING_SLACK_CHANNEL }}",
+        "text": "=📊 *Weekly Influencer Discovery Report*\n\n*{{ $('Aggregate & Score').first().json.summary.total }} influencers discovered*\n\n📱 *By Platform:*\n• Instagram: {{ $('Aggregate & Score').first().json.summary.byPlatform.instagram }}\n• TikTok: {{ $('Aggregate & Score').first().json.summary.byPlatform.tiktok }}\n• YouTube: {{ $('Aggregate & Score').first().json.summary.byPlatform.youtube }}\n\n🎯 *By Tier:*\n• Nano (1-10K): {{ $('Aggregate & Score').first().json.summary.byTier.nano }}\n• Micro (10-100K): {{ $('Aggregate & Score').first().json.summary.byTier.micro }}\n• Macro (100K-1M): {{ $('Aggregate & Score').first().json.summary.byTier.macro }}\n• Mega (1M+): {{ $('Aggregate & Score').first().json.summary.byTier.mega }}\n\n⭐ *Average Score:* {{ $('Aggregate & Score').first().json.summary.avgScore }}/100\n\n🤖 *AI Analysis:*\n{{ $json.message?.content || $json.choices?.[0]?.message?.content || 'See detailed report' }}\n\n_Full list saved to CRM_",
+        "otherOptions": {}
+      },
+      "id": "notify-discovery",
+      "name": "Notify Discovery",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1300, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process campaign request\nconst campaign = $input.first().json.body;\n\nconst campaignData = {\n  campaignId: `CAMP-${Date.now().toString(36).toUpperCase()}`,\n  name: campaign.name,\n  brand: campaign.brand,\n  objective: campaign.objective, // awareness, engagement, conversions\n  budget: campaign.budget,\n  platforms: campaign.platforms || ['instagram', 'tiktok'],\n  targetAudience: campaign.targetAudience,\n  startDate: campaign.startDate,\n  endDate: campaign.endDate,\n  contentRequirements: campaign.contentRequirements,\n  hashtags: campaign.hashtags || [],\n  selectedInfluencers: campaign.influencerIds || [],\n  status: 'planning',\n  createdAt: new Date().toISOString()\n};\n\nreturn [{ json: campaignData }];"
+      },
+      "id": "parse-campaign",
+      "name": "Parse Campaign Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 800]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CRM_API_URL }}/influencers",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ids",
+              "value": "={{ $json.selectedInfluencers.join(',') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-selected-influencers",
+      "name": "Fetch Selected Influencers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an Influencer Outreach Specialist AI. Generate personalized outreach messages for influencer collaborations.\n\nYour messages should:\n1. Be personalized based on the influencer's content and style\n2. Clearly explain the brand and campaign\n3. Highlight mutual benefits\n4. Include specific collaboration details\n5. Have a clear call-to-action\n6. Be professional yet friendly\n\nGenerate outreach templates that can be personalized further.",
+              "role": "system"
+            },
+            {
+              "content": "=Generate outreach messages for this campaign:\n\n**Campaign:**\n{{ JSON.stringify($('Parse Campaign Request').first().json, null, 2) }}\n\n**Selected Influencers:**\n{{ JSON.stringify($json.influencers?.slice(0, 10), null, 2) }}\n\nGenerate personalized outreach messages for each influencer.",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 3000
+        }
+      },
+      "id": "generate-outreach",
+      "name": "Generate Outreach Messages",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 800],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CRM_API_URL }}/campaigns",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"campaign\": {{ JSON.stringify($('Parse Campaign Request').first().json) }},\n  \"influencers\": {{ JSON.stringify($('Fetch Selected Influencers').first().json.influencers) }},\n  \"outreachMessages\": {{ JSON.stringify($json) }}\n}",
+        "options": {}
+      },
+      "id": "create-campaign",
+      "name": "Create Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.MARKETING_SLACK_CHANNEL }}",
+        "text": "=🚀 *New Influencer Campaign Created*\n\n*Campaign:* {{ $('Parse Campaign Request').first().json.name }}\n*ID:* {{ $('Parse Campaign Request').first().json.campaignId }}\n*Budget:* ${{ $('Parse Campaign Request').first().json.budget.toLocaleString() }}\n*Platforms:* {{ $('Parse Campaign Request').first().json.platforms.join(', ') }}\n*Duration:* {{ $('Parse Campaign Request').first().json.startDate }} - {{ $('Parse Campaign Request').first().json.endDate }}\n\n👥 *Selected Influencers:* {{ $('Parse Campaign Request').first().json.selectedInfluencers.length }}\n\n📝 *Outreach messages generated and ready for review*\n\n_Campaign saved to CRM_",
+        "otherOptions": {}
+      },
+      "id": "notify-campaign-created",
+      "name": "Notify Campaign Created",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1500, 800],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.INFLUENCER_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Discovery Log",
+          "mode": "list",
+          "cachedResultName": "Discovery Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.format('yyyy-MM-dd') }}",
+            "Total Discovered": "={{ $('Aggregate & Score').first().json.summary.total }}",
+            "Instagram": "={{ $('Aggregate & Score').first().json.summary.byPlatform.instagram }}",
+            "TikTok": "={{ $('Aggregate & Score').first().json.summary.byPlatform.tiktok }}",
+            "YouTube": "={{ $('Aggregate & Score').first().json.summary.byPlatform.youtube }}",
+            "Avg Score": "={{ $('Aggregate & Score').first().json.summary.avgScore }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-discovery",
+      "name": "Log Discovery",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1300, 500],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Discovery": {
+      "main": [
+        [
+          { "node": "Discover Instagram", "type": "main", "index": 0 },
+          { "node": "Discover TikTok", "type": "main", "index": 0 },
+          { "node": "Discover YouTube", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Discover Instagram": {
+      "main": [
+        [{ "node": "Aggregate & Score", "type": "main", "index": 0 }]
+      ]
+    },
+    "Discover TikTok": {
+      "main": [
+        [{ "node": "Aggregate & Score", "type": "main", "index": 0 }]
+      ]
+    },
+    "Discover YouTube": {
+      "main": [
+        [{ "node": "Aggregate & Score", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate & Score": {
+      "main": [
+        [
+          { "node": "AI Strategic Analysis", "type": "main", "index": 0 },
+          { "node": "Save to CRM", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "AI Strategic Analysis": {
+      "main": [
+        [
+          { "node": "Notify Discovery", "type": "main", "index": 0 },
+          { "node": "Log Discovery", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Campaign Webhook": {
+      "main": [
+        [{ "node": "Parse Campaign Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Campaign Request": {
+      "main": [
+        [{ "node": "Fetch Selected Influencers", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Selected Influencers": {
+      "main": [
+        [{ "node": "Generate Outreach Messages", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Outreach Messages": {
+      "main": [
+        [{ "node": "Create Campaign", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Campaign": {
+      "main": [
+        [{ "node": "Notify Campaign Created", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "marketing", "name": "marketing" },
+    { "id": "influencer", "name": "influencer" },
+    { "id": "social-media", "name": "social-media" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

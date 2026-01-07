@@ -1,0 +1,586 @@
+{
+  "name": "Grain Dynamic Pricing Engine v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 2 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PMS_API_URL }}/inventory/availability",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-inventory",
+      "name": "Fetch Current Inventory",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PMS_API_URL }}/bookings/pace",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-booking-pace",
+      "name": "Fetch Booking Pace",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.ratecomparison.io/v1/competitors",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "location",
+              "value": "={{ $vars.PROPERTY_LOCATION }}"
+            },
+            {
+              "name": "check_in",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "days_ahead",
+              "value": "90"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-competitor-rates",
+      "name": "Fetch Competitor Rates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rate-comparison-api",
+          "name": "Rate Comparison API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.predicthq.com/v1/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "location_around.origin",
+              "value": "={{ $vars.PROPERTY_COORDINATES }}"
+            },
+            {
+              "name": "location_around.radius",
+              "value": "50km"
+            },
+            {
+              "name": "active.gte",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "active.lte",
+              "value": "={{ $now.plus({ days: 90 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "category",
+              "value": "concerts,conferences,sports,festivals"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-local-events",
+      "name": "Fetch Local Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "predicthq-api",
+          "name": "PredictHQ API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.weatherapi.com/v1/forecast.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $vars.PROPERTY_LOCATION }}"
+            },
+            {
+              "name": "days",
+              "value": "14"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-weather",
+      "name": "Fetch Weather Forecast",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 1000],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "weather-api",
+          "name": "Weather API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all market intelligence data\nconst inventory = $('Fetch Current Inventory').first().json;\nconst bookingPace = $('Fetch Booking Pace').first().json;\nconst competitors = $('Fetch Competitor Rates').first().json;\nconst events = $('Fetch Local Events').first().json;\nconst weather = $('Fetch Weather Forecast').first().json;\n\n// Calculate demand signals for next 90 days\nconst demandSignals = [];\nconst today = new Date();\n\nfor (let i = 0; i < 90; i++) {\n  const targetDate = new Date(today);\n  targetDate.setDate(today.getDate() + i);\n  const dateStr = targetDate.toISOString().split('T')[0];\n  const dayOfWeek = targetDate.getDay();\n  \n  // Base demand factors\n  let demandScore = 50; // Base score\n  \n  // Weekend boost\n  if (dayOfWeek === 5 || dayOfWeek === 6) {\n    demandScore += 15;\n  }\n  \n  // Booking pace analysis\n  const paceData = bookingPace.dates?.find(d => d.date === dateStr);\n  if (paceData) {\n    const paceRatio = paceData.booked / paceData.historical_avg;\n    demandScore += Math.round((paceRatio - 1) * 30);\n  }\n  \n  // Event impact\n  const dayEvents = events.results?.filter(e => {\n    const eventStart = new Date(e.start);\n    const eventEnd = new Date(e.end);\n    return targetDate >= eventStart && targetDate <= eventEnd;\n  }) || [];\n  \n  let eventImpact = 0;\n  dayEvents.forEach(event => {\n    const attendance = event.phq_attendance || 1000;\n    if (attendance > 50000) eventImpact += 30;\n    else if (attendance > 10000) eventImpact += 20;\n    else if (attendance > 1000) eventImpact += 10;\n    else eventImpact += 5;\n  });\n  demandScore += Math.min(eventImpact, 40);\n  \n  // Competitor pricing analysis\n  const compData = competitors.rates?.find(r => r.date === dateStr);\n  const avgCompRate = compData?.average_rate || 100;\n  const compOccupancy = compData?.average_occupancy || 0.7;\n  \n  // Weather impact (for leisure destinations)\n  const weatherDay = weather.forecast?.forecastday?.find(d => d.date === dateStr);\n  if (weatherDay) {\n    const condition = weatherDay.day?.condition?.text?.toLowerCase() || '';\n    if (condition.includes('sunny') || condition.includes('clear')) {\n      demandScore += 5;\n    } else if (condition.includes('rain') || condition.includes('storm')) {\n      demandScore -= 10;\n    }\n  }\n  \n  // Get current inventory for date\n  const invData = inventory.dates?.find(d => d.date === dateStr) || {};\n  const totalRooms = invData.total_rooms || 100;\n  const available = invData.available || totalRooms;\n  const occupancy = 1 - (available / totalRooms);\n  \n  // Occupancy-based adjustment\n  if (occupancy > 0.9) demandScore += 25;\n  else if (occupancy > 0.8) demandScore += 15;\n  else if (occupancy > 0.7) demandScore += 5;\n  else if (occupancy < 0.3) demandScore -= 20;\n  else if (occupancy < 0.5) demandScore -= 10;\n  \n  // Clamp score\n  demandScore = Math.max(0, Math.min(100, demandScore));\n  \n  demandSignals.push({\n    date: dateStr,\n    dayOfWeek: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek],\n    demandScore,\n    occupancy: Math.round(occupancy * 100),\n    availableRooms: available,\n    totalRooms,\n    competitorAvgRate: avgCompRate,\n    competitorOccupancy: Math.round(compOccupancy * 100),\n    events: dayEvents.map(e => ({ name: e.title, attendance: e.phq_attendance })),\n    weatherCondition: weatherDay?.day?.condition?.text || 'Unknown'\n  });\n}\n\nreturn [{ json: { demandSignals, propertyId: inventory.property_id } }];"
+      },
+      "id": "aggregate-signals",
+      "name": "Aggregate Market Signals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert Revenue Manager AI for hospitality. Analyze market demand signals and recommend optimal pricing strategies.\n\nPricing Strategy Guidelines:\n1. Base Rate Multipliers by Demand Score:\n   - 0-20: 0.75x (Deep discount to drive occupancy)\n   - 21-40: 0.90x (Moderate discount)\n   - 41-60: 1.00x (Standard BAR rate)\n   - 61-80: 1.15x (Premium pricing)\n   - 81-100: 1.35x (Peak demand pricing)\n\n2. Length of Stay (LOS) Incentives:\n   - 2-night minimum during high demand\n   - Discounts for 3+ night stays during low demand\n\n3. Channel-Specific Pricing:\n   - Direct bookings: Best rate guaranteed\n   - OTAs: +5-10% markup to cover commissions\n   - Wholesale: Negotiate based on volume\n\n4. Room Type Differential:\n   - Maintain 15-25% spread between categories\n   - Premium rooms get higher multiplier during peak\n\nAnalyze the demand signals and provide specific pricing recommendations.",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze these demand signals for the next 90 days and recommend pricing:\n\n{{ JSON.stringify($json.demandSignals, null, 2) }}\n\nFor each date, provide:\n1. Recommended BAR multiplier\n2. Minimum LOS requirement (if any)\n3. Channel pricing strategy\n4. Key reasoning (events, occupancy, competition)\n\nReturn as JSON array with pricing recommendations.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 4000
+        }
+      },
+      "id": "ai-pricing-analysis",
+      "name": "AI Pricing Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform AI recommendations into PMS-compatible rate updates\nconst aiRecommendations = $input.first().json;\nconst baseRates = {\n  standard: 150,\n  deluxe: 195,\n  suite: 280,\n  premium_suite: 380\n};\n\nconst rateUpdates = [];\n\n// Parse recommendations\nconst recommendations = aiRecommendations.recommendations || aiRecommendations;\n\nfor (const rec of recommendations) {\n  const multiplier = rec.barMultiplier || rec.multiplier || 1.0;\n  const minLOS = rec.minLOS || rec.minimumStay || 1;\n  \n  // Calculate rates for each room type\n  const roomRates = {};\n  for (const [roomType, baseRate] of Object.entries(baseRates)) {\n    const calculatedRate = Math.round(baseRate * multiplier);\n    roomRates[roomType] = {\n      bar: calculatedRate,\n      directBooking: calculatedRate,\n      ota: Math.round(calculatedRate * 1.08), // 8% OTA markup\n      wholesale: Math.round(calculatedRate * 0.85) // 15% wholesale discount\n    };\n  }\n  \n  rateUpdates.push({\n    date: rec.date,\n    demandScore: rec.demandScore,\n    multiplier,\n    minLOS,\n    rates: roomRates,\n    closedToArrival: rec.closedToArrival || false,\n    closedToDeparture: rec.closedToDeparture || false,\n    reasoning: rec.reasoning || rec.keyReasons,\n    events: rec.events || [],\n    confidence: rec.confidence || 0.85\n  });\n}\n\n// Identify significant changes requiring approval\nconst significantChanges = rateUpdates.filter(r => \n  r.multiplier > 1.25 || r.multiplier < 0.8 || r.minLOS > 2\n);\n\nreturn [\n  { json: { rateUpdates, significantChanges, totalDates: rateUpdates.length } }\n];"
+      },
+      "id": "transform-rates",
+      "name": "Transform to PMS Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "significant-changes",
+              "leftValue": "={{ $json.significantChanges.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-approval-needed",
+      "name": "Significant Changes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.REVENUE_SLACK_CHANNEL }}",
+        "text": "=🏷️ *Dynamic Pricing Alert - Significant Changes Detected*\n\n*{{ $json.significantChanges.length }} dates require review:*\n\n{{ $json.significantChanges.slice(0, 10).map(c => `📅 *${c.date}*\n   Multiplier: ${c.multiplier}x | Min LOS: ${c.minLOS} nights\n   Reason: ${c.reasoning || 'High demand signals'}\n   Events: ${c.events?.map(e => e.name).join(', ') || 'None'}`).join('\\n\\n') }}\n\n{{ $json.significantChanges.length > 10 ? `_...and ${$json.significantChanges.length - 10} more dates_` : '' }}\n\nReact with ✅ to approve all, or reply with specific dates to exclude.",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "notify-revenue-team",
+      "name": "Notify Revenue Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "Rate Change Approval",
+        "formDescription": "Review and approve significant rate changes",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Approval Decision",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  { "option": "Approve All" },
+                  { "option": "Approve with Modifications" },
+                  { "option": "Reject All" }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Excluded Dates (comma-separated)",
+              "fieldType": "text",
+              "placeholder": "2026-03-15, 2026-03-16"
+            },
+            {
+              "fieldLabel": "Maximum Multiplier Override",
+              "fieldType": "number",
+              "placeholder": "1.35"
+            },
+            {
+              "fieldLabel": "Notes",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {
+          "respondWithData": true
+        }
+      },
+      "id": "approval-form",
+      "name": "Manager Approval Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [1750, 500],
+      "webhookId": "rate-approval-form"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process approval and filter rate updates\nconst originalData = $('Transform to PMS Format').first().json;\nconst approval = $input.first().json;\n\nlet rateUpdates = originalData.rateUpdates;\nconst decision = approval['Approval Decision'];\n\nif (decision === 'Reject All') {\n  return [{ json: { action: 'rejected', message: 'All rate changes rejected by manager' } }];\n}\n\n// Filter excluded dates\nif (approval['Excluded Dates (comma-separated)']) {\n  const excludedDates = approval['Excluded Dates (comma-separated)']\n    .split(',')\n    .map(d => d.trim());\n  rateUpdates = rateUpdates.filter(r => !excludedDates.includes(r.date));\n}\n\n// Apply multiplier cap if specified\nif (approval['Maximum Multiplier Override']) {\n  const maxMultiplier = parseFloat(approval['Maximum Multiplier Override']);\n  rateUpdates = rateUpdates.map(r => ({\n    ...r,\n    multiplier: Math.min(r.multiplier, maxMultiplier),\n    rates: Object.fromEntries(\n      Object.entries(r.rates).map(([type, rates]) => [\n        type,\n        Object.fromEntries(\n          Object.entries(rates).map(([channel, rate]) => [\n            channel,\n            Math.round(rate * Math.min(1, maxMultiplier / r.multiplier))\n          ])\n        )\n      ])\n    )\n  }));\n}\n\nreturn [{ \n  json: { \n    action: 'approved',\n    rateUpdates,\n    approvalNotes: approval.Notes,\n    approvedCount: rateUpdates.length\n  } \n}];"
+      },
+      "id": "process-approval",
+      "name": "Process Approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PMS_API_URL }}/rates/bulk-update",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ updates: $json.rateUpdates }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "update-pms-rates",
+      "name": "Update PMS Rates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CHANNEL_MANAGER_URL }}/rates/sync",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ property_id: $vars.PROPERTY_ID, rate_updates: $json.rateUpdates }) }}",
+        "options": {}
+      },
+      "id": "sync-channel-manager",
+      "name": "Sync Channel Manager",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2500, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "channel-manager-api",
+          "name": "Channel Manager API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.PRICING_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Rate Updates",
+          "mode": "list",
+          "cachedResultName": "Rate Updates"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now.toISO() }}",
+            "Dates Updated": "={{ $('Transform to PMS Format').first().json.totalDates }}",
+            "Significant Changes": "={{ $('Transform to PMS Format').first().json.significantChanges.length }}",
+            "Approval Status": "={{ $json.action || 'auto-approved' }}",
+            "PMS Update Status": "={{ $('Update PMS Rates').first().json.status || 'success' }}",
+            "Channel Sync Status": "={{ $json.status || 'success' }}",
+            "Average Multiplier": "={{ ($('Transform to PMS Format').first().json.rateUpdates.reduce((a, b) => a + b.multiplier, 0) / $('Transform to PMS Format').first().json.totalDates).toFixed(2) }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-to-sheets",
+      "name": "Log Rate Updates",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2750, 400],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.REVENUE_SLACK_CHANNEL }}",
+        "text": "=✅ *Dynamic Pricing Update Complete*\n\n📊 *Summary:*\n• Dates Updated: {{ $('Transform to PMS Format').first().json.totalDates }}\n• Significant Changes: {{ $('Transform to PMS Format').first().json.significantChanges.length }}\n• Avg Multiplier: {{ ($('Transform to PMS Format').first().json.rateUpdates.reduce((a, b) => a + b.multiplier, 0) / $('Transform to PMS Format').first().json.totalDates).toFixed(2) }}x\n\n🔄 *Sync Status:*\n• PMS: {{ $('Update PMS Rates').first().json.status || 'Success' }}\n• Channel Manager: {{ $json.status || 'Success' }}\n\n_Next update in 2 hours_",
+        "otherOptions": {}
+      },
+      "id": "notify-complete",
+      "name": "Notify Completion",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [3000, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auto-approve",
+              "leftValue": "={{ $json.significantChanges.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "auto-approve-check",
+      "name": "Auto-Approve Minor?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 600]
+    }
+  ],
+  "connections": {
+    "Every 2 Hours": {
+      "main": [
+        [
+          { "node": "Fetch Current Inventory", "type": "main", "index": 0 },
+          { "node": "Fetch Booking Pace", "type": "main", "index": 0 },
+          { "node": "Fetch Competitor Rates", "type": "main", "index": 0 },
+          { "node": "Fetch Local Events", "type": "main", "index": 0 },
+          { "node": "Fetch Weather Forecast", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Current Inventory": {
+      "main": [
+        [{ "node": "Aggregate Market Signals", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Booking Pace": {
+      "main": [
+        [{ "node": "Aggregate Market Signals", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Competitor Rates": {
+      "main": [
+        [{ "node": "Aggregate Market Signals", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Local Events": {
+      "main": [
+        [{ "node": "Aggregate Market Signals", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Weather Forecast": {
+      "main": [
+        [{ "node": "Aggregate Market Signals", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate Market Signals": {
+      "main": [
+        [{ "node": "AI Pricing Analysis", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Pricing Analysis": {
+      "main": [
+        [{ "node": "Transform to PMS Format", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transform to PMS Format": {
+      "main": [
+        [
+          { "node": "Significant Changes?", "type": "main", "index": 0 },
+          { "node": "Auto-Approve Minor?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Significant Changes?": {
+      "main": [
+        [
+          { "node": "Notify Revenue Team", "type": "main", "index": 0 },
+          { "node": "Manager Approval Form", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Auto-Approve Minor?": {
+      "main": [
+        [{ "node": "Update PMS Rates", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Manager Approval Form": {
+      "main": [
+        [{ "node": "Process Approval", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Approval": {
+      "main": [
+        [{ "node": "Update PMS Rates", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update PMS Rates": {
+      "main": [
+        [{ "node": "Sync Channel Manager", "type": "main", "index": 0 }]
+      ]
+    },
+    "Sync Channel Manager": {
+      "main": [
+        [{ "node": "Log Rate Updates", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log Rate Updates": {
+      "main": [
+        [{ "node": "Notify Completion", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "hospitality", "name": "hospitality" },
+    { "id": "revenue-management", "name": "revenue-management" },
+    { "id": "ai-pricing", "name": "ai-pricing" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

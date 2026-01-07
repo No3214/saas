@@ -1,0 +1,598 @@
+{
+  "name": "Grain Housekeeping Operations v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "morning-schedule",
+      "name": "Daily 6 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "housekeeping-update",
+        "options": {}
+      },
+      "id": "status-webhook",
+      "name": "Status Update Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "housekeeping-status"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PMS_API_URL }}/rooms/status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-room-status",
+      "name": "Fetch Room Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PMS_API_URL }}/reservations/today",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-arrivals-departures",
+      "name": "Fetch Arrivals & Departures",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PMS_API_URL }}/staff/housekeeping",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-staff",
+      "name": "Fetch Available Staff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate optimized housekeeping task list\nconst rooms = $('Fetch Room Status').first().json.rooms || [];\nconst reservations = $('Fetch Arrivals & Departures').first().json;\nconst staff = $('Fetch Available Staff').first().json.staff || [];\n\nconst arrivals = reservations.arrivals || [];\nconst departures = reservations.departures || [];\nconst stayovers = reservations.stayovers || [];\n\n// Categorize rooms by priority\nconst tasks = [];\n\n// Priority 1: Departures with same-day arrivals (turnovers)\nconst turnovers = departures.filter(d => \n  arrivals.some(a => a.roomNumber === d.roomNumber)\n);\n\nturnovers.forEach(t => {\n  const arrival = arrivals.find(a => a.roomNumber === t.roomNumber);\n  tasks.push({\n    roomNumber: t.roomNumber,\n    roomType: t.roomType,\n    floor: Math.floor(t.roomNumber / 100),\n    priority: 1,\n    taskType: 'turnover',\n    checkoutTime: t.checkoutTime || '11:00',\n    checkinTime: arrival?.checkinTime || '15:00',\n    guestName: arrival?.guestName,\n    vipStatus: arrival?.vipStatus || false,\n    specialRequests: arrival?.specialRequests || [],\n    estimatedMinutes: 45,\n    status: 'pending'\n  });\n});\n\n// Priority 2: VIP arrivals (non-turnover)\nconst vipArrivals = arrivals.filter(a => \n  a.vipStatus && !turnovers.some(t => t.roomNumber === a.roomNumber)\n);\n\nvipArrivals.forEach(a => {\n  const room = rooms.find(r => r.number === a.roomNumber);\n  tasks.push({\n    roomNumber: a.roomNumber,\n    roomType: a.roomType,\n    floor: Math.floor(a.roomNumber / 100),\n    priority: 2,\n    taskType: room?.status === 'dirty' ? 'departure_clean' : 'vip_prep',\n    checkinTime: a.checkinTime || '15:00',\n    guestName: a.guestName,\n    vipStatus: true,\n    specialRequests: a.specialRequests || [],\n    estimatedMinutes: room?.status === 'dirty' ? 40 : 20,\n    status: 'pending'\n  });\n});\n\n// Priority 3: Regular departures\nconst regularDepartures = departures.filter(d => \n  !turnovers.some(t => t.roomNumber === d.roomNumber)\n);\n\nregularDepartures.forEach(d => {\n  tasks.push({\n    roomNumber: d.roomNumber,\n    roomType: d.roomType,\n    floor: Math.floor(d.roomNumber / 100),\n    priority: 3,\n    taskType: 'departure_clean',\n    checkoutTime: d.checkoutTime || '11:00',\n    estimatedMinutes: 35,\n    status: 'pending'\n  });\n});\n\n// Priority 4: Stayovers\nstayovers.forEach(s => {\n  const room = rooms.find(r => r.number === s.roomNumber);\n  if (room?.cleaningSchedule !== 'declined') {\n    tasks.push({\n      roomNumber: s.roomNumber,\n      roomType: s.roomType,\n      floor: Math.floor(s.roomNumber / 100),\n      priority: 4,\n      taskType: s.cleaningPreference === 'full' ? 'stayover_full' : 'stayover_light',\n      guestName: s.guestName,\n      estimatedMinutes: s.cleaningPreference === 'full' ? 25 : 15,\n      status: 'pending'\n    });\n  }\n});\n\n// Sort tasks by priority and floor for efficiency\ntasks.sort((a, b) => {\n  if (a.priority !== b.priority) return a.priority - b.priority;\n  return a.floor - b.floor;\n});\n\n// Assign tasks to staff based on availability and workload\nconst availableStaff = staff.filter(s => s.status === 'available');\nconst assignments = {};\nlet currentStaffIndex = 0;\n\ntasks.forEach(task => {\n  if (availableStaff.length > 0) {\n    const assignedStaff = availableStaff[currentStaffIndex % availableStaff.length];\n    task.assignedTo = assignedStaff.id;\n    task.assignedName = assignedStaff.name;\n    \n    if (!assignments[assignedStaff.id]) {\n      assignments[assignedStaff.id] = {\n        staffId: assignedStaff.id,\n        staffName: assignedStaff.name,\n        tasks: [],\n        totalMinutes: 0\n      };\n    }\n    assignments[assignedStaff.id].tasks.push(task);\n    assignments[assignedStaff.id].totalMinutes += task.estimatedMinutes;\n    \n    currentStaffIndex++;\n  }\n});\n\nreturn [{\n  json: {\n    date: new Date().toISOString().split('T')[0],\n    summary: {\n      turnovers: turnovers.length,\n      vipArrivals: vipArrivals.length,\n      departures: regularDepartures.length,\n      stayovers: tasks.filter(t => t.taskType.includes('stayover')).length,\n      totalTasks: tasks.length,\n      staffAssigned: Object.keys(assignments).length\n    },\n    tasks,\n    staffAssignments: Object.values(assignments)\n  }\n}];"
+      },
+      "id": "generate-task-list",
+      "name": "Generate Task List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PMS_API_URL }}/housekeeping/tasks/bulk",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tasks: $json.tasks }) }}",
+        "options": {}
+      },
+      "id": "create-tasks-pms",
+      "name": "Create Tasks in PMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.HOUSEKEEPING_SLACK_CHANNEL }}",
+        "text": "=🧹 *Daily Housekeeping Schedule - {{ $now.format('MMMM d, yyyy') }}*\n\n📊 *Today's Summary:*\n• Turnovers (Priority 1): {{ $json.summary.turnovers }}\n• VIP Arrivals: {{ $json.summary.vipArrivals }}\n• Departures: {{ $json.summary.departures }}\n• Stayovers: {{ $json.summary.stayovers }}\n• *Total Tasks: {{ $json.summary.totalTasks }}*\n• Staff Assigned: {{ $json.summary.staffAssigned }}\n\n👥 *Staff Assignments:*\n{{ $json.staffAssignments.map(s => `• *${s.staffName}*: ${s.tasks.length} rooms (~${s.totalMinutes} min)`).join('\\n') }}\n\n⚠️ *VIP Arrivals to prioritize:*\n{{ $json.tasks.filter(t => t.vipStatus).map(t => `• Room ${t.roomNumber}: ${t.guestName} (${t.checkinTime})`).join('\\n') || 'None today' }}\n\n_Update room status via the housekeeping app_",
+        "otherOptions": {}
+      },
+      "id": "notify-schedule",
+      "name": "Post Daily Schedule",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1050, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Send individual task notifications to staff\nconst assignments = $input.first().json.staffAssignments;\nconst notifications = [];\n\nfor (const assignment of assignments) {\n  // Group tasks by floor for efficiency\n  const tasksByFloor = {};\n  assignment.tasks.forEach(task => {\n    if (!tasksByFloor[task.floor]) {\n      tasksByFloor[task.floor] = [];\n    }\n    tasksByFloor[task.floor].push(task);\n  });\n  \n  notifications.push({\n    staffId: assignment.staffId,\n    staffName: assignment.staffName,\n    totalTasks: assignment.tasks.length,\n    totalMinutes: assignment.totalMinutes,\n    tasksByFloor,\n    tasks: assignment.tasks\n  });\n}\n\nreturn notifications.map(n => ({ json: n }));"
+      },
+      "id": "prepare-staff-notifications",
+      "name": "Prepare Staff Notifications",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.STAFF_APP_URL }}/notifications",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"staffId\": \"{{ $json.staffId }}\",\n  \"title\": \"Your Housekeeping Tasks for Today\",\n  \"message\": \"You have {{ $json.totalTasks }} rooms assigned (~{{ $json.totalMinutes }} min estimated)\",\n  \"tasks\": {{ JSON.stringify($json.tasks) }},\n  \"type\": \"task_assignment\"\n}",
+        "options": {}
+      },
+      "id": "send-staff-notification",
+      "name": "Send to Staff App",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1550, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "staff-app-api",
+          "name": "Staff App API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process status update from housekeeping staff\nconst update = $input.first().json.body;\n\nconst statusUpdate = {\n  roomNumber: update.roomNumber,\n  taskId: update.taskId,\n  staffId: update.staffId,\n  newStatus: update.status, // 'in_progress', 'completed', 'blocked'\n  notes: update.notes,\n  issues: update.issues || [],\n  completedAt: update.status === 'completed' ? new Date().toISOString() : null,\n  photosUploaded: update.photos?.length || 0,\n  maintenanceRequired: update.maintenanceRequired || false\n};\n\nreturn [{ json: statusUpdate }];"
+      },
+      "id": "process-status-update",
+      "name": "Process Status Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 750]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $vars.PMS_API_URL }}/housekeeping/tasks/{{ $json.taskId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"{{ $json.newStatus }}\",\n  \"notes\": \"{{ $json.notes }}\",\n  \"completedAt\": \"{{ $json.completedAt }}\",\n  \"updatedBy\": \"{{ $json.staffId }}\"\n}",
+        "options": {}
+      },
+      "id": "update-task-pms",
+      "name": "Update Task in PMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 750],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "room-completed",
+              "leftValue": "={{ $json.newStatus }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-completed",
+      "name": "Task Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 750]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $vars.PMS_API_URL }}/rooms/{{ $json.roomNumber }}/status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"clean\",\n  \"inspectionRequired\": true,\n  \"cleanedBy\": \"{{ $json.staffId }}\",\n  \"cleanedAt\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "update-room-status",
+      "name": "Update Room Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 650],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "maintenance-needed",
+              "leftValue": "={{ $json.maintenanceRequired }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-maintenance",
+      "name": "Maintenance Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PMS_API_URL }}/maintenance/tickets",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"roomNumber\": \"{{ $json.roomNumber }}\",\n  \"reportedBy\": \"{{ $json.staffId }}\",\n  \"issues\": {{ JSON.stringify($json.issues) }},\n  \"notes\": \"{{ $json.notes }}\",\n  \"priority\": \"normal\",\n  \"source\": \"housekeeping\"\n}",
+        "options": {}
+      },
+      "id": "create-maintenance-ticket",
+      "name": "Create Maintenance Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.MAINTENANCE_SLACK_CHANNEL }}",
+        "text": "=🔧 *Maintenance Request from Housekeeping*\n\n📍 *Room:* {{ $json.roomNumber }}\n👤 *Reported by:* Staff ID {{ $json.staffId }}\n\n⚠️ *Issues:*\n{{ $json.issues.map(i => `• ${i}`).join('\\n') || '• See notes' }}\n\n📝 *Notes:* {{ $json.notes || 'No additional notes' }}\n\n_Please assign and resolve_",
+        "otherOptions": {}
+      },
+      "id": "notify-maintenance",
+      "name": "Notify Maintenance Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1500, 900],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 14 * * *"
+            }
+          ]
+        }
+      },
+      "id": "afternoon-check",
+      "name": "Daily 2 PM Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 1100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PMS_API_URL }}/housekeeping/tasks/status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-task-progress",
+      "name": "Fetch Task Progress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 1100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze progress and identify at-risk rooms\nconst tasks = $input.first().json.tasks || [];\nconst now = new Date();\n\nconst completed = tasks.filter(t => t.status === 'completed');\nconst inProgress = tasks.filter(t => t.status === 'in_progress');\nconst pending = tasks.filter(t => t.status === 'pending');\nconst blocked = tasks.filter(t => t.status === 'blocked');\n\n// Identify at-risk turnovers (arrivals before 3pm without clean room)\nconst atRisk = tasks.filter(t => {\n  if (t.taskType === 'turnover' && t.status !== 'completed') {\n    const checkinTime = new Date(`${now.toISOString().split('T')[0]}T${t.checkinTime || '15:00'}:00`);\n    const hoursUntilCheckin = (checkinTime - now) / (1000 * 60 * 60);\n    return hoursUntilCheckin < 2;\n  }\n  return false;\n});\n\n// VIP rooms not yet ready\nconst vipNotReady = tasks.filter(t => t.vipStatus && t.status !== 'completed');\n\nconst progress = {\n  total: tasks.length,\n  completed: completed.length,\n  inProgress: inProgress.length,\n  pending: pending.length,\n  blocked: blocked.length,\n  completionRate: tasks.length > 0 ? Math.round((completed.length / tasks.length) * 100) : 0,\n  atRiskRooms: atRisk,\n  vipNotReady,\n  estimatedCompletionTime: null\n};\n\n// Estimate completion\nconst remainingMinutes = [...inProgress, ...pending].reduce((sum, t) => sum + (t.estimatedMinutes || 30), 0);\nconst avgRoomsPerHour = completed.length > 0 ? completed.length / ((now.getHours() - 6) || 1) : 2;\nprogress.estimatedCompletionTime = new Date(now.getTime() + (remainingMinutes * 60000)).toISOString();\n\nreturn [{ json: progress }];"
+      },
+      "id": "analyze-progress",
+      "name": "Analyze Progress",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 1100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-at-risk",
+              "leftValue": "={{ $json.atRiskRooms.length + $json.vipNotReady.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-at-risk",
+      "name": "At-Risk Rooms?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 1100]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.HOUSEKEEPING_SLACK_CHANNEL }}",
+        "text": "=⚠️ *Housekeeping Progress Alert*\n\n📊 *Current Status (2 PM):*\n• Completed: {{ $json.completed }}/{{ $json.total }} ({{ $json.completionRate }}%)\n• In Progress: {{ $json.inProgress }}\n• Pending: {{ $json.pending }}\n• Blocked: {{ $json.blocked }}\n\n🚨 *At-Risk Turnovers:* {{ $json.atRiskRooms.length }}\n{{ $json.atRiskRooms.map(r => `• Room ${r.roomNumber} - Checkin at ${r.checkinTime}`).join('\\n') || 'None' }}\n\n⭐ *VIP Rooms Not Ready:* {{ $json.vipNotReady.length }}\n{{ $json.vipNotReady.map(r => `• Room ${r.roomNumber} - ${r.guestName}`).join('\\n') || 'None' }}\n\n*Please prioritize these rooms immediately!*",
+        "otherOptions": {}
+      },
+      "id": "alert-at-risk",
+      "name": "Alert At-Risk Rooms",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 1050],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.HOUSEKEEPING_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Daily Log",
+          "mode": "list",
+          "cachedResultName": "Daily Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.format('yyyy-MM-dd') }}",
+            "Total Tasks": "={{ $json.total }}",
+            "Completed": "={{ $json.completed }}",
+            "Completion Rate": "={{ $json.completionRate }}%",
+            "At Risk Rooms": "={{ $json.atRiskRooms.length }}",
+            "VIP Not Ready": "={{ $json.vipNotReady.length }}",
+            "Blocked": "={{ $json.blocked }}",
+            "Check Time": "=2:00 PM"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-progress",
+      "name": "Log Progress",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1250, 1200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 6 AM": {
+      "main": [
+        [
+          { "node": "Fetch Room Status", "type": "main", "index": 0 },
+          { "node": "Fetch Arrivals & Departures", "type": "main", "index": 0 },
+          { "node": "Fetch Available Staff", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Room Status": {
+      "main": [
+        [{ "node": "Generate Task List", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Arrivals & Departures": {
+      "main": [
+        [{ "node": "Generate Task List", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Available Staff": {
+      "main": [
+        [{ "node": "Generate Task List", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Task List": {
+      "main": [
+        [
+          { "node": "Create Tasks in PMS", "type": "main", "index": 0 },
+          { "node": "Post Daily Schedule", "type": "main", "index": 0 },
+          { "node": "Prepare Staff Notifications", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Prepare Staff Notifications": {
+      "main": [
+        [{ "node": "Send to Staff App", "type": "main", "index": 0 }]
+      ]
+    },
+    "Status Update Webhook": {
+      "main": [
+        [{ "node": "Process Status Update", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Status Update": {
+      "main": [
+        [{ "node": "Update Task in PMS", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Task in PMS": {
+      "main": [
+        [
+          { "node": "Task Completed?", "type": "main", "index": 0 },
+          { "node": "Maintenance Needed?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Task Completed?": {
+      "main": [
+        [{ "node": "Update Room Status", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Maintenance Needed?": {
+      "main": [
+        [{ "node": "Create Maintenance Ticket", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Create Maintenance Ticket": {
+      "main": [
+        [{ "node": "Notify Maintenance Team", "type": "main", "index": 0 }]
+      ]
+    },
+    "Daily 2 PM Check": {
+      "main": [
+        [{ "node": "Fetch Task Progress", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Task Progress": {
+      "main": [
+        [{ "node": "Analyze Progress", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze Progress": {
+      "main": [
+        [
+          { "node": "At-Risk Rooms?", "type": "main", "index": 0 },
+          { "node": "Log Progress", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "At-Risk Rooms?": {
+      "main": [
+        [{ "node": "Alert At-Risk Rooms", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "hospitality", "name": "hospitality" },
+    { "id": "housekeeping", "name": "housekeeping" },
+    { "id": "operations", "name": "operations" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

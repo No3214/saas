@@ -1,0 +1,432 @@
+{
+  "name": "Grain Referral Program Automation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "referral-signup",
+        "options": {}
+      },
+      "id": "referral-signup",
+      "name": "Referral Signup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "referral-signup"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "referral-conversion",
+        "options": {}
+      },
+      "id": "referral-conversion",
+      "name": "Referral Conversion",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "referral-conversion"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process new referral signup (someone joined via referral link)\nconst data = $input.first().json.body;\n\nconst referral = {\n  referralId: `REF-${Date.now().toString(36).toUpperCase()}`,\n  referrerId: data.referrerId || data.referrer_code,\n  referredId: data.userId,\n  referredEmail: data.email,\n  referredName: data.name,\n  source: data.source || 'referral_link',\n  campaignId: data.campaignId,\n  status: 'pending',\n  signupDate: new Date().toISOString(),\n  conversionDate: null,\n  rewards: {\n    referrer: null,\n    referred: null\n  },\n  metadata: data.metadata || {}\n};\n\nreturn [{ json: referral }];"
+      },
+      "id": "parse-signup",
+      "name": "Parse Signup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CRM_API_URL }}/users/{{ $json.referrerId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-referrer",
+      "name": "Fetch Referrer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.REFERRAL_API_URL }}/referrals",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Parse Signup').first().json) }}",
+        "options": {}
+      },
+      "id": "create-referral",
+      "name": "Create Referral Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "referral-api-key",
+          "name": "Referral API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=You were referred by {{ $json.name }}!",
+        "message": "=Welcome to {{ $vars.COMPANY_NAME }}!\n\n{{ $('Fetch Referrer').first().json.name }} thought you'd love our product, and we're excited to have you!\n\n🎁 **Your Welcome Bonus:**\nAs a referred friend, you get:\n- 20% off your first purchase\n- Extended 30-day trial\n- Priority onboarding support\n\n**Use code:** FRIEND20 at checkout\n\nStart exploring now and see why {{ $('Fetch Referrer').first().json.name }} recommends us!\n\nBest,\nThe {{ $vars.COMPANY_NAME }} Team",
+        "options": {}
+      },
+      "id": "welcome-referred",
+      "name": "Welcome Referred User",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Fetch Referrer').first().json.email }}",
+        "subject": "=Great news! {{ $json.name }} just signed up",
+        "message": "=Hi {{ $('Fetch Referrer').first().json.name }},\n\nAwesome news! Your friend {{ $('Parse Signup').first().json.referredName }} just signed up using your referral link!\n\n🎯 **What's next:**\nOnce they make their first purchase, you'll both receive your rewards:\n- You: ${{ $vars.REFERRER_REWARD }} credit\n- Them: 20% off first purchase\n\n📊 **Your Referral Stats:**\n- Total Referrals: {{ $('Fetch Referrer').first().json.referral_count || 1 }}\n- Successful Conversions: {{ $('Fetch Referrer').first().json.conversion_count || 0 }}\n- Total Earned: ${{ $('Fetch Referrer').first().json.total_rewards || 0 }}\n\nKeep sharing your link to earn more rewards!\nYour unique link: {{ $vars.REFERRAL_BASE_URL }}/{{ $('Fetch Referrer').first().json.referral_code }}\n\nThanks for spreading the word!\n\nThe {{ $vars.COMPANY_NAME }} Team",
+        "options": {}
+      },
+      "id": "notify-referrer-signup",
+      "name": "Notify Referrer",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 500],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process referral conversion (referred user made purchase)\nconst data = $input.first().json.body;\n\nconst conversion = {\n  referralId: data.referralId,\n  referrerId: data.referrerId,\n  referredId: data.referredId,\n  conversionType: data.conversionType || 'purchase',\n  orderValue: data.orderValue || 0,\n  orderId: data.orderId,\n  conversionDate: new Date().toISOString(),\n  status: 'converted'\n};\n\nreturn [{ json: conversion }];"
+      },
+      "id": "parse-conversion",
+      "name": "Parse Conversion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 600]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.REFERRAL_API_URL }}/referrals/{{ $json.referralId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-referral",
+      "name": "Fetch Referral Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "referral-api-key",
+          "name": "Referral API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate and process rewards\nconst conversion = $('Parse Conversion').first().json;\nconst referral = $input.first().json;\n\n// Reward tiers based on referral count\nconst referrerTiers = {\n  1: 25,   // First referral: $25\n  5: 30,   // 5+ referrals: $30 each\n  10: 40,  // 10+ referrals: $40 each\n  25: 50   // 25+ referrals: $50 each\n};\n\n// Get referrer's total successful referrals\nconst totalReferrals = referral.referrer?.successful_referrals || 0;\n\n// Determine reward amount\nlet referrerReward = 25; // Default\nfor (const [threshold, amount] of Object.entries(referrerTiers)) {\n  if (totalReferrals >= parseInt(threshold)) {\n    referrerReward = amount;\n  }\n}\n\n// Calculate commission if applicable (for high-value referrers)\nlet commission = 0;\nif (totalReferrals >= 10 && conversion.orderValue > 0) {\n  commission = Math.round(conversion.orderValue * 0.1); // 10% commission\n}\n\nconst rewards = {\n  referralId: conversion.referralId,\n  referrerId: conversion.referrerId,\n  referredId: conversion.referredId,\n  referrer: {\n    userId: conversion.referrerId,\n    email: referral.referrer?.email,\n    name: referral.referrer?.name,\n    rewardType: 'credit',\n    amount: referrerReward + commission,\n    breakdown: {\n      baseReward: referrerReward,\n      commission\n    }\n  },\n  referred: {\n    userId: conversion.referredId,\n    email: referral.referred?.email,\n    name: referral.referred?.name,\n    rewardType: 'discount',\n    amount: 20, // 20% off\n    applied: true // Already applied at checkout\n  },\n  orderValue: conversion.orderValue,\n  processedAt: new Date().toISOString()\n};\n\nreturn [{ json: rewards }];"
+      },
+      "id": "calculate-rewards",
+      "name": "Calculate Rewards",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.BILLING_API_URL }}/credits",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_id\": \"{{ $json.referrer.userId }}\",\n  \"amount\": {{ $json.referrer.amount }},\n  \"type\": \"referral_reward\",\n  \"description\": \"Referral reward for {{ $json.referred.name }}\",\n  \"referral_id\": \"{{ $json.referralId }}\"\n}",
+        "options": {}
+      },
+      "id": "issue-credit",
+      "name": "Issue Referrer Credit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "billing-api-key",
+          "name": "Billing API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $vars.REFERRAL_API_URL }}/referrals/{{ $json.referralId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"converted\",\n  \"conversion_date\": \"{{ $json.processedAt }}\",\n  \"rewards_issued\": true,\n  \"referrer_reward\": {{ $json.referrer.amount }},\n  \"order_value\": {{ $json.orderValue }}\n}",
+        "options": {}
+      },
+      "id": "update-referral",
+      "name": "Update Referral Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "referral-api-key",
+          "name": "Referral API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.referrer.email }}",
+        "subject": "=🎉 You earned ${{ $json.referrer.amount }} from your referral!",
+        "message": "=Hi {{ $json.referrer.name }},\n\nGreat news! {{ $json.referred.name }} just made their first purchase, and you've earned your reward!\n\n💰 **Your Reward:**\n${{ $json.referrer.amount }} credit added to your account\n{{ $json.referrer.breakdown.commission > 0 ? `\\n(Includes $${$json.referrer.breakdown.commission} bonus commission!)` : '' }}\n\n📊 **Your Referral Dashboard:**\nVisit {{ $vars.REFERRAL_DASHBOARD_URL }} to:\n- See your total earnings\n- Track pending referrals\n- Get your shareable link\n- Access marketing materials\n\n🚀 **Keep the momentum going!**\nShare your unique link and earn ${{ $json.referrer.breakdown.baseReward }}+ for every successful referral.\n\nThank you for being an amazing advocate!\n\nThe {{ $vars.COMPANY_NAME }} Team",
+        "options": {}
+      },
+      "id": "notify-reward",
+      "name": "Notify Referrer Reward",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1500, 600],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.GROWTH_SLACK_CHANNEL }}",
+        "text": "=🎯 *Referral Conversion!*\n\n*Referrer:* {{ $json.referrer.name }}\n*Referred:* {{ $json.referred.name }}\n*Order Value:* ${{ $json.orderValue }}\n*Reward Issued:* ${{ $json.referrer.amount }}\n\n_{{ $json.referrer.breakdown.commission > 0 ? 'Includes commission bonus!' : '' }}_",
+        "otherOptions": {}
+      },
+      "id": "notify-conversion",
+      "name": "Notify Conversion",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1500, 800],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-report",
+      "name": "Weekly Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 900]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.REFERRAL_API_URL }}/stats",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "period",
+              "value": "last_7_days"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-stats",
+      "name": "Fetch Weekly Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "referral-api-key",
+          "name": "Referral API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.GROWTH_SLACK_CHANNEL }}",
+        "text": "=📊 *Weekly Referral Program Report*\n\n*Last 7 Days:*\n• New Referrals: {{ $json.new_referrals || 0 }}\n• Conversions: {{ $json.conversions || 0 }}\n• Conversion Rate: {{ $json.conversion_rate || 0 }}%\n• Total Revenue: ${{ $json.referral_revenue?.toLocaleString() || 0 }}\n• Rewards Issued: ${{ $json.rewards_issued?.toLocaleString() || 0 }}\n\n*Top Referrers:*\n{{ $json.top_referrers?.slice(0, 5).map((r, i) => `${i + 1}. ${r.name}: ${r.conversions} conversions`).join('\\n') || 'No data' }}\n\n*Program Health:*\n• Active Referrers: {{ $json.active_referrers || 0 }}\n• Avg Reward: ${{ $json.avg_reward || 0 }}\n• CAC via Referral: ${{ $json.referral_cac || 0 }}",
+        "otherOptions": {}
+      },
+      "id": "post-weekly-report",
+      "name": "Post Weekly Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [750, 900],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.REFERRAL_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Referrals",
+          "mode": "list",
+          "cachedResultName": "Referrals"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Referral ID": "={{ $('Parse Signup').first().json.referralId }}",
+            "Referrer ID": "={{ $('Parse Signup').first().json.referrerId }}",
+            "Referred Email": "={{ $('Parse Signup').first().json.referredEmail }}",
+            "Referred Name": "={{ $('Parse Signup').first().json.referredName }}",
+            "Source": "={{ $('Parse Signup').first().json.source }}",
+            "Status": "=pending",
+            "Signup Date": "={{ $('Parse Signup').first().json.signupDate }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-referral",
+      "name": "Log Referral",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1250, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Referral Signup": {
+      "main": [
+        [{ "node": "Parse Signup", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Signup": {
+      "main": [
+        [
+          { "node": "Fetch Referrer", "type": "main", "index": 0 },
+          { "node": "Create Referral Record", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Referrer": {
+      "main": [
+        [
+          { "node": "Welcome Referred User", "type": "main", "index": 0 },
+          { "node": "Notify Referrer", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Create Referral Record": {
+      "main": [
+        [{ "node": "Log Referral", "type": "main", "index": 0 }]
+      ]
+    },
+    "Referral Conversion": {
+      "main": [
+        [{ "node": "Parse Conversion", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Conversion": {
+      "main": [
+        [{ "node": "Fetch Referral Details", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Referral Details": {
+      "main": [
+        [{ "node": "Calculate Rewards", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calculate Rewards": {
+      "main": [
+        [
+          { "node": "Issue Referrer Credit", "type": "main", "index": 0 },
+          { "node": "Update Referral Status", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Issue Referrer Credit": {
+      "main": [
+        [{ "node": "Notify Referrer Reward", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Referral Status": {
+      "main": [
+        [{ "node": "Notify Conversion", "type": "main", "index": 0 }]
+      ]
+    },
+    "Weekly Report": {
+      "main": [
+        [{ "node": "Fetch Weekly Stats", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Weekly Stats": {
+      "main": [
+        [{ "node": "Post Weekly Report", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "referral", "name": "referral" },
+    { "id": "growth", "name": "growth" },
+    { "id": "marketing", "name": "marketing" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

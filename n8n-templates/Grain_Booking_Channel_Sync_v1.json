@@ -1,0 +1,604 @@
+{
+  "name": "Grain Booking Channel Sync v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "booking-webhook",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "booking-webhook",
+      "name": "Booking Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "booking-channel-webhook"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-sync",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse incoming booking webhook\nconst body = $input.first().json.body;\nconst headers = $input.first().json.headers;\n\n// Detect source channel from webhook signature/headers\nlet source = 'unknown';\nlet bookingData = {};\n\nif (headers['x-booking-signature']) {\n  source = 'booking.com';\n  bookingData = {\n    id: body.reservation_id,\n    guestName: body.guest_name,\n    email: body.guest_email,\n    phone: body.guest_phone,\n    checkIn: body.checkin,\n    checkOut: body.checkout,\n    roomType: body.room_type,\n    rateCode: body.rate_code,\n    totalAmount: body.total_price?.amount,\n    currency: body.total_price?.currency || 'USD',\n    status: body.status,\n    specialRequests: body.remarks,\n    numberOfGuests: body.number_of_guests,\n    paymentStatus: body.payment_status\n  };\n} else if (headers['x-expedia-signature']) {\n  source = 'expedia';\n  bookingData = {\n    id: body.confirmationNumber,\n    guestName: `${body.primaryGuest?.firstName} ${body.primaryGuest?.lastName}`,\n    email: body.primaryGuest?.email,\n    phone: body.primaryGuest?.phone,\n    checkIn: body.stayDates?.checkIn,\n    checkOut: body.stayDates?.checkOut,\n    roomType: body.roomStay?.roomType,\n    rateCode: body.roomStay?.ratePlan,\n    totalAmount: body.totalPrice,\n    currency: body.currencyCode || 'USD',\n    status: body.reservationStatus,\n    specialRequests: body.specialRequests?.join(', '),\n    numberOfGuests: body.guestCount,\n    paymentStatus: body.paymentInfo?.status\n  };\n} else if (headers['x-airbnb-signature']) {\n  source = 'airbnb';\n  bookingData = {\n    id: body.confirmation_code,\n    guestName: body.guest?.full_name,\n    email: body.guest?.email,\n    phone: body.guest?.phone,\n    checkIn: body.start_date,\n    checkOut: body.end_date,\n    roomType: body.listing?.room_type,\n    rateCode: 'AIRBNB',\n    totalAmount: body.expected_payout_amount_accurate,\n    currency: body.listing_base_price_currency || 'USD',\n    status: body.status,\n    specialRequests: body.guest_details?.special_requests,\n    numberOfGuests: body.number_of_guests,\n    paymentStatus: 'prepaid'\n  };\n} else if (headers['x-vrbo-signature']) {\n  source = 'vrbo';\n  bookingData = {\n    id: body.reservationId,\n    guestName: body.guestName,\n    email: body.guestEmail,\n    phone: body.guestPhone,\n    checkIn: body.arrivalDate,\n    checkOut: body.departureDate,\n    roomType: body.unitType,\n    rateCode: 'VRBO',\n    totalAmount: body.totalRent,\n    currency: 'USD',\n    status: body.status,\n    specialRequests: body.notes,\n    numberOfGuests: body.numberOfGuests,\n    paymentStatus: body.paymentStatus\n  };\n} else {\n  // Direct booking or unknown source\n  source = body.source || 'direct';\n  bookingData = body;\n}\n\nreturn [{\n  json: {\n    source,\n    action: 'webhook',\n    booking: bookingData,\n    rawPayload: body,\n    receivedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "parse-webhook",
+      "name": "Parse Booking Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CHANNEL_MANAGER_URL }}/reservations/recent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "since",
+              "value": "={{ $now.minus({ minutes: 20 }).toISO() }}"
+            },
+            {
+              "name": "channels",
+              "value": "booking.com,expedia,airbnb,vrbo,google,tripadvisor"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-recent-bookings",
+      "name": "Fetch Recent Bookings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "channel-manager-api",
+          "name": "Channel Manager API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PMS_API_URL }}/reservations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "modified_since",
+              "value": "={{ $now.minus({ minutes: 20 }).toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-pms-reservations",
+      "name": "Fetch PMS Reservations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reconcile bookings across all channels\nconst channelBookings = $('Fetch Recent Bookings').first().json.reservations || [];\nconst pmsReservations = $('Fetch PMS Reservations').first().json.reservations || [];\n\nconst results = {\n  newBookings: [],\n  modifications: [],\n  cancellations: [],\n  conflicts: [],\n  synced: []\n};\n\n// Index PMS reservations by external ID\nconst pmsIndex = {};\npmsReservations.forEach(res => {\n  if (res.externalIds) {\n    Object.entries(res.externalIds).forEach(([channel, id]) => {\n      pmsIndex[`${channel}:${id}`] = res;\n    });\n  }\n  pmsIndex[`pms:${res.id}`] = res;\n});\n\n// Process channel bookings\nfor (const booking of channelBookings) {\n  const key = `${booking.channel}:${booking.externalId}`;\n  const pmsMatch = pmsIndex[key];\n  \n  if (!pmsMatch) {\n    // New booking - needs to be created in PMS\n    results.newBookings.push({\n      ...booking,\n      action: 'create',\n      priority: booking.status === 'confirmed' ? 'high' : 'normal'\n    });\n  } else {\n    // Check for modifications\n    const hasChanges = \n      booking.checkIn !== pmsMatch.checkIn ||\n      booking.checkOut !== pmsMatch.checkOut ||\n      booking.roomType !== pmsMatch.roomType ||\n      booking.status !== pmsMatch.status ||\n      booking.totalAmount !== pmsMatch.totalAmount;\n    \n    if (hasChanges) {\n      if (booking.status === 'cancelled' || booking.status === 'canceled') {\n        results.cancellations.push({\n          channelBooking: booking,\n          pmsReservation: pmsMatch,\n          action: 'cancel'\n        });\n      } else {\n        results.modifications.push({\n          channelBooking: booking,\n          pmsReservation: pmsMatch,\n          changes: {\n            checkIn: booking.checkIn !== pmsMatch.checkIn,\n            checkOut: booking.checkOut !== pmsMatch.checkOut,\n            roomType: booking.roomType !== pmsMatch.roomType,\n            totalAmount: booking.totalAmount !== pmsMatch.totalAmount\n          },\n          action: 'update'\n        });\n      }\n    } else {\n      results.synced.push({\n        channelBooking: booking,\n        pmsReservation: pmsMatch,\n        status: 'in_sync'\n      });\n    }\n  }\n}\n\n// Check for overbookings/conflicts\nconst inventoryByDate = {};\nconst allActiveBookings = [...results.synced, ...results.newBookings];\n\nfor (const item of allActiveBookings) {\n  const booking = item.channelBooking || item;\n  if (booking.status === 'confirmed') {\n    const checkIn = new Date(booking.checkIn);\n    const checkOut = new Date(booking.checkOut);\n    \n    for (let d = new Date(checkIn); d < checkOut; d.setDate(d.getDate() + 1)) {\n      const dateKey = d.toISOString().split('T')[0];\n      const roomKey = `${dateKey}:${booking.roomType}`;\n      \n      if (!inventoryByDate[roomKey]) {\n        inventoryByDate[roomKey] = [];\n      }\n      inventoryByDate[roomKey].push(booking);\n    }\n  }\n}\n\n// Detect overbookings (simplified - would need actual inventory data)\nfor (const [key, bookings] of Object.entries(inventoryByDate)) {\n  if (bookings.length > 1) {\n    // Potential conflict - mark for review\n    results.conflicts.push({\n      dateRoomKey: key,\n      bookings: bookings,\n      severity: 'high'\n    });\n  }\n}\n\nreturn [{\n  json: {\n    ...results,\n    summary: {\n      newBookings: results.newBookings.length,\n      modifications: results.modifications.length,\n      cancellations: results.cancellations.length,\n      conflicts: results.conflicts.length,\n      synced: results.synced.length\n    },\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "reconcile-bookings",
+      "name": "Reconcile Bookings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-conflicts",
+              "leftValue": "={{ $json.conflicts.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-conflicts",
+      "name": "Has Conflicts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.OPERATIONS_SLACK_CHANNEL }}",
+        "text": "=🚨 *URGENT: Booking Conflict Detected!*\n\n*{{ $json.conflicts.length }} potential overbookings found:*\n\n{{ $json.conflicts.map(c => `⚠️ *${c.dateRoomKey}*\n   Conflicting bookings: ${c.bookings.length}\n   ${c.bookings.map(b => `• ${b.guestName || 'Guest'} via ${b.channel || 'Direct'}`).join('\\n   ')}`).join('\\n\\n') }}\n\n*Immediate action required!*\nPlease review and resolve conflicts in the PMS.",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "alert-conflicts",
+      "name": "Alert Conflicts",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1300, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-new-bookings",
+              "leftValue": "={{ $json.newBookings.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-new-bookings",
+      "name": "Has New Bookings?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "split-new-bookings",
+      "name": "Split New Bookings",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1300, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PMS_API_URL }}/reservations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"externalId\": \"{{ $json.externalId }}\",\n  \"channel\": \"{{ $json.channel }}\",\n  \"guestName\": \"{{ $json.guestName }}\",\n  \"email\": \"{{ $json.email }}\",\n  \"phone\": \"{{ $json.phone }}\",\n  \"checkIn\": \"{{ $json.checkIn }}\",\n  \"checkOut\": \"{{ $json.checkOut }}\",\n  \"roomType\": \"{{ $json.roomType }}\",\n  \"rateCode\": \"{{ $json.rateCode }}\",\n  \"totalAmount\": {{ $json.totalAmount }},\n  \"currency\": \"{{ $json.currency }}\",\n  \"status\": \"{{ $json.status }}\",\n  \"specialRequests\": \"{{ $json.specialRequests }}\",\n  \"numberOfGuests\": {{ $json.numberOfGuests }},\n  \"source\": \"channel_sync\"\n}",
+        "options": {}
+      },
+      "id": "create-pms-reservation",
+      "name": "Create PMS Reservation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1550, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-modifications",
+              "leftValue": "={{ $json.modifications.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-modifications",
+      "name": "Has Modifications?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 800]
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "split-modifications",
+      "name": "Split Modifications",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1300, 800]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $vars.PMS_API_URL }}/reservations/{{ $json.pmsReservation.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"checkIn\": \"{{ $json.channelBooking.checkIn }}\",\n  \"checkOut\": \"{{ $json.channelBooking.checkOut }}\",\n  \"roomType\": \"{{ $json.channelBooking.roomType }}\",\n  \"totalAmount\": {{ $json.channelBooking.totalAmount }},\n  \"status\": \"{{ $json.channelBooking.status }}\",\n  \"modifiedAt\": \"{{ $now.toISO() }}\",\n  \"modifiedBy\": \"channel_sync\"\n}",
+        "options": {}
+      },
+      "id": "update-pms-reservation",
+      "name": "Update PMS Reservation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1550, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-cancellations",
+              "leftValue": "={{ $json.cancellations.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-cancellations",
+      "name": "Has Cancellations?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 1000]
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "split-cancellations",
+      "name": "Split Cancellations",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1300, 1000]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PMS_API_URL }}/reservations/{{ $json.pmsReservation.id }}/cancel",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"reason\": \"Cancelled via {{ $json.channelBooking.channel }}\",\n  \"cancelledAt\": \"{{ $now.toISO() }}\",\n  \"cancelledBy\": \"channel_sync\"\n}",
+        "options": {}
+      },
+      "id": "cancel-pms-reservation",
+      "name": "Cancel PMS Reservation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1550, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pms-api-key",
+          "name": "PMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CHANNEL_MANAGER_URL }}/inventory/sync",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"property_id\": \"{{ $vars.PROPERTY_ID }}\",\n  \"sync_type\": \"full\",\n  \"channels\": [\"booking.com\", \"expedia\", \"airbnb\", \"vrbo\", \"google\"]\n}",
+        "options": {}
+      },
+      "id": "sync-inventory",
+      "name": "Sync Inventory to Channels",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1800, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "channel-manager-api",
+          "name": "Channel Manager API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.BOOKING_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sync Log",
+          "mode": "list",
+          "cachedResultName": "Sync Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now.toISO() }}",
+            "New Bookings": "={{ $('Reconcile Bookings').first().json.summary.newBookings }}",
+            "Modifications": "={{ $('Reconcile Bookings').first().json.summary.modifications }}",
+            "Cancellations": "={{ $('Reconcile Bookings').first().json.summary.cancellations }}",
+            "Conflicts": "={{ $('Reconcile Bookings').first().json.summary.conflicts }}",
+            "Inventory Sync": "={{ $json.status || 'success' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-sync",
+      "name": "Log Sync Activity",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2050, 700],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-changes",
+              "leftValue": "={{ $('Reconcile Bookings').first().json.summary.newBookings + $('Reconcile Bookings').first().json.summary.modifications + $('Reconcile Bookings').first().json.summary.cancellations }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-notify",
+      "name": "Should Notify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2050, 500]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.RESERVATIONS_SLACK_CHANNEL }}",
+        "text": "=📊 *Channel Sync Summary*\n\n*Activity in the last 15 minutes:*\n\n{{ $('Reconcile Bookings').first().json.summary.newBookings > 0 ? `✅ *New Bookings:* ${$('Reconcile Bookings').first().json.summary.newBookings}` : '' }}\n{{ $('Reconcile Bookings').first().json.summary.modifications > 0 ? `📝 *Modifications:* ${$('Reconcile Bookings').first().json.summary.modifications}` : '' }}\n{{ $('Reconcile Bookings').first().json.summary.cancellations > 0 ? `❌ *Cancellations:* ${$('Reconcile Bookings').first().json.summary.cancellations}` : '' }}\n{{ $('Reconcile Bookings').first().json.summary.conflicts > 0 ? `⚠️ *Conflicts:* ${$('Reconcile Bookings').first().json.summary.conflicts}` : '' }}\n\n_Inventory synced across all channels_",
+        "otherOptions": {}
+      },
+      "id": "notify-summary",
+      "name": "Notify Summary",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2300, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process webhook booking and merge with workflow\nconst webhookData = $input.first().json;\n\nif (webhookData.action === 'webhook') {\n  // Single booking from webhook\n  return [{\n    json: {\n      newBookings: [webhookData.booking],\n      modifications: [],\n      cancellations: [],\n      conflicts: [],\n      synced: [],\n      summary: {\n        newBookings: 1,\n        modifications: 0,\n        cancellations: 0,\n        conflicts: 0,\n        synced: 0\n      },\n      source: 'webhook',\n      processedAt: new Date().toISOString()\n    }\n  }];\n}\n\nreturn $input.all();"
+      },
+      "id": "process-webhook",
+      "name": "Process Webhook Booking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Booking Webhook": {
+      "main": [
+        [{ "node": "Parse Booking Webhook", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Booking Webhook": {
+      "main": [
+        [{ "node": "Process Webhook Booking", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Webhook Booking": {
+      "main": [
+        [
+          { "node": "Check Conflicts?", "type": "main", "index": 0 },
+          { "node": "Has New Bookings?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Every 15 Minutes": {
+      "main": [
+        [
+          { "node": "Fetch Recent Bookings", "type": "main", "index": 0 },
+          { "node": "Fetch PMS Reservations", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Recent Bookings": {
+      "main": [
+        [{ "node": "Reconcile Bookings", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch PMS Reservations": {
+      "main": [
+        [{ "node": "Reconcile Bookings", "type": "main", "index": 0 }]
+      ]
+    },
+    "Reconcile Bookings": {
+      "main": [
+        [
+          { "node": "Has Conflicts?", "type": "main", "index": 0 },
+          { "node": "Has New Bookings?", "type": "main", "index": 0 },
+          { "node": "Has Modifications?", "type": "main", "index": 0 },
+          { "node": "Has Cancellations?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Has Conflicts?": {
+      "main": [
+        [{ "node": "Alert Conflicts", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Has New Bookings?": {
+      "main": [
+        [{ "node": "Split New Bookings", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Split New Bookings": {
+      "main": [
+        [{ "node": "Create PMS Reservation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create PMS Reservation": {
+      "main": [
+        [{ "node": "Sync Inventory to Channels", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Modifications?": {
+      "main": [
+        [{ "node": "Split Modifications", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Split Modifications": {
+      "main": [
+        [{ "node": "Update PMS Reservation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update PMS Reservation": {
+      "main": [
+        [{ "node": "Sync Inventory to Channels", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Cancellations?": {
+      "main": [
+        [{ "node": "Split Cancellations", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Split Cancellations": {
+      "main": [
+        [{ "node": "Cancel PMS Reservation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cancel PMS Reservation": {
+      "main": [
+        [{ "node": "Sync Inventory to Channels", "type": "main", "index": 0 }]
+      ]
+    },
+    "Sync Inventory to Channels": {
+      "main": [
+        [
+          { "node": "Log Sync Activity", "type": "main", "index": 0 },
+          { "node": "Should Notify?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Should Notify?": {
+      "main": [
+        [{ "node": "Notify Summary", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "hospitality", "name": "hospitality" },
+    { "id": "channel-management", "name": "channel-management" },
+    { "id": "ota", "name": "ota" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

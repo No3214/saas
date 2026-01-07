@@ -1,0 +1,430 @@
+{
+  "name": "Grain SEO Content Pipeline v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-trigger",
+      "name": "Weekly Monday",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "seo-content-request",
+        "options": {}
+      },
+      "id": "content-webhook",
+      "name": "Content Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 500],
+      "webhookId": "seo-content-request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.semrush.com/analytics/v1/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "phrase_questions"
+            },
+            {
+              "name": "phrase",
+              "value": "={{ $vars.TARGET_KEYWORDS }}"
+            },
+            {
+              "name": "database",
+              "value": "us"
+            },
+            {
+              "name": "export_columns",
+              "value": "Ph,Nq,Cp,Co,Nr"
+            },
+            {
+              "name": "display_limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-keyword-questions",
+      "name": "Fetch Keyword Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "semrush-api",
+          "name": "SEMrush API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.semrush.com/analytics/v1/",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "phrase_related"
+            },
+            {
+              "name": "phrase",
+              "value": "={{ $vars.TARGET_KEYWORDS }}"
+            },
+            {
+              "name": "database",
+              "value": "us"
+            },
+            {
+              "name": "export_columns",
+              "value": "Ph,Nq,Cp,Co,Nr,Kd"
+            },
+            {
+              "name": "display_limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-related-keywords",
+      "name": "Fetch Related Keywords",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "semrush-api",
+          "name": "SEMrush API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.ahrefs.com/v3/keywords-explorer/keywords",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "target",
+              "value": "={{ $vars.TARGET_KEYWORDS }}"
+            },
+            {
+              "name": "country",
+              "value": "us"
+            },
+            {
+              "name": "select",
+              "value": "keyword,volume,keyword_difficulty,cpc,parent_keyword"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-ahrefs-data",
+      "name": "Fetch Ahrefs Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ahrefs-api",
+          "name": "Ahrefs API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate and analyze keyword data\nconst questions = $('Fetch Keyword Questions').first().json;\nconst related = $('Fetch Related Keywords').first().json;\nconst ahrefs = $('Fetch Ahrefs Data').first().json;\n\n// Parse SEMrush data (CSV format)\nfunction parseSEMrushCSV(data) {\n  if (!data || typeof data !== 'string') return [];\n  const lines = data.split('\\n');\n  const headers = lines[0]?.split(';') || [];\n  return lines.slice(1).filter(l => l.trim()).map(line => {\n    const values = line.split(';');\n    const obj = {};\n    headers.forEach((h, i) => obj[h] = values[i]);\n    return obj;\n  });\n}\n\nconst questionKeywords = parseSEMrushCSV(questions);\nconst relatedKeywords = parseSEMrushCSV(related);\nconst ahrefsKeywords = ahrefs.keywords || [];\n\n// Combine and deduplicate keywords\nconst keywordMap = new Map();\n\nrelatedKeywords.forEach(kw => {\n  const keyword = kw.Ph?.toLowerCase();\n  if (keyword) {\n    keywordMap.set(keyword, {\n      keyword,\n      volume: parseInt(kw.Nq) || 0,\n      difficulty: parseInt(kw.Kd) || 0,\n      cpc: parseFloat(kw.Cp) || 0,\n      competition: parseFloat(kw.Co) || 0,\n      results: parseInt(kw.Nr) || 0,\n      type: 'related',\n      source: 'semrush'\n    });\n  }\n});\n\nquestionKeywords.forEach(kw => {\n  const keyword = kw.Ph?.toLowerCase();\n  if (keyword && !keywordMap.has(keyword)) {\n    keywordMap.set(keyword, {\n      keyword,\n      volume: parseInt(kw.Nq) || 0,\n      difficulty: 0,\n      cpc: parseFloat(kw.Cp) || 0,\n      competition: parseFloat(kw.Co) || 0,\n      results: parseInt(kw.Nr) || 0,\n      type: 'question',\n      source: 'semrush'\n    });\n  }\n});\n\nahrefsKeywords.forEach(kw => {\n  const keyword = kw.keyword?.toLowerCase();\n  if (keyword) {\n    const existing = keywordMap.get(keyword);\n    if (existing) {\n      // Merge data\n      existing.ahrefsVolume = kw.volume;\n      existing.ahrefsDifficulty = kw.keyword_difficulty;\n    } else {\n      keywordMap.set(keyword, {\n        keyword,\n        volume: kw.volume || 0,\n        difficulty: kw.keyword_difficulty || 0,\n        cpc: kw.cpc || 0,\n        type: 'related',\n        source: 'ahrefs'\n      });\n    }\n  }\n});\n\n// Score and rank keywords\nconst keywords = Array.from(keywordMap.values()).map(kw => {\n  // Calculate opportunity score\n  let score = 0;\n  \n  // Volume scoring (max 30)\n  if (kw.volume > 10000) score += 30;\n  else if (kw.volume > 5000) score += 25;\n  else if (kw.volume > 1000) score += 20;\n  else if (kw.volume > 500) score += 15;\n  else if (kw.volume > 100) score += 10;\n  else score += 5;\n  \n  // Difficulty scoring (max 30, lower is better)\n  if (kw.difficulty < 20) score += 30;\n  else if (kw.difficulty < 40) score += 25;\n  else if (kw.difficulty < 60) score += 15;\n  else if (kw.difficulty < 80) score += 5;\n  \n  // CPC scoring (indicates commercial intent, max 20)\n  if (kw.cpc > 10) score += 20;\n  else if (kw.cpc > 5) score += 15;\n  else if (kw.cpc > 2) score += 10;\n  else if (kw.cpc > 0.5) score += 5;\n  \n  // Question bonus (max 20)\n  if (kw.type === 'question') score += 20;\n  \n  kw.opportunityScore = score;\n  kw.priority = score > 70 ? 'high' : score > 50 ? 'medium' : 'low';\n  \n  return kw;\n});\n\n// Sort by opportunity score\nkeywords.sort((a, b) => b.opportunityScore - a.opportunityScore);\n\n// Group into content clusters\nconst clusters = [];\nconst usedKeywords = new Set();\n\nkeywords.slice(0, 50).forEach(kw => {\n  if (usedKeywords.has(kw.keyword)) return;\n  \n  // Find related keywords for this cluster\n  const clusterKeywords = keywords.filter(k => \n    !usedKeywords.has(k.keyword) &&\n    (k.keyword.includes(kw.keyword) || kw.keyword.includes(k.keyword) ||\n     k.keyword.split(' ').some(word => kw.keyword.includes(word)))\n  ).slice(0, 10);\n  \n  if (clusterKeywords.length >= 3) {\n    clusterKeywords.forEach(k => usedKeywords.add(k.keyword));\n    clusters.push({\n      primaryKeyword: kw.keyword,\n      volume: kw.volume,\n      difficulty: kw.difficulty,\n      opportunityScore: kw.opportunityScore,\n      supportingKeywords: clusterKeywords.filter(k => k.keyword !== kw.keyword),\n      contentSuggestion: kw.type === 'question' ? 'FAQ/How-to' : 'Pillar Content'\n    });\n  }\n});\n\nreturn [{\n  json: {\n    keywords: keywords.slice(0, 100),\n    clusters: clusters.slice(0, 10),\n    summary: {\n      totalKeywords: keywords.length,\n      highPriority: keywords.filter(k => k.priority === 'high').length,\n      mediumPriority: keywords.filter(k => k.priority === 'medium').length,\n      questionKeywords: keywords.filter(k => k.type === 'question').length,\n      clustersIdentified: clusters.length,\n      avgVolume: Math.round(keywords.reduce((a, b) => a + b.volume, 0) / keywords.length),\n      avgDifficulty: Math.round(keywords.reduce((a, b) => a + b.difficulty, 0) / keywords.length)\n    },\n    analyzedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "analyze-keywords",
+      "name": "Analyze Keywords",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an SEO Content Strategist AI. Analyze keyword clusters and generate comprehensive content briefs.\n\nFor each content cluster, create:\n1. Content title suggestions (3 options)\n2. Target word count\n3. Content type recommendation (blog post, guide, landing page, etc.)\n4. Primary heading structure (H1, H2, H3)\n5. Key sections to include\n6. Internal linking opportunities\n7. Featured snippet optimization (if applicable)\n8. Meta description suggestion\n\nConsider search intent, competitor content gaps, and user needs.",
+              "role": "system"
+            },
+            {
+              "content": "=Create content briefs for these keyword clusters:\n\n**Top Clusters:**\n{{ JSON.stringify($json.clusters.slice(0, 5), null, 2) }}\n\n**Keyword Summary:**\n{{ JSON.stringify($json.summary, null, 2) }}\n\nGenerate detailed, actionable content briefs for each cluster.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 4000
+        }
+      },
+      "id": "generate-briefs",
+      "name": "Generate Content Briefs",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1050, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CMS_API_URL }}/posts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "published"
+            },
+            {
+              "name": "fields",
+              "value": "id,title,slug,primary_keyword,meta_description,word_count"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-existing-content",
+      "name": "Fetch Existing Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cms-api-key",
+          "name": "CMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Identify content gaps and optimization opportunities\nconst keywords = $('Analyze Keywords').first().json.keywords;\nconst existingContent = $input.first().json.posts || [];\n\n// Create map of existing content by keyword\nconst existingKeywords = new Set(\n  existingContent.map(c => c.primary_keyword?.toLowerCase()).filter(Boolean)\n);\n\nconst contentGaps = [];\nconst optimizationOpportunities = [];\n\nkeywords.forEach(kw => {\n  if (!existingKeywords.has(kw.keyword)) {\n    if (kw.opportunityScore >= 50) {\n      contentGaps.push({\n        keyword: kw.keyword,\n        volume: kw.volume,\n        difficulty: kw.difficulty,\n        opportunityScore: kw.opportunityScore,\n        priority: kw.priority,\n        type: 'new_content'\n      });\n    }\n  } else {\n    // Find the existing content\n    const existing = existingContent.find(\n      c => c.primary_keyword?.toLowerCase() === kw.keyword\n    );\n    if (existing) {\n      // Check if optimization is needed\n      const needsUpdate = (\n        existing.word_count < 1500 ||\n        !existing.meta_description\n      );\n      if (needsUpdate && kw.opportunityScore >= 40) {\n        optimizationOpportunities.push({\n          keyword: kw.keyword,\n          existingContent: existing,\n          volume: kw.volume,\n          recommendations: [\n            existing.word_count < 1500 ? 'Expand content length' : null,\n            !existing.meta_description ? 'Add meta description' : null\n          ].filter(Boolean),\n          type: 'optimization'\n        });\n      }\n    }\n  }\n});\n\nreturn [{\n  json: {\n    contentGaps: contentGaps.slice(0, 20),\n    optimizationOpportunities: optimizationOpportunities.slice(0, 10),\n    summary: {\n      newContentNeeded: contentGaps.length,\n      optimizationsNeeded: optimizationOpportunities.length,\n      existingContentCount: existingContent.length\n    }\n  }\n}];"
+      },
+      "id": "identify-gaps",
+      "name": "Identify Content Gaps",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create content calendar from briefs\nconst briefs = $('Generate Content Briefs').first().json;\nconst gaps = $('Identify Content Gaps').first().json;\n\nconst calendarItems = [];\nconst today = new Date();\n\n// Add high-priority gaps to calendar\nconst priorityBriefs = briefs.briefs || briefs;\n\n(Array.isArray(priorityBriefs) ? priorityBriefs : []).forEach((brief, index) => {\n  const publishDate = new Date(today);\n  publishDate.setDate(today.getDate() + (index * 7) + 7);\n  \n  calendarItems.push({\n    id: `CAL-${Date.now().toString(36)}-${index}`,\n    title: Array.isArray(brief.titleSuggestions) ? brief.titleSuggestions[0] : brief.title || brief.primaryKeyword,\n    primaryKeyword: brief.primaryKeyword,\n    type: brief.contentType || 'blog_post',\n    wordCount: brief.targetWordCount || brief.wordCount || 1500,\n    scheduledDate: publishDate.toISOString().split('T')[0],\n    status: 'planned',\n    priority: index < 3 ? 'high' : 'medium',\n    brief: brief\n  });\n});\n\nreturn [{ json: { calendar: calendarItems, totalItems: calendarItems.length } }];"
+      },
+      "id": "create-calendar",
+      "name": "Create Content Calendar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PROJECT_MGMT_URL }}/content-calendar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-calendar",
+      "name": "Save Calendar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1550, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "project-mgmt-api",
+          "name": "Project Management API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.CONTENT_SLACK_CHANNEL }}",
+        "text": "=📊 *Weekly SEO Content Pipeline Report*\n\n🔍 *Keyword Analysis:*\n• Total Keywords Analyzed: {{ $('Analyze Keywords').first().json.summary.totalKeywords }}\n• High Priority: {{ $('Analyze Keywords').first().json.summary.highPriority }}\n• Question Keywords: {{ $('Analyze Keywords').first().json.summary.questionKeywords }}\n• Content Clusters: {{ $('Analyze Keywords').first().json.summary.clustersIdentified }}\n\n📝 *Content Opportunities:*\n• New Content Needed: {{ $('Identify Content Gaps').first().json.summary.newContentNeeded }}\n• Optimizations Needed: {{ $('Identify Content Gaps').first().json.summary.optimizationsNeeded }}\n\n📅 *Calendar Updated:*\n• Items Added: {{ $json.totalItems }}\n\n*Top Keywords to Target:*\n{{ $('Analyze Keywords').first().json.keywords.slice(0, 5).map(k => `• ${k.keyword} (Vol: ${k.volume}, KD: ${k.difficulty})`).join('\\n') }}\n\n_Full report saved to project management_",
+        "otherOptions": {}
+      },
+      "id": "notify-report",
+      "name": "Notify Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1550, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.SEO_CONTENT_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Keyword Analysis",
+          "mode": "list",
+          "cachedResultName": "Keyword Analysis"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.format('yyyy-MM-dd') }}",
+            "Total Keywords": "={{ $('Analyze Keywords').first().json.summary.totalKeywords }}",
+            "High Priority": "={{ $('Analyze Keywords').first().json.summary.highPriority }}",
+            "Clusters": "={{ $('Analyze Keywords').first().json.summary.clustersIdentified }}",
+            "Avg Volume": "={{ $('Analyze Keywords').first().json.summary.avgVolume }}",
+            "Avg Difficulty": "={{ $('Analyze Keywords').first().json.summary.avgDifficulty }}",
+            "Content Gaps": "={{ $('Identify Content Gaps').first().json.summary.newContentNeeded }}",
+            "Optimizations": "={{ $('Identify Content Gaps').first().json.summary.optimizationsNeeded }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-analysis",
+      "name": "Log Analysis",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1800, 400],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Monday": {
+      "main": [
+        [
+          { "node": "Fetch Keyword Questions", "type": "main", "index": 0 },
+          { "node": "Fetch Related Keywords", "type": "main", "index": 0 },
+          { "node": "Fetch Ahrefs Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Content Request": {
+      "main": [
+        [{ "node": "Analyze Keywords", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Keyword Questions": {
+      "main": [
+        [{ "node": "Analyze Keywords", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Related Keywords": {
+      "main": [
+        [{ "node": "Analyze Keywords", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Ahrefs Data": {
+      "main": [
+        [{ "node": "Analyze Keywords", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze Keywords": {
+      "main": [
+        [
+          { "node": "Generate Content Briefs", "type": "main", "index": 0 },
+          { "node": "Fetch Existing Content", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Generate Content Briefs": {
+      "main": [
+        [{ "node": "Create Content Calendar", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Existing Content": {
+      "main": [
+        [{ "node": "Identify Content Gaps", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Content Calendar": {
+      "main": [
+        [{ "node": "Save Calendar", "type": "main", "index": 0 }]
+      ]
+    },
+    "Identify Content Gaps": {
+      "main": [
+        [{ "node": "Notify Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Calendar": {
+      "main": [
+        [{ "node": "Notify Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Notify Report": {
+      "main": [
+        [{ "node": "Log Analysis", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "seo", "name": "seo" },
+    { "id": "content", "name": "content" },
+    { "id": "marketing", "name": "marketing" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}
