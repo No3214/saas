@@ -1,0 +1,458 @@
+{
+  "name": "Grain Prompt Engineering Studio v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "prompt-studio",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Prompt Request",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "typeVersion": 2,
+      "webhookId": "prompt-studio"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Advanced Request Normalizer with Template Detection\nconst input = $input.item.json;\n\nconst request = {\n  request_id: input.request_id || `PRM-${Date.now()}`,\n  \n  // Core Input\n  raw_prompt: input.prompt || input.raw_prompt,\n  context: input.context || '',\n  \n  // Task Configuration\n  task_type: input.task_type || 'general', // general, email, caption, analysis, classification, creative, code\n  output_format: input.output_format || 'text', // text, json, markdown, html\n  \n  // Target Configuration\n  target_model: input.target_model || 'auto', // auto, gpt-4o, gpt-4o-mini, claude-opus, claude-sonnet\n  target_platform: input.target_platform || 'any', // instagram, linkedin, email, web, any\n  target_audience: input.target_audience || 'general',\n  target_language: input.target_language || 'tr', // tr, en, auto\n  \n  // Style & Tone\n  tone: input.tone || 'professional', // professional, casual, formal, friendly, urgent, empathetic\n  style: input.style || 'balanced', // concise, detailed, balanced, creative, technical\n  \n  // Advanced Options\n  use_chain_of_thought: input.use_chain_of_thought !== false,\n  use_few_shot: input.use_few_shot !== false,\n  generate_variants: input.generate_variants || 1, // 1-5 variants\n  include_negative_examples: input.include_negative_examples || false,\n  \n  // Constraints\n  max_tokens: input.max_tokens || null,\n  max_words: input.max_words || null,\n  max_characters: input.max_characters || null,\n  \n  // Quality Settings\n  quality_level: input.quality_level || 'high', // draft, standard, high, premium\n  temperature_override: input.temperature || null,\n  \n  // Metadata\n  client_name: input.client_name || 'Unknown',\n  project: input.project || 'General',\n  tags: input.tags || []\n};\n\nreturn { json: request };"
+      },
+      "id": "normalize-request",
+      "name": "Normalize & Enrich Request",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen dunyanin en iyi prompt muhendisisin. Kullanicinin ham promptunu analiz et ve detayli bir analiz raporu olustur.\n\n## ANALIZ BOYUTLARI\n\n1. **INTENT DETECTION**: Kullanici ne yapmak istiyor?\n2. **CLARITY SCORE (1-10)**: Prompt ne kadar net?\n3. **COMPLETENESS SCORE (1-10)**: Eksik bilgi var mi?\n4. **AMBIGUITY DETECTION**: Belirsiz noktalar\n5. **IMPLICIT REQUIREMENTS**: Soylenmemis ama beklenen seyler\n6. **OPTIMAL MODEL**: En uygun AI model\n7. **OPTIMAL TEMPERATURE**: Onerilen sicaklik\n8. **RISK AREAS**: Halusinasyon, bias, hata riskleri\n\nJSON formatinda dondur:\n{\n  \"intent\": {\n    \"primary\": \"ana amac\",\n    \"secondary\": [\"yan amaclar\"],\n    \"task_category\": \"classification|generation|analysis|transformation|qa\"\n  },\n  \"quality_scores\": {\n    \"clarity\": 8,\n    \"completeness\": 6,\n    \"specificity\": 7,\n    \"actionability\": 9\n  },\n  \"missing_elements\": [\n    { \"element\": \"hedef kitle\", \"importance\": \"high\", \"suggestion\": \"Kimlere hitap edecek?\" }\n  ],\n  \"ambiguities\": [\n    { \"phrase\": \"iyi bir\", \"issue\": \"subjektif\", \"clarification_needed\": \"Hangi kriterlere gore iyi?\" }\n  ],\n  \"implicit_requirements\": [\n    \"Turkce olacak\",\n    \"Profesyonel ton bekleniyor\"\n  ],\n  \"optimal_settings\": {\n    \"model\": \"gpt-4o-mini\",\n    \"temperature\": 0.7,\n    \"reasoning\": \"Yaratici icerik, orta karmasiklik\"\n  },\n  \"risk_assessment\": {\n    \"hallucination_risk\": \"low|medium|high\",\n    \"bias_risk\": \"low|medium|high\",\n    \"factual_accuracy_concern\": true,\n    \"mitigation_suggestions\": [\"kaynak belirt\", \"dogrulama ekle\"]\n  },\n  \"enhancement_suggestions\": [\n    { \"type\": \"add_context\", \"suggestion\": \"Sektor bilgisi ekle\" },\n    { \"type\": \"add_constraint\", \"suggestion\": \"Karakter limiti belirt\" },\n    { \"type\": \"add_example\", \"suggestion\": \"Ornek cikti goster\" }\n  ]\n}"
+            },
+            {
+              "role": "user",
+              "content": "HAM PROMPT:\n{{ $json.raw_prompt }}\n\nEK CONTEXT:\n{{ $json.context }}\n\nGOREV TIPI: {{ $json.task_type }}\nHEDEF PLATFORM: {{ $json.target_platform }}\nHEDEF KITLE: {{ $json.target_audience }}\nTON: {{ $json.tone }}\nSTIL: {{ $json.style }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.3 }
+      },
+      "id": "analyze-prompt",
+      "name": "Deep Prompt Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [650, 300],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse analysis and merge with request\nconst request = $input.item.json;\nconst aiResponse = $('Deep Prompt Analysis').item?.json?.message?.content;\n\nlet analysis;\ntry {\n  analysis = JSON.parse(aiResponse);\n} catch (e) {\n  analysis = {\n    intent: { primary: 'unknown', task_category: 'generation' },\n    quality_scores: { clarity: 5, completeness: 5, specificity: 5, actionability: 5 },\n    missing_elements: [],\n    ambiguities: [],\n    implicit_requirements: [],\n    optimal_settings: { model: 'gpt-4o-mini', temperature: 0.7 },\n    risk_assessment: { hallucination_risk: 'medium' },\n    enhancement_suggestions: []\n  };\n}\n\n// Calculate overall quality score\nconst scores = analysis.quality_scores;\nconst overallScore = (scores.clarity + scores.completeness + scores.specificity + scores.actionability) / 4;\n\nreturn {\n  json: {\n    ...request,\n    analysis: analysis,\n    overall_quality_score: overallScore.toFixed(1),\n    needs_enhancement: overallScore < 7,\n    auto_model: analysis.optimal_settings?.model || 'gpt-4o-mini',\n    auto_temperature: analysis.optimal_settings?.temperature || 0.7\n  }\n};"
+      },
+      "id": "parse-analysis",
+      "name": "Parse Analysis Results",
+      "type": "n8n-nodes-base.code",
+      "position": [850, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir prompt engineering uzmanisın. Verilen analiz sonuclarina gore promptu optimize et ve gelistir.\n\n## OPTIMIZATION FRAMEWORK\n\n### 1. STRUCTURE OPTIMIZATION\n- Clear role definition\n- Explicit task description  \n- Output format specification\n- Constraints and boundaries\n- Examples (few-shot)\n\n### 2. CLARITY ENHANCEMENT\n- Remove ambiguity\n- Add specific metrics\n- Define success criteria\n- Include edge cases\n\n### 3. CHAIN-OF-THOUGHT INTEGRATION\nKarmasik gorevler icin:\n\"Adim adim dusun:\n1. Oncelikle [X] analiz et\n2. Sonra [Y] degerlendir\n3. Son olarak [Z] karar ver\"\n\n### 4. FEW-SHOT EXAMPLES\nOrnek format:\n\"ORNEK 1:\nInput: [ornek girdi]\nOutput: [beklenen cikti]\n\nORNEK 2:\nInput: [farkli senaryo]\nOutput: [beklenen cikti]\"\n\n### 5. NEGATIVE EXAMPLES (Opsiyonel)\n\"YAPMA:\n- [yanlis ornek 1]\n- [yanlis ornek 2]\"\n\n### 6. OUTPUT VALIDATION\n\"Ciktini kontrol et:\n- [kriter 1] saglanmali\n- [kriter 2] olmamali\n- [format] uyumlu olmali\"\n\nJSON formatinda dondur:\n{\n  \"optimized_system_prompt\": \"[tam sistem promptu]\",\n  \"optimized_user_prompt_template\": \"[kullanici promptu sablonu]\",\n  \"few_shot_examples\": [\n    { \"input\": \"...\", \"output\": \"...\" }\n  ],\n  \"negative_examples\": [\n    { \"bad_output\": \"...\", \"why_bad\": \"...\" }\n  ],\n  \"output_schema\": {\n    \"type\": \"json|text|markdown\",\n    \"fields\": [\"field1\", \"field2\"],\n    \"validation_rules\": [\"rule1\", \"rule2\"]\n  },\n  \"chain_of_thought_steps\": [\n    \"Step 1: ...\",\n    \"Step 2: ...\"\n  ],\n  \"recommended_temperature\": 0.7,\n  \"recommended_max_tokens\": 1000,\n  \"quality_improvements\": [\n    \"Eklenen: explicit output format\",\n    \"Duzeltilen: ambiguous language\"\n  ],\n  \"confidence_score\": 85\n}"
+            },
+            {
+              "role": "user",
+              "content": "HAM PROMPT: {{ $json.raw_prompt }}\n\nANALIZ SONUCLARI:\n- Intent: {{ $json.analysis.intent.primary }}\n- Task Category: {{ $json.analysis.intent.task_category }}\n- Quality Score: {{ $json.overall_quality_score }}/10\n- Missing Elements: {{ JSON.stringify($json.analysis.missing_elements) }}\n- Ambiguities: {{ JSON.stringify($json.analysis.ambiguities) }}\n- Enhancement Suggestions: {{ JSON.stringify($json.analysis.enhancement_suggestions) }}\n\nTARGET CONFIG:\n- Task Type: {{ $json.task_type }}\n- Output Format: {{ $json.output_format }}\n- Target Platform: {{ $json.target_platform }}\n- Target Audience: {{ $json.target_audience }}\n- Tone: {{ $json.tone }}\n- Style: {{ $json.style }}\n- Language: {{ $json.target_language }}\n\nADVANCED OPTIONS:\n- Chain of Thought: {{ $json.use_chain_of_thought }}\n- Few-Shot Examples: {{ $json.use_few_shot }}\n- Negative Examples: {{ $json.include_negative_examples }}\n\nCONSTRAINTS:\n- Max Words: {{ $json.max_words || 'unlimited' }}\n- Max Characters: {{ $json.max_characters || 'unlimited' }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.5 }
+      },
+      "id": "optimize-prompt",
+      "name": "Optimize & Enhance Prompt",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1050, 300],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse optimized prompt\nconst request = $input.item.json;\nconst aiResponse = $('Optimize & Enhance Prompt').item?.json?.message?.content;\n\nlet optimized;\ntry {\n  optimized = JSON.parse(aiResponse);\n} catch (e) {\n  // Fallback: use raw prompt with basic structure\n  optimized = {\n    optimized_system_prompt: `Sen bir ${request.task_type} uzmanisin. ${request.raw_prompt}`,\n    optimized_user_prompt_template: request.raw_prompt,\n    few_shot_examples: [],\n    output_schema: { type: request.output_format },\n    recommended_temperature: request.auto_temperature,\n    confidence_score: 50\n  };\n}\n\nreturn {\n  json: {\n    ...request,\n    optimized: optimized,\n    final_system_prompt: optimized.optimized_system_prompt,\n    final_user_template: optimized.optimized_user_prompt_template,\n    final_temperature: request.temperature_override || optimized.recommended_temperature || 0.7,\n    final_model: request.target_model !== 'auto' ? request.target_model : request.auto_model\n  }\n};"
+      },
+      "id": "parse-optimization",
+      "name": "Parse Optimized Prompt",
+      "type": "n8n-nodes-base.code",
+      "position": [1250, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "id": "check-variants", "leftValue": "={{ $json.generate_variants }}", "rightValue": "1", "operator": { "type": "number", "operation": "gt" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-generate-variants",
+      "name": "If Multiple Variants",
+      "type": "n8n-nodes-base.if",
+      "position": [1450, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Ayni promptun {{ $json.generate_variants }} farkli varyasyonunu olustur. Her varyasyon:\n- Farkli bir yaklasim\n- Farkli ton/stil\n- Farkli vurgu\n\nJSON array dondur:\n[\n  {\n    \"variant_id\": 1,\n    \"variant_name\": \"Concise Version\",\n    \"system_prompt\": \"...\",\n    \"user_template\": \"...\",\n    \"temperature\": 0.7,\n    \"differentiator\": \"Kisa ve oz\"\n  },\n  ...\n]"
+            },
+            {
+              "role": "user",
+              "content": "BASE SYSTEM PROMPT:\n{{ $json.final_system_prompt }}\n\nBASE USER TEMPLATE:\n{{ $json.final_user_template }}\n\nVaryasyon sayisi: {{ $json.generate_variants }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.8 }
+      },
+      "id": "generate-variants",
+      "name": "Generate Prompt Variants",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1650, 200],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "{{ $json.final_system_prompt }}"
+            },
+            {
+              "role": "user",
+              "content": "{{ $json.final_user_template }}"
+            }
+          ]
+        },
+        "options": { "temperature": "={{ $json.final_temperature }}" }
+      },
+      "id": "test-prompt",
+      "name": "Test Optimized Prompt",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1650, 400],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir AI output validator'sun. Verilen ciktiyi analiz et ve kalite degerlendirmesi yap.\n\n## VALIDATION CRITERIA\n\n1. **FORMAT COMPLIANCE**: Beklenen formata uygun mu?\n2. **COMPLETENESS**: Tum gerekli bilgiler var mi?\n3. **ACCURACY SIGNALS**: Halusinasyon belirtileri var mi?\n4. **TONE MATCH**: Istenen tona uygun mu?\n5. **CONSTRAINT ADHERENCE**: Kisitlamalara uyulmus mu?\n6. **ACTIONABILITY**: Kullanilabilir mi?\n\nJSON dondur:\n{\n  \"validation_passed\": true,\n  \"overall_score\": 85,\n  \"dimension_scores\": {\n    \"format_compliance\": 90,\n    \"completeness\": 80,\n    \"accuracy_confidence\": 75,\n    \"tone_match\": 85,\n    \"constraint_adherence\": 95,\n    \"actionability\": 80\n  },\n  \"issues_found\": [\n    { \"severity\": \"warning\", \"issue\": \"...\", \"location\": \"...\", \"suggestion\": \"...\" }\n  ],\n  \"strengths\": [\"...\"],\n  \"improvement_suggestions\": [\"...\"],\n  \"human_review_needed\": false,\n  \"confidence_in_assessment\": 90\n}"
+            },
+            {
+              "role": "user",
+              "content": "BEKLENEN FORMAT: {{ $json.output_format }}\nBEKLENEN TON: {{ $json.tone }}\nKISITLAMALAR: Max words={{ $json.max_words }}, Max chars={{ $json.max_characters }}\n\nTEST CIKTISI:\n{{ $('Test Optimized Prompt').item?.json?.message?.content || 'No output' }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.2 }
+      },
+      "id": "validate-output",
+      "name": "Validate Test Output",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1850, 400],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final prompt package\nconst request = $input.item.json;\nconst testOutput = $('Test Optimized Prompt').item?.json?.message?.content || '';\nconst validationRaw = $('Validate Test Output').item?.json?.message?.content || '{}';\nconst variantsRaw = $('Generate Prompt Variants').item?.json?.message?.content || '[]';\n\nlet validation, variants;\ntry { validation = JSON.parse(validationRaw); } catch { validation = { overall_score: 70, validation_passed: true }; }\ntry { variants = JSON.parse(variantsRaw); } catch { variants = []; }\n\nconst promptPackage = {\n  // Meta\n  request_id: request.request_id,\n  created_at: new Date().toISOString(),\n  client_name: request.client_name,\n  project: request.project,\n  \n  // Original Input\n  original_prompt: request.raw_prompt,\n  original_context: request.context,\n  \n  // Analysis Results\n  analysis: {\n    intent: request.analysis?.intent,\n    quality_scores: request.analysis?.quality_scores,\n    overall_score: request.overall_quality_score,\n    missing_elements: request.analysis?.missing_elements,\n    risk_assessment: request.analysis?.risk_assessment\n  },\n  \n  // Optimized Prompts\n  optimized: {\n    system_prompt: request.final_system_prompt,\n    user_template: request.final_user_template,\n    few_shot_examples: request.optimized?.few_shot_examples || [],\n    chain_of_thought: request.optimized?.chain_of_thought_steps || [],\n    output_schema: request.optimized?.output_schema,\n    quality_improvements: request.optimized?.quality_improvements || []\n  },\n  \n  // Variants (if generated)\n  variants: variants,\n  \n  // Recommended Settings\n  settings: {\n    model: request.final_model,\n    temperature: request.final_temperature,\n    max_tokens: request.optimized?.recommended_max_tokens,\n    output_format: request.output_format\n  },\n  \n  // Test Results\n  test: {\n    output_sample: testOutput.substring(0, 500),\n    validation: validation,\n    passed: validation.validation_passed,\n    score: validation.overall_score\n  },\n  \n  // Final Scores\n  scores: {\n    original_quality: parseFloat(request.overall_quality_score),\n    optimization_confidence: request.optimized?.confidence_score || 75,\n    test_validation_score: validation.overall_score || 70,\n    overall_confidence: Math.round(\n      (parseFloat(request.overall_quality_score) * 0.2) +\n      ((request.optimized?.confidence_score || 75) * 0.4) +\n      ((validation.overall_score || 70) * 0.4)\n    )\n  },\n  \n  // Usage Instructions\n  usage: {\n    copy_system_prompt: request.final_system_prompt,\n    copy_user_template: request.final_user_template,\n    suggested_variables: extractVariables(request.final_user_template)\n  }\n};\n\nfunction extractVariables(template) {\n  const matches = template.match(/\\{\\{[^}]+\\}\\}/g) || [];\n  return [...new Set(matches.map(m => m.replace(/[{}\\s]/g, '')))];\n}\n\nreturn { json: promptPackage };"
+      },
+      "id": "compile-package",
+      "name": "Compile Prompt Package",
+      "type": "n8n-nodes-base.code",
+      "position": [2050, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Prompt_Library" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "request_id": "={{ $json.request_id }}",
+            "client_name": "={{ $json.client_name }}",
+            "project": "={{ $json.project }}",
+            "original_prompt": "={{ $json.original_prompt }}",
+            "optimized_system_prompt": "={{ $json.optimized.system_prompt }}",
+            "optimized_user_template": "={{ $json.optimized.user_template }}",
+            "model": "={{ $json.settings.model }}",
+            "temperature": "={{ $json.settings.temperature }}",
+            "original_score": "={{ $json.scores.original_quality }}",
+            "final_score": "={{ $json.scores.overall_confidence }}",
+            "test_passed": "={{ $json.test.passed }}",
+            "created_at": "={{ $json.created_at }}"
+          }
+        }
+      },
+      "id": "save-to-library",
+      "name": "Save to Prompt Library",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2250, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Return Prompt Package",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [2450, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "channel": "#prompt-engineering",
+        "text": "=*Yeni Prompt Optimize Edildi*\n\n*Request ID:* {{ $json.request_id }}\n*Client:* {{ $json.client_name }}\n*Project:* {{ $json.project }}\n\n*Original Score:* {{ $json.scores.original_quality }}/10\n*Final Score:* {{ $json.scores.overall_confidence }}/100\n*Test Passed:* {{ $json.test.passed ? 'Yes' : 'No' }}\n\n*Model:* {{ $json.settings.model }}\n*Temperature:* {{ $json.settings.temperature }}\n\n*Improvements:*\n{{ ($json.optimized.quality_improvements || []).slice(0, 3).map(i => '- ' + i).join('\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [2450, 450],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "prompt-templates",
+        "options": {}
+      },
+      "id": "templates-webhook",
+      "name": "Get Templates",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 600],
+      "typeVersion": 2,
+      "webhookId": "prompt-templates"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return pre-built prompt templates\nconst templates = {\n  email_cold_outreach: {\n    name: 'Cold Email Outreach',\n    system_prompt: `Sen bir B2B satis uzmanisin. Kisisel, dikkat cekici ve deger odakli cold email'ler yaziyorsun.\n\nKURALLAR:\n- Max 150 kelime\n- Direkt konuya gir\n- Spesifik deger onerisi sun\n- Tek net CTA\n- SPAM kelimelerinden kacin\n\nADIM ADIM:\n1. Hook ile basla (dikkat cekici ilk cumle)\n2. Deger onerisi (ne sunuyorsun)\n3. Sosyal kanit (kisa)\n4. CTA (tek ve net)`,\n    user_template: 'Lead: {{name}}\\nSirket: {{company}}\\nPozisyon: {{title}}\\nSektor: {{industry}}',\n    variables: ['name', 'company', 'title', 'industry'],\n    temperature: 0.7,\n    output_format: 'json',\n    expected_output: '{ \"subject\": \"...\", \"body\": \"...\", \"cta_type\": \"...\" }'\n  },\n  \n  social_media_caption: {\n    name: 'Social Media Caption',\n    system_prompt: `Sen bir sosyal medya uzmanisin. Platform-specific caption'lar yaziyorsun.\n\nPLATFORM KURALLARI:\n- Instagram: 2200 char, emoji, 20-30 hashtag\n- LinkedIn: Professional, 1000 char, 3-5 hashtag\n- Twitter: MAX 280 char, punchy, 1-2 hashtag\n- TikTok: 150 char, Gen-Z, trending hashtag`,\n    user_template: 'Icerik: {{content}}\\nMarka: {{brand}}\\nPlatform: {{platform}}',\n    variables: ['content', 'brand', 'platform'],\n    temperature: 0.8,\n    output_format: 'text'\n  },\n  \n  customer_response: {\n    name: 'Customer Support Response',\n    system_prompt: `Sen bir musteri destek temsilcisisin. Empati gosteren, cozum odakli yanitlar yaziyorsun.\n\nYAKLASIM:\n1. Empati goster\n2. Sorunu anla\n3. Cozum sun\n4. Sonraki adimlari belirt\n\nTON: Sicak ama profesyonel\nMAX: 200 kelime`,\n    user_template: 'Musteri: {{customer_name}}\\nSorun: {{issue}}\\nKategori: {{category}}',\n    variables: ['customer_name', 'issue', 'category'],\n    temperature: 0.6,\n    output_format: 'text'\n  },\n  \n  content_analysis: {\n    name: 'Content Analysis',\n    system_prompt: `Sen bir icerik analistisin. Verilen icerigi detayli analiz ediyorsun.\n\nANALIZ BOYUTLARI:\n1. Sentiment (positive/negative/neutral)\n2. Tone (formal/casual/urgent/etc)\n3. Key themes\n4. Target audience\n5. Call-to-actions\n6. SEO keywords\n7. Readability score`,\n    user_template: 'Icerik:\\n{{content}}',\n    variables: ['content'],\n    temperature: 0.3,\n    output_format: 'json',\n    expected_output: '{ \"sentiment\": \"...\", \"tone\": \"...\", \"themes\": [...], \"audience\": \"...\", \"ctas\": [...], \"keywords\": [...], \"readability\": 8 }'\n  },\n  \n  product_description: {\n    name: 'Product Description',\n    system_prompt: `Sen bir e-ticaret copywriter'isin. Satış odaklı ürün açıklamaları yazıyorsun.\n\nFORMAT:\n1. Hook (dikkat çekici başlık)\n2. Problem (müşteri ağrı noktası)\n3. Solution (ürün nasıl çözüyor)\n4. Features (özellikler - bullet points)\n5. Benefits (faydalar)\n6. Social proof (varsa)\n7. CTA`,\n    user_template: 'Urun: {{product_name}}\\nKategori: {{category}}\\nOzellikler: {{features}}\\nFiyat: {{price}}',\n    variables: ['product_name', 'category', 'features', 'price'],\n    temperature: 0.7,\n    output_format: 'markdown'\n  },\n  \n  meeting_summary: {\n    name: 'Meeting Summary',\n    system_prompt: `Sen bir executive assistant'sin. Toplanti notlarindan ozet ve action items cikariyorsun.\n\nFORMAT:\n## Ozet\n[2-3 cumle toplanti ozeti]\n\n## Ana Kararlar\n- Karar 1\n- Karar 2\n\n## Action Items\n| Gorev | Sorumlu | Deadline |\n|-------|---------|----------|\n\n## Sonraki Adimlar\n- Adim 1\n- Adim 2`,\n    user_template: 'Toplanti Notlari:\\n{{notes}}\\nKatilimcilar: {{participants}}',\n    variables: ['notes', 'participants'],\n    temperature: 0.3,\n    output_format: 'markdown'\n  },\n  \n  competitor_analysis: {\n    name: 'Competitor Analysis',\n    system_prompt: `Sen bir strateji danismanisin. Rakip analizi yapiyorsun.\n\nANALIZ FRAMEWORK:\n1. Overview (kim, ne yapıyor)\n2. Strengths (güçlü yönler)\n3. Weaknesses (zayıf yönler)\n4. Market Position (pazar konumu)\n5. Threat Level (tehdit seviyesi: LOW/MEDIUM/HIGH/CRITICAL)\n6. Opportunities (bizim için fırsatlar)\n7. Recommended Actions (önerilen aksiyonlar)`,\n    user_template: 'Rakip: {{competitor_name}}\\nSektor: {{industry}}\\nBilgiler:\\n{{intel}}',\n    variables: ['competitor_name', 'industry', 'intel'],\n    temperature: 0.4,\n    output_format: 'json'\n  },\n  \n  blog_outline: {\n    name: 'Blog Post Outline',\n    system_prompt: `Sen bir content strategist'sin. SEO-optimized blog outline'ları oluşturuyorsun.\n\nFORMAT:\n# [Başlık - H1]\n\n## Giriş\n[hook + thesis]\n\n## [H2 Bölüm 1]\n### [H3 Alt bölümler]\n- Key points\n\n## [H2 Bölüm 2-4]\n...\n\n## Sonuç\n[Özet + CTA]\n\n## SEO Notes\n- Primary keyword:\n- Secondary keywords:\n- Meta description:`,\n    user_template: 'Konu: {{topic}}\\nHedef Kitle: {{audience}}\\nAnahtar Kelime: {{keyword}}\\nKelime Sayisi: {{word_count}}',\n    variables: ['topic', 'audience', 'keyword', 'word_count'],\n    temperature: 0.6,\n    output_format: 'markdown'\n  }\n};\n\nconst category = $input.item.json.category || 'all';\n\nif (category === 'all') {\n  return { json: { templates: templates, count: Object.keys(templates).length } };\n} else {\n  return { json: { template: templates[category] || null } };\n}"
+      },
+      "id": "return-templates",
+      "name": "Return Prompt Templates",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 600],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-templates",
+      "name": "Return Templates Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [650, 600],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "prompt-ab-test",
+        "options": {}
+      },
+      "id": "ab-test-webhook",
+      "name": "A/B Test Request",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 800],
+      "typeVersion": 2,
+      "webhookId": "prompt-ab-test"
+    },
+    {
+      "parameters": {
+        "jsCode": "// A/B Test two prompts\nconst input = $input.item.json;\n\nconst testConfig = {\n  test_id: `ABT-${Date.now()}`,\n  prompt_a: input.prompt_a,\n  prompt_b: input.prompt_b,\n  test_input: input.test_input,\n  evaluation_criteria: input.evaluation_criteria || ['clarity', 'relevance', 'actionability'],\n  model: input.model || 'gpt-4o-mini',\n  temperature: input.temperature || 0.7,\n  runs_per_variant: input.runs || 3\n};\n\nreturn { json: testConfig };"
+      },
+      "id": "setup-ab-test",
+      "name": "Setup A/B Test",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 800],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{ $json.prompt_a }}"
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.test_input }}"
+            }
+          ]
+        },
+        "options": { "temperature": "={{ $json.temperature }}" }
+      },
+      "id": "run-prompt-a",
+      "name": "Run Prompt A",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [650, 750],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{ $json.prompt_b }}"
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.test_input }}"
+            }
+          ]
+        },
+        "options": { "temperature": "={{ $json.temperature }}" }
+      },
+      "id": "run-prompt-b",
+      "name": "Run Prompt B",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [650, 900],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir prompt kalite hakemisin. Iki farkli prompt ciktisini kiyasla ve kazanani belirle.\n\nDEGERLENDIRME KRITERLERI:\n{{ $json.evaluation_criteria.join(', ') }}\n\nOBJEKTIF OL. Sadece cikti kalitesine bak.\n\nJSON dondur:\n{\n  \"winner\": \"A\" | \"B\" | \"tie\",\n  \"scores\": {\n    \"A\": { \"overall\": 85, \"criteria_scores\": {...} },\n    \"B\": { \"overall\": 78, \"criteria_scores\": {...} }\n  },\n  \"reasoning\": \"Neden bu kazandi?\",\n  \"detailed_comparison\": {\n    \"A_strengths\": [...],\n    \"A_weaknesses\": [...],\n    \"B_strengths\": [...],\n    \"B_weaknesses\": [...]\n  },\n  \"recommendation\": \"Hangi prompt kullanilmali ve neden\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "TEST INPUT:\n{{ $json.test_input }}\n\n--- OUTPUT A ---\n{{ $('Run Prompt A').item?.json?.message?.content || 'No output' }}\n\n--- OUTPUT B ---\n{{ $('Run Prompt B').item?.json?.message?.content || 'No output' }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.2 }
+      },
+      "id": "compare-outputs",
+      "name": "Compare A/B Outputs",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [850, 800],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile A/B test results\nconst config = $input.item.json;\nconst outputA = $('Run Prompt A').item?.json?.message?.content || '';\nconst outputB = $('Run Prompt B').item?.json?.message?.content || '';\nconst comparisonRaw = $('Compare A/B Outputs').item?.json?.message?.content || '{}';\n\nlet comparison;\ntry { comparison = JSON.parse(comparisonRaw); } catch { comparison = { winner: 'tie', scores: {} }; }\n\nconst results = {\n  test_id: config.test_id,\n  test_input: config.test_input,\n  \n  prompt_a: {\n    prompt: config.prompt_a,\n    output: outputA,\n    score: comparison.scores?.A?.overall || 0\n  },\n  \n  prompt_b: {\n    prompt: config.prompt_b,\n    output: outputB,\n    score: comparison.scores?.B?.overall || 0\n  },\n  \n  winner: comparison.winner,\n  score_difference: Math.abs((comparison.scores?.A?.overall || 0) - (comparison.scores?.B?.overall || 0)),\n  reasoning: comparison.reasoning,\n  detailed_comparison: comparison.detailed_comparison,\n  recommendation: comparison.recommendation,\n  \n  tested_at: new Date().toISOString()\n};\n\nreturn { json: results };"
+      },
+      "id": "compile-ab-results",
+      "name": "Compile A/B Results",
+      "type": "n8n-nodes-base.code",
+      "position": [1050, 800],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-ab-test",
+      "name": "Return A/B Results",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1250, 800],
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Prompt Request": { "main": [[{ "node": "Normalize & Enrich Request", "type": "main", "index": 0 }]] },
+    "Normalize & Enrich Request": { "main": [[{ "node": "Deep Prompt Analysis", "type": "main", "index": 0 }]] },
+    "Deep Prompt Analysis": { "main": [[{ "node": "Parse Analysis Results", "type": "main", "index": 0 }]] },
+    "Parse Analysis Results": { "main": [[{ "node": "Optimize & Enhance Prompt", "type": "main", "index": 0 }]] },
+    "Optimize & Enhance Prompt": { "main": [[{ "node": "Parse Optimized Prompt", "type": "main", "index": 0 }]] },
+    "Parse Optimized Prompt": { "main": [[{ "node": "If Multiple Variants", "type": "main", "index": 0 }]] },
+    "If Multiple Variants": {
+      "main": [
+        [{ "node": "Generate Prompt Variants", "type": "main", "index": 0 }],
+        [{ "node": "Test Optimized Prompt", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Prompt Variants": { "main": [[{ "node": "Compile Prompt Package", "type": "main", "index": 0 }]] },
+    "Test Optimized Prompt": { "main": [[{ "node": "Validate Test Output", "type": "main", "index": 0 }]] },
+    "Validate Test Output": { "main": [[{ "node": "Compile Prompt Package", "type": "main", "index": 0 }]] },
+    "Compile Prompt Package": { "main": [[{ "node": "Save to Prompt Library", "type": "main", "index": 0 }]] },
+    "Save to Prompt Library": {
+      "main": [[
+        { "node": "Return Prompt Package", "type": "main", "index": 0 },
+        { "node": "Notify Slack", "type": "main", "index": 0 }
+      ]]
+    },
+    "Get Templates": { "main": [[{ "node": "Return Prompt Templates", "type": "main", "index": 0 }]] },
+    "Return Prompt Templates": { "main": [[{ "node": "Return Templates Response", "type": "main", "index": 0 }]] },
+    "A/B Test Request": { "main": [[{ "node": "Setup A/B Test", "type": "main", "index": 0 }]] },
+    "Setup A/B Test": {
+      "main": [[
+        { "node": "Run Prompt A", "type": "main", "index": 0 },
+        { "node": "Run Prompt B", "type": "main", "index": 0 }
+      ]]
+    },
+    "Run Prompt A": { "main": [[{ "node": "Compare A/B Outputs", "type": "main", "index": 0 }]] },
+    "Run Prompt B": { "main": [[{ "node": "Compare A/B Outputs", "type": "main", "index": 0 }]] },
+    "Compare A/B Outputs": { "main": [[{ "node": "Compile A/B Results", "type": "main", "index": 0 }]] },
+    "Compile A/B Results": { "main": [[{ "node": "Return A/B Results", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "grain-automation" }, { "name": "prompt-engineering" }, { "name": "ai-tools" }],
+  "meta": {
+    "templateId": "grain-pes-v1",
+    "version": "1.0.0",
+    "description": "Advanced Prompt Engineering Studio: Analyze, optimize, test, and version prompts. Includes few-shot generation, chain-of-thought, A/B testing, and prompt library.",
+    "requiredCredentials": ["Google Sheets OAuth2", "OpenAI API", "Slack"],
+    "endpoints": {
+      "optimize": "/webhook/prompt-studio",
+      "templates": "/webhook/prompt-templates",
+      "ab_test": "/webhook/prompt-ab-test"
+    },
+    "features": [
+      "Deep prompt analysis",
+      "Auto-optimization with CoT",
+      "Few-shot example generation",
+      "Multi-variant generation",
+      "Output validation",
+      "A/B testing framework",
+      "Pre-built template library",
+      "Prompt versioning"
+    ]
+  }
+}

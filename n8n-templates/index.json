@@ -1,5 +1,5 @@
 {
-  "count": 36,
+  "count": 37,
   "files": [
     {
       "filename": "0 - MARKETING TEAM.json",
@@ -140,6 +140,12 @@
       "notes": ""
     },
     {
+      "filename": "Grain_Prompt_Engineering_Studio_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Prompt_Engineering_Studio_v1.json",
+      "size_bytes": 36109,
+      "notes": ""
+    },
+    {
       "filename": "Grain_Social_Listening_Sentiment_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Social_Listening_Sentiment_v1.json",
       "size_bytes": 22241,
@@ -196,7 +202,7 @@
     {
       "filename": "index.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/index.json",
-      "size_bytes": 7958,
+      "size_bytes": 8448,
       "notes": ""
     },
     {
