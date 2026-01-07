@@ -1,5 +1,5 @@
 {
-  "count": 44,
+  "count": 48,
   "files": [
     {
       "filename": "0 - MARKETING TEAM.json",
@@ -122,6 +122,12 @@
       "notes": ""
     },
     {
+      "filename": "Grain_Client_Reporting_Dashboard_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Client_Reporting_Dashboard_v1.json",
+      "size_bytes": 30341,
+      "notes": ""
+    },
+    {
       "filename": "Grain_Competitive_Intelligence_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Competitive_Intelligence_v1.json",
       "size_bytes": 17114,
@@ -140,9 +146,21 @@
       "notes": ""
     },
     {
+      "filename": "Grain_Guest_Communication_Journey_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Guest_Communication_Journey_v1.json",
+      "size_bytes": 23610,
+      "notes": ""
+    },
+    {
       "filename": "Grain_Intelligent_CDP_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Intelligent_CDP_v1.json",
       "size_bytes": 27955,
+      "notes": ""
+    },
+    {
+      "filename": "Grain_Invoice_Billing_Automation_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Invoice_Billing_Automation_v1.json",
+      "size_bytes": 24184,
       "notes": ""
     },
     {
@@ -179,6 +197,12 @@
       "filename": "Grain_RevOps_Hub_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_RevOps_Hub_v1.json",
       "size_bytes": 22982,
+      "notes": ""
+    },
+    {
+      "filename": "Grain_Review_Management_AI_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Review_Management_AI_v1.json",
+      "size_bytes": 23604,
       "notes": ""
     },
     {
@@ -244,7 +268,7 @@
     {
       "filename": "index.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/index.json",
-      "size_bytes": 8692,
+      "size_bytes": 10326,
       "notes": ""
     },
     {

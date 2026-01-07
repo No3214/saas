@@ -1,0 +1,584 @@
+{
+  "name": "Grain Invoice & Billing Automation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "monthly-invoice-trigger",
+      "name": "Monthly Invoice Generation",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {},
+      "id": "webhook-milestone",
+      "name": "Milestone Completed Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 500],
+      "webhookId": "milestone-invoice-trigger"
+    },
+    {
+      "parameters": {
+        "events": [
+          "invoice.payment_succeeded",
+          "invoice.payment_failed",
+          "customer.subscription.updated",
+          "customer.subscription.deleted"
+        ]
+      },
+      "id": "stripe-webhook",
+      "name": "Stripe Webhook Events",
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [200, 700]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.CLIENT_DATABASE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Billing",
+          "mode": "list"
+        },
+        "options": {
+          "filterByFormula": "AND({billing_type} = 'recurring', {status} = 'active')"
+        }
+      },
+      "id": "get-recurring-clients",
+      "name": "Get Recurring Clients",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Invoice Generator\n// Creates invoice data structure for different billing types\n\nconst client = $input.first().json;\nconst billingDate = new Date();\n\nconst invoice = {\n  invoiceNumber: `INV-${billingDate.getFullYear()}${String(billingDate.getMonth() + 1).padStart(2, '0')}-${client.client_id}-${Date.now().toString().slice(-4)}`,\n  \n  // Client details\n  client: {\n    id: client.client_id,\n    name: client.client_name,\n    email: client.billing_email || client.email,\n    address: client.billing_address,\n    taxId: client.tax_id,\n    stripeCustomerId: client.stripe_customer_id\n  },\n  \n  // Invoice details\n  issueDate: billingDate.toISOString().split('T')[0],\n  dueDate: new Date(billingDate.getTime() + 30*24*60*60*1000).toISOString().split('T')[0],\n  currency: client.currency || 'USD',\n  \n  // Line items\n  lineItems: [],\n  \n  // Billing type specific\n  billingType: client.billing_type, // recurring, milestone, hourly, one-time\n  billingPeriod: {\n    start: new Date(billingDate.getFullYear(), billingDate.getMonth() - 1, 1).toISOString().split('T')[0],\n    end: new Date(billingDate.getFullYear(), billingDate.getMonth(), 0).toISOString().split('T')[0]\n  },\n  \n  // Totals (calculated after line items)\n  subtotal: 0,\n  taxRate: parseFloat(client.tax_rate) || 0,\n  taxAmount: 0,\n  discount: parseFloat(client.discount) || 0,\n  total: 0,\n  \n  // Payment\n  paymentMethod: client.payment_method || 'stripe',\n  status: 'draft',\n  \n  // Notes\n  notes: client.invoice_notes || '',\n  terms: client.payment_terms || 'Net 30'\n};\n\n// Add line items based on billing type\nswitch (client.billing_type) {\n  case 'recurring':\n    // Retainer or subscription\n    invoice.lineItems.push({\n      description: client.service_description || 'Monthly Retainer Services',\n      quantity: 1,\n      unitPrice: parseFloat(client.monthly_rate) || 0,\n      amount: parseFloat(client.monthly_rate) || 0\n    });\n    \n    // Add any overage charges\n    if (client.overage_hours > 0) {\n      invoice.lineItems.push({\n        description: `Additional Hours (${client.overage_hours} hrs @ $${client.hourly_rate}/hr)`,\n        quantity: parseFloat(client.overage_hours),\n        unitPrice: parseFloat(client.hourly_rate),\n        amount: parseFloat(client.overage_hours) * parseFloat(client.hourly_rate)\n      });\n    }\n    break;\n    \n  case 'milestone':\n    // Project milestone\n    invoice.lineItems.push({\n      description: `${client.project_name}: ${client.milestone_name}`,\n      quantity: 1,\n      unitPrice: parseFloat(client.milestone_amount) || 0,\n      amount: parseFloat(client.milestone_amount) || 0\n    });\n    break;\n    \n  case 'hourly':\n    // Time-based billing\n    const hours = parseFloat(client.hours_worked) || 0;\n    const rate = parseFloat(client.hourly_rate) || 0;\n    invoice.lineItems.push({\n      description: `Professional Services - ${hours} hours`,\n      quantity: hours,\n      unitPrice: rate,\n      amount: hours * rate\n    });\n    break;\n}\n\n// Add any recurring add-ons\nif (client.addons) {\n  const addons = typeof client.addons === 'string' ? JSON.parse(client.addons) : client.addons;\n  addons.forEach(addon => {\n    invoice.lineItems.push({\n      description: addon.name,\n      quantity: addon.quantity || 1,\n      unitPrice: addon.price,\n      amount: (addon.quantity || 1) * addon.price\n    });\n  });\n}\n\n// Calculate totals\ninvoice.subtotal = invoice.lineItems.reduce((sum, item) => sum + item.amount, 0);\ninvoice.taxAmount = invoice.subtotal * (invoice.taxRate / 100);\ninvoice.total = invoice.subtotal + invoice.taxAmount - invoice.discount;\n\nreturn [{ json: invoice }];"
+      },
+      "id": "generate-invoice",
+      "name": "Generate Invoice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/invoices",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customer",
+              "value": "={{ $json.client.stripeCustomerId }}"
+            },
+            {
+              "name": "collection_method",
+              "value": "send_invoice"
+            },
+            {
+              "name": "days_until_due",
+              "value": "30"
+            },
+            {
+              "name": "auto_advance",
+              "value": "true"
+            },
+            {
+              "name": "metadata[invoice_number]",
+              "value": "={{ $json.invoiceNumber }}"
+            },
+            {
+              "name": "metadata[client_id]",
+              "value": "={{ $json.client.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-stripe-invoice",
+      "name": "Create Stripe Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [950, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/invoiceitems",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customer",
+              "value": "={{ $json.client.stripeCustomerId }}"
+            },
+            {
+              "name": "invoice",
+              "value": "={{ $('Create Stripe Invoice').first().json.id }}"
+            },
+            {
+              "name": "amount",
+              "value": "={{ Math.round($json.total * 100) }}"
+            },
+            {
+              "name": "currency",
+              "value": "={{ $json.currency.toLowerCase() }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.lineItems.map(i => i.description).join(', ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "add-stripe-line-items",
+      "name": "Add Stripe Line Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [950, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/invoices/{{ $('Create Stripe Invoice').first().json.id }}/finalize",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "options": {}
+      },
+      "id": "finalize-stripe-invoice",
+      "name": "Finalize & Send Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Stripe Payment Events\n\nconst event = $input.first().json;\nconst eventType = event.type;\nconst invoiceData = event.data?.object || {};\n\nconst paymentEvent = {\n  eventType,\n  eventId: event.id,\n  invoiceId: invoiceData.id,\n  invoiceNumber: invoiceData.metadata?.invoice_number || invoiceData.number,\n  customerId: invoiceData.customer,\n  amount: (invoiceData.amount_paid || invoiceData.amount_due || 0) / 100,\n  currency: invoiceData.currency?.toUpperCase(),\n  status: invoiceData.status,\n  paidAt: invoiceData.status_transitions?.paid_at \n    ? new Date(invoiceData.status_transitions.paid_at * 1000).toISOString() \n    : null,\n  hostedInvoiceUrl: invoiceData.hosted_invoice_url,\n  pdfUrl: invoiceData.invoice_pdf,\n  processedAt: new Date().toISOString()\n};\n\n// Determine notification type\nswitch (eventType) {\n  case 'invoice.payment_succeeded':\n    paymentEvent.notificationType = 'payment_success';\n    paymentEvent.message = `Payment of $${paymentEvent.amount} received for invoice ${paymentEvent.invoiceNumber}`;\n    break;\n  case 'invoice.payment_failed':\n    paymentEvent.notificationType = 'payment_failed';\n    paymentEvent.message = `Payment failed for invoice ${paymentEvent.invoiceNumber}. Amount: $${paymentEvent.amount}`;\n    paymentEvent.failureReason = invoiceData.last_finalization_error?.message || 'Unknown error';\n    break;\n  case 'customer.subscription.updated':\n    paymentEvent.notificationType = 'subscription_updated';\n    paymentEvent.message = `Subscription updated for customer ${paymentEvent.customerId}`;\n    break;\n  case 'customer.subscription.deleted':\n    paymentEvent.notificationType = 'subscription_cancelled';\n    paymentEvent.message = `Subscription cancelled for customer ${paymentEvent.customerId}`;\n    break;\n}\n\nreturn [{ json: paymentEvent }];"
+      },
+      "id": "process-payment-event",
+      "name": "Process Payment Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "payment-failed",
+              "leftValue": "={{ $json.notificationType }}",
+              "rightValue": "payment_failed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-payment-status",
+      "name": "Payment Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "to": "={{ $json.customerEmail }}",
+        "subject": "Action Required: Payment Failed for Invoice {{ $json.invoiceNumber }}",
+        "emailType": "html",
+        "html": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <h2 style=\"color: #e74c3c;\">Payment Failed</h2>\n  <p>We were unable to process your payment for invoice <strong>{{ $json.invoiceNumber }}</strong>.</p>\n  \n  <div style=\"background: #fef2f2; padding: 15px; border-radius: 8px; margin: 20px 0;\">\n    <p><strong>Amount Due:</strong> ${{ $json.amount }}</p>\n    <p><strong>Reason:</strong> {{ $json.failureReason }}</p>\n  </div>\n  \n  <p>Please update your payment method or try again:</p>\n  \n  <div style=\"text-align: center; margin: 30px 0;\">\n    <a href=\"{{ $json.hostedInvoiceUrl }}\" style=\"background: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;\">Pay Invoice Now</a>\n  </div>\n  \n  <p>If you have questions, please contact us.</p>\n</div>",
+        "options": {}
+      },
+      "id": "send-payment-failed-email",
+      "name": "Send Payment Failed Email",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2.1,
+      "position": [950, 650]
+    },
+    {
+      "parameters": {
+        "channel": "#billing-alerts",
+        "text": "=🚨 *Payment Failed Alert*\n\n*Invoice:* {{ $json.invoiceNumber }}\n*Customer:* {{ $json.customerId }}\n*Amount:* ${{ $json.amount }} {{ $json.currency }}\n*Reason:* {{ $json.failureReason }}\n\n_Action Required: Follow up with customer_",
+        "otherOptions": {}
+      },
+      "id": "slack-payment-failed",
+      "name": "Slack Payment Failed Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [950, 800]
+    },
+    {
+      "parameters": {
+        "to": "={{ $json.customerEmail }}",
+        "subject": "Thank you! Payment received for Invoice {{ $json.invoiceNumber }}",
+        "emailType": "html",
+        "html": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <h2 style=\"color: #27ae60;\">✓ Payment Received</h2>\n  <p>Thank you! We've received your payment.</p>\n  \n  <div style=\"background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0;\">\n    <p><strong>Invoice Number:</strong> {{ $json.invoiceNumber }}</p>\n    <p><strong>Amount Paid:</strong> ${{ $json.amount }} {{ $json.currency }}</p>\n    <p><strong>Date:</strong> {{ new Date($json.paidAt).toLocaleDateString() }}</p>\n  </div>\n  \n  <p><a href=\"{{ $json.pdfUrl }}\">Download PDF Receipt</a></p>\n  \n  <p>Thank you for your business!</p>\n</div>",
+        "options": {}
+      },
+      "id": "send-payment-success-email",
+      "name": "Send Payment Success Email",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2.1,
+      "position": [950, 950]
+    },
+    {
+      "parameters": {
+        "channel": "#billing",
+        "text": "=✅ *Payment Received*\n\n*Invoice:* {{ $json.invoiceNumber }}\n*Amount:* ${{ $json.amount }} {{ $json.currency }}\n*Customer:* {{ $json.customerId }}",
+        "otherOptions": {}
+      },
+      "id": "slack-payment-success",
+      "name": "Slack Payment Success",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1200, 950]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-overdue-check",
+      "name": "Daily Overdue Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 1100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.stripe.com/v1/invoices",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "open"
+            },
+            {
+              "name": "due_date[lt]",
+              "value": "={{ Math.floor(Date.now() / 1000) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-overdue-invoices",
+      "name": "Get Overdue Invoices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 1100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process overdue invoices for reminders\n\nconst overdueInvoices = $input.first().json.data || [];\n\nreturn overdueInvoices.map(invoice => {\n  const daysOverdue = Math.floor((Date.now() / 1000 - invoice.due_date) / (24 * 60 * 60));\n  \n  return {\n    json: {\n      invoiceId: invoice.id,\n      invoiceNumber: invoice.number,\n      customerId: invoice.customer,\n      customerEmail: invoice.customer_email,\n      amount: invoice.amount_due / 100,\n      currency: invoice.currency.toUpperCase(),\n      dueDate: new Date(invoice.due_date * 1000).toISOString().split('T')[0],\n      daysOverdue,\n      hostedInvoiceUrl: invoice.hosted_invoice_url,\n      reminderLevel: daysOverdue <= 7 ? 'gentle' : daysOverdue <= 14 ? 'firm' : 'urgent'\n    }\n  };\n});"
+      },
+      "id": "process-overdue",
+      "name": "Process Overdue Invoices",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 1100]
+    },
+    {
+      "parameters": {
+        "to": "={{ $json.customerEmail }}",
+        "subject": "={{ $json.reminderLevel === 'urgent' ? '⚠️ URGENT: ' : '' }}Payment Reminder - Invoice {{ $json.invoiceNumber }}",
+        "emailType": "html",
+        "html": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <h2>Payment Reminder</h2>\n  <p>This is a {{ $json.reminderLevel }} reminder that invoice <strong>{{ $json.invoiceNumber }}</strong> is now {{ $json.daysOverdue }} days overdue.</p>\n  \n  <div style=\"background: {{ $json.reminderLevel === 'urgent' ? '#fef2f2' : '#fffbeb' }}; padding: 15px; border-radius: 8px; margin: 20px 0;\">\n    <p><strong>Amount Due:</strong> ${{ $json.amount }} {{ $json.currency }}</p>\n    <p><strong>Due Date:</strong> {{ $json.dueDate }}</p>\n    <p><strong>Days Overdue:</strong> {{ $json.daysOverdue }}</p>\n  </div>\n  \n  <div style=\"text-align: center; margin: 30px 0;\">\n    <a href=\"{{ $json.hostedInvoiceUrl }}\" style=\"background: {{ $json.reminderLevel === 'urgent' ? '#e74c3c' : '#3498db' }}; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;\">Pay Now</a>\n  </div>\n  \n  {{ $json.reminderLevel === 'urgent' ? '<p style=\"color: #e74c3c;\"><strong>Please note:</strong> To avoid service interruption, please make payment immediately.</p>' : '' }}\n</div>",
+        "options": {}
+      },
+      "id": "send-overdue-reminder",
+      "name": "Send Overdue Reminder",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2.1,
+      "position": [950, 1100]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.BILLING_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Invoice Log",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ new Date().toISOString() }}",
+            "invoice_number": "={{ $json.invoiceNumber }}",
+            "client_id": "={{ $json.client?.id }}",
+            "client_name": "={{ $json.client?.name }}",
+            "amount": "={{ $json.total }}",
+            "status": "={{ $json.status }}",
+            "stripe_invoice_id": "={{ $('Create Stripe Invoice').first()?.json?.id || '' }}",
+            "billing_type": "={{ $json.billingType }}"
+          }
+        }
+      },
+      "id": "log-invoice",
+      "name": "Log Invoice",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#billing",
+        "text": "=📄 *Invoice Generated*\n\n*Invoice #:* {{ $json.invoiceNumber }}\n*Client:* {{ $json.client.name }}\n*Amount:* ${{ $json.total.toFixed(2) }} {{ $json.currency }}\n*Due Date:* {{ $json.dueDate }}\n*Type:* {{ $json.billingType }}\n\n<{{ $('Finalize & Send Invoice').first()?.json?.hosted_invoice_url || '#' }}|View Invoice>",
+        "otherOptions": {}
+      },
+      "id": "slack-invoice-created",
+      "name": "Slack Invoice Created",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1450, 600]
+    }
+  ],
+  "connections": {
+    "Monthly Invoice Generation": {
+      "main": [
+        [
+          {
+            "node": "Get Recurring Clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Milestone Completed Webhook": {
+      "main": [
+        [
+          {
+            "node": "Generate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stripe Webhook Events": {
+      "main": [
+        [
+          {
+            "node": "Process Payment Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recurring Clients": {
+      "main": [
+        [
+          {
+            "node": "Generate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Invoice": {
+      "main": [
+        [
+          {
+            "node": "Create Stripe Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Stripe Invoice": {
+      "main": [
+        [
+          {
+            "node": "Add Stripe Line Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Stripe Line Items": {
+      "main": [
+        [
+          {
+            "node": "Finalize & Send Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize & Send Invoice": {
+      "main": [
+        [
+          {
+            "node": "Log Invoice",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack Invoice Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Payment Event": {
+      "main": [
+        [
+          {
+            "node": "Payment Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Failed?": {
+      "main": [
+        [
+          {
+            "node": "Send Payment Failed Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack Payment Failed Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Payment Success Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack Payment Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Overdue Check": {
+      "main": [
+        [
+          {
+            "node": "Get Overdue Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Overdue Invoices": {
+      "main": [
+        [
+          {
+            "node": "Process Overdue Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Overdue Invoices": {
+      "main": [
+        [
+          {
+            "node": "Send Overdue Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-invoice-billing-automation"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 4,
+  "tags": [
+    {
+      "name": "Billing",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Invoice",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Stripe",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Automation",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}
