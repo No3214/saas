@@ -1,0 +1,339 @@
+{
+  "name": "Grain Content Performance Analyzer v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-analysis",
+      "name": "Weekly Analysis",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "content-analysis",
+        "options": {}
+      },
+      "id": "manual-analysis",
+      "name": "Manual Analysis Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "content-analysis"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.ANALYTICS_API_URL }}/content/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "dateRange",
+              "value": "30d"
+            },
+            {
+              "name": "metrics",
+              "value": "pageviews,sessions,bounceRate,avgTimeOnPage,entrances,exits,conversions"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-analytics",
+      "name": "Fetch Analytics Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "analytics-api-key",
+          "name": "Analytics API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SEARCH_CONSOLE_API_URL }}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startDate",
+              "value": "={{ new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0] }}"
+            },
+            {
+              "name": "endDate",
+              "value": "={{ new Date().toISOString().split('T')[0] }}"
+            },
+            {
+              "name": "dimensions",
+              "value": "page,query"
+            },
+            {
+              "name": "rowLimit",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-gsc",
+      "name": "Fetch Search Console Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gsc-api-key",
+          "name": "Search Console API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SOCIAL_API_URL }}/shares",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{ $vars.DOMAIN }}"
+            },
+            {
+              "name": "days",
+              "value": "30"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-social",
+      "name": "Fetch Social Shares",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "social-api-key",
+          "name": "Social API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge and analyze content performance\nconst analyticsData = $('Fetch Analytics Data').first().json;\nconst gscData = $('Fetch Search Console Data').first().json;\nconst socialData = $('Fetch Social Shares').first().json;\n\nconst pages = analyticsData.pages || [];\nconst searchData = gscData.rows || [];\nconst socialShares = socialData.shares || [];\n\n// Create page performance map\nconst pagePerformance = new Map();\n\n// Add analytics data\npages.forEach(page => {\n  pagePerformance.set(page.path, {\n    url: page.path,\n    title: page.title,\n    traffic: {\n      pageviews: page.pageviews || 0,\n      sessions: page.sessions || 0,\n      bounceRate: page.bounceRate || 0,\n      avgTimeOnPage: page.avgTimeOnPage || 0,\n      entrances: page.entrances || 0,\n      exits: page.exits || 0\n    },\n    conversions: page.conversions || 0,\n    conversionRate: page.sessions > 0 \n      ? Math.round(page.conversions / page.sessions * 10000) / 100 \n      : 0,\n    search: { impressions: 0, clicks: 0, ctr: 0, position: null, keywords: [] },\n    social: { total: 0, facebook: 0, twitter: 0, linkedin: 0, pinterest: 0 }\n  });\n});\n\n// Add search data\nconst pageSearchData = {};\nsearchData.forEach(row => {\n  const page = row.keys[0];\n  const query = row.keys[1];\n  \n  if (!pageSearchData[page]) {\n    pageSearchData[page] = {\n      impressions: 0,\n      clicks: 0,\n      keywords: [],\n      positions: []\n    };\n  }\n  \n  pageSearchData[page].impressions += row.impressions;\n  pageSearchData[page].clicks += row.clicks;\n  pageSearchData[page].keywords.push({\n    keyword: query,\n    impressions: row.impressions,\n    clicks: row.clicks,\n    position: row.position\n  });\n  pageSearchData[page].positions.push(row.position);\n});\n\nObject.entries(pageSearchData).forEach(([page, data]) => {\n  const urlPath = new URL(page).pathname;\n  if (pagePerformance.has(urlPath)) {\n    const perf = pagePerformance.get(urlPath);\n    perf.search = {\n      impressions: data.impressions,\n      clicks: data.clicks,\n      ctr: data.impressions > 0 \n        ? Math.round(data.clicks / data.impressions * 10000) / 100 \n        : 0,\n      position: data.positions.length > 0 \n        ? Math.round(data.positions.reduce((a, b) => a + b, 0) / data.positions.length * 10) / 10\n        : null,\n      keywords: data.keywords.sort((a, b) => b.clicks - a.clicks).slice(0, 10)\n    };\n  }\n});\n\n// Add social data\nsocialShares.forEach(share => {\n  const urlPath = new URL(share.url).pathname;\n  if (pagePerformance.has(urlPath)) {\n    pagePerformance.get(urlPath).social = {\n      total: (share.facebook || 0) + (share.twitter || 0) + (share.linkedin || 0) + (share.pinterest || 0),\n      facebook: share.facebook || 0,\n      twitter: share.twitter || 0,\n      linkedin: share.linkedin || 0,\n      pinterest: share.pinterest || 0\n    };\n  }\n});\n\n// Calculate content scores\nconst scoredPages = Array.from(pagePerformance.values()).map(page => {\n  // Traffic score (0-25)\n  const trafficScore = Math.min(25, Math.round(page.traffic.pageviews / 100));\n  \n  // Engagement score (0-25) based on time on page and bounce rate\n  const engagementScore = Math.min(25, \n    Math.round((page.traffic.avgTimeOnPage / 60) * 5) + \n    Math.round((100 - page.traffic.bounceRate) / 10)\n  );\n  \n  // SEO score (0-25) based on search performance\n  const seoScore = Math.min(25,\n    Math.round(page.search.clicks / 10) +\n    (page.search.position && page.search.position < 20 ? Math.round(25 - page.search.position) : 0)\n  );\n  \n  // Social score (0-25)\n  const socialScore = Math.min(25, Math.round(page.social.total / 10));\n  \n  page.scores = {\n    traffic: trafficScore,\n    engagement: engagementScore,\n    seo: seoScore,\n    social: socialScore,\n    total: trafficScore + engagementScore + seoScore + socialScore\n  };\n  \n  // Determine content status\n  if (page.scores.total >= 70) page.status = 'top_performer';\n  else if (page.scores.total >= 50) page.status = 'good';\n  else if (page.scores.total >= 30) page.status = 'needs_improvement';\n  else page.status = 'underperforming';\n  \n  return page;\n});\n\n// Sort by total score\nscoredPages.sort((a, b) => b.scores.total - a.scores.total);\n\nreturn [{ json: {\n  analysisId: `CPA-${Date.now().toString(36).toUpperCase()}`,\n  analyzedAt: new Date().toISOString(),\n  totalPages: scoredPages.length,\n  pages: scoredPages\n}}];"
+      },
+      "id": "analyze-content",
+      "name": "Analyze Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate insights and recommendations\nconst analysis = $input.first().json;\nconst pages = analysis.pages;\n\n// Categorize pages\nconst topPerformers = pages.filter(p => p.status === 'top_performer');\nconst goodPages = pages.filter(p => p.status === 'good');\nconst needsImprovement = pages.filter(p => p.status === 'needs_improvement');\nconst underperforming = pages.filter(p => p.status === 'underperforming');\n\n// Calculate averages\nconst avgPageviews = Math.round(pages.reduce((a, b) => a + b.traffic.pageviews, 0) / pages.length);\nconst avgBounceRate = Math.round(pages.reduce((a, b) => a + b.traffic.bounceRate, 0) / pages.length * 10) / 10;\nconst avgTimeOnPage = Math.round(pages.reduce((a, b) => a + b.traffic.avgTimeOnPage, 0) / pages.length);\nconst totalConversions = pages.reduce((a, b) => a + b.conversions, 0);\n\n// Identify opportunities\nconst opportunities = [];\n\n// High traffic, low conversion\nconst highTrafficLowConversion = pages.filter(p => \n  p.traffic.pageviews > avgPageviews * 2 && p.conversionRate < 1\n);\nif (highTrafficLowConversion.length > 0) {\n  opportunities.push({\n    type: 'conversion_optimization',\n    priority: 'high',\n    pages: highTrafficLowConversion.slice(0, 5).map(p => p.url),\n    insight: 'These pages get good traffic but low conversions. Add CTAs or improve offer.',\n    potentialImpact: 'Could increase conversions by 50-100%'\n  });\n}\n\n// High impressions, low CTR\nconst lowCTR = pages.filter(p => \n  p.search.impressions > 1000 && p.search.ctr < 2\n);\nif (lowCTR.length > 0) {\n  opportunities.push({\n    type: 'title_meta_optimization',\n    priority: 'high',\n    pages: lowCTR.slice(0, 5).map(p => p.url),\n    insight: 'These pages appear in search but don\\'t get clicks. Improve titles and meta descriptions.',\n    potentialImpact: 'Could double organic traffic'\n  });\n}\n\n// High bounce rate, good traffic\nconst highBounce = pages.filter(p => \n  p.traffic.bounceRate > 70 && p.traffic.pageviews > avgPageviews\n);\nif (highBounce.length > 0) {\n  opportunities.push({\n    type: 'engagement_improvement',\n    priority: 'medium',\n    pages: highBounce.slice(0, 5).map(p => p.url),\n    insight: 'High bounce rate indicates content mismatch or poor UX. Review content relevance.',\n    potentialImpact: 'Reduce bounce rate by 20-30%'\n  });\n}\n\n// Good position, low traffic\nconst rankingNoTraffic = pages.filter(p => \n  p.search.position && p.search.position < 20 && p.traffic.pageviews < avgPageviews / 2\n);\nif (rankingNoTraffic.length > 0) {\n  opportunities.push({\n    type: 'ranking_leverage',\n    priority: 'medium',\n    pages: rankingNoTraffic.slice(0, 5).map(p => p.url),\n    insight: 'These pages rank well but get little traffic. Optimize for higher-volume keywords.',\n    potentialImpact: 'Could 3-5x organic traffic'\n  });\n}\n\n// Content refresh candidates (older content, declining traffic)\nconst refreshCandidates = pages.filter(p => \n  p.status === 'underperforming' && p.search.keywords.length > 3\n);\nif (refreshCandidates.length > 0) {\n  opportunities.push({\n    type: 'content_refresh',\n    priority: 'medium',\n    pages: refreshCandidates.slice(0, 10).map(p => p.url),\n    insight: 'These pages have keyword potential but underperform. Update and refresh content.',\n    potentialImpact: 'Could revive traffic by 100-200%'\n  });\n}\n\n// Social amplification candidates\nconst lowSocial = pages.filter(p => \n  p.scores.total >= 50 && p.social.total < 10\n);\nif (lowSocial.length > 0) {\n  opportunities.push({\n    type: 'social_amplification',\n    priority: 'low',\n    pages: lowSocial.slice(0, 5).map(p => p.url),\n    insight: 'Good content with low social shares. Promote on social channels.',\n    potentialImpact: 'Could increase reach by 50%'\n  });\n}\n\nconst insights = {\n  analysisId: analysis.analysisId,\n  analyzedAt: analysis.analyzedAt,\n  summary: {\n    totalPages: pages.length,\n    topPerformers: topPerformers.length,\n    good: goodPages.length,\n    needsImprovement: needsImprovement.length,\n    underperforming: underperforming.length,\n    avgPageviews,\n    avgBounceRate,\n    avgTimeOnPage,\n    totalConversions,\n    totalSocialShares: pages.reduce((a, b) => a + b.social.total, 0)\n  },\n  topContent: topPerformers.slice(0, 10),\n  opportunities,\n  actionItems: opportunities.filter(o => o.priority === 'high').length,\n  pages: pages\n};\n\nreturn [{ json: insights }];"
+      },
+      "id": "generate-insights",
+      "name": "Generate Insights",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 600]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Content Marketing Strategist. Analyze the content performance data and provide strategic recommendations.\n\nFocus on:\n1. Content strategy improvements\n2. Quick wins for traffic growth\n3. Conversion optimization tactics\n4. Content repurposing opportunities\n5. Content calendar priorities",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze this content performance report:\n\n**Summary:**\n• Total Pages: {{ $json.summary.totalPages }}\n• Top Performers: {{ $json.summary.topPerformers }}\n• Underperforming: {{ $json.summary.underperforming }}\n• Avg Pageviews: {{ $json.summary.avgPageviews }}\n• Avg Bounce Rate: {{ $json.summary.avgBounceRate }}%\n• Total Conversions: {{ $json.summary.totalConversions }}\n\n**Top Content:**\n{{ $json.topContent.slice(0, 5).map(p => `• ${p.url} (Score: ${p.scores.total}, Views: ${p.traffic.pageviews})`).join('\\n') }}\n\n**Opportunities Identified:**\n{{ $json.opportunities.map(o => `• [${o.priority.toUpperCase()}] ${o.type}: ${o.insight}`).join('\\n') }}\n\n**Action Items Needed:** {{ $json.actionItems }}\n\nProvide a strategic content plan with prioritized actions.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 2500
+        }
+      },
+      "id": "ai-strategy",
+      "name": "AI Strategy",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1250, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final report\nconst insights = $('Generate Insights').first().json;\nconst strategy = $('AI Strategy').first().json;\n\nconst report = {\n  ...insights,\n  strategy,\n  generatedAt: new Date().toISOString(),\n  exportUrls: {\n    pdf: `{{ $vars.REPORT_BASE_URL }}/content/${insights.analysisId}/pdf`,\n    csv: `{{ $vars.REPORT_BASE_URL }}/content/${insights.analysisId}/csv`\n  }\n};\n\nreturn [{ json: report }];"
+      },
+      "id": "compile-report",
+      "name": "Compile Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CONTENT_DB_URL }}/reports",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-report",
+      "name": "Save Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "content-db-api",
+          "name": "Content DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.CONTENT_SLACK_CHANNEL }}",
+        "text": "=📊 *Weekly Content Performance Report*\n\n*Summary:*\n• Total Pages Analyzed: {{ $json.summary.totalPages }}\n• Top Performers: {{ $json.summary.topPerformers }}\n• Need Improvement: {{ $json.summary.needsImprovement }}\n• Underperforming: {{ $json.summary.underperforming }}\n\n📈 *Key Metrics:*\n• Avg Pageviews: {{ $json.summary.avgPageviews }}\n• Avg Bounce Rate: {{ $json.summary.avgBounceRate }}%\n• Total Conversions: {{ $json.summary.totalConversions }}\n• Social Shares: {{ $json.summary.totalSocialShares }}\n\n🏆 *Top Content This Week:*\n{{ $json.topContent.slice(0, 3).map(p => `• ${p.url.split('/').pop() || p.url} (Score: ${p.scores.total})`).join('\\n') }}\n\n⚡ *High Priority Actions:* {{ $json.actionItems }}\n{{ $json.opportunities.filter(o => o.priority === 'high').map(o => `• ${o.insight}`).join('\\n') }}\n\n<{{ $json.exportUrls.pdf }}|Download Full Report>",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 700],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1750, 900]
+    }
+  ],
+  "connections": {
+    "Weekly Analysis": {
+      "main": [
+        [
+          { "node": "Fetch Analytics Data", "type": "main", "index": 0 },
+          { "node": "Fetch Search Console Data", "type": "main", "index": 0 },
+          { "node": "Fetch Social Shares", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Manual Analysis Trigger": {
+      "main": [
+        [
+          { "node": "Fetch Analytics Data", "type": "main", "index": 0 },
+          { "node": "Fetch Search Console Data", "type": "main", "index": 0 },
+          { "node": "Fetch Social Shares", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Analytics Data": {
+      "main": [
+        [{ "node": "Analyze Content", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Search Console Data": {
+      "main": [
+        [{ "node": "Analyze Content", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Social Shares": {
+      "main": [
+        [{ "node": "Analyze Content", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze Content": {
+      "main": [
+        [{ "node": "Generate Insights", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Insights": {
+      "main": [
+        [{ "node": "AI Strategy", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Strategy": {
+      "main": [
+        [{ "node": "Compile Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Report": {
+      "main": [
+        [
+          { "node": "Save Report", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "content", "name": "content" },
+    { "id": "analytics", "name": "analytics" },
+    { "id": "seo", "name": "seo" },
+    { "id": "performance", "name": "performance" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

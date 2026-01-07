@@ -1,0 +1,315 @@
+{
+  "name": "Grain Rank Tracking v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-tracking",
+      "name": "Daily Rank Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rank-check",
+        "options": {}
+      },
+      "id": "manual-check",
+      "name": "Manual Check Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "rank-check-trigger"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.TRACKING_DB_URL }}/campaigns/active",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-campaigns",
+      "name": "Fetch Active Campaigns",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "tracking-db-api",
+          "name": "Tracking DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare tracking jobs for all campaigns\nconst campaigns = $input.first().json.campaigns || [];\n\nconst trackingJobs = campaigns.map(campaign => ({\n  trackingId: `TRK-${Date.now().toString(36).toUpperCase()}-${campaign.id}`,\n  campaignId: campaign.id,\n  domain: campaign.domain,\n  keywords: campaign.keywords || [],\n  locations: campaign.locations || [{ country: 'US', device: 'desktop' }],\n  competitors: campaign.competitors || [],\n  searchEngine: campaign.searchEngine || 'google',\n  checkDate: new Date().toISOString().split('T')[0],\n  timestamp: new Date().toISOString()\n}));\n\nreturn trackingJobs.map(job => ({ json: job }));"
+      },
+      "id": "prepare-jobs",
+      "name": "Prepare Tracking Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "batch-keywords",
+      "name": "Batch Keywords",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1000, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SERP_API_URL }}/check",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"domain\": \"{{ $json.domain }}\",\n  \"keywords\": {{ JSON.stringify($json.keywords) }},\n  \"locations\": {{ JSON.stringify($json.locations) }},\n  \"searchEngine\": \"{{ $json.searchEngine }}\",\n  \"checkCompetitors\": {{ $json.competitors.length > 0 }},\n  \"competitors\": {{ JSON.stringify($json.competitors) }}\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "check-rankings",
+      "name": "Check SERP Rankings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "serp-api-key",
+          "name": "SERP API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process ranking results and compare with previous\nconst currentJob = $('Batch Keywords').first().json;\nconst serpResults = $input.first().json;\n\n// Process each keyword result\nconst processedResults = (serpResults.results || []).map(result => {\n  const previousPosition = result.previousPosition || null;\n  const currentPosition = result.position || null;\n  \n  let change = 0;\n  let changeType = 'stable';\n  \n  if (previousPosition && currentPosition) {\n    change = previousPosition - currentPosition;\n    if (change > 0) changeType = 'improved';\n    else if (change < 0) changeType = 'declined';\n  } else if (!previousPosition && currentPosition) {\n    changeType = 'new_ranking';\n  } else if (previousPosition && !currentPosition) {\n    changeType = 'lost_ranking';\n  }\n  \n  // Determine ranking tier\n  let tier = 'not_ranked';\n  if (currentPosition) {\n    if (currentPosition <= 3) tier = 'top3';\n    else if (currentPosition <= 10) tier = 'top10';\n    else if (currentPosition <= 20) tier = 'top20';\n    else if (currentPosition <= 50) tier = 'top50';\n    else tier = 'below50';\n  }\n  \n  return {\n    keyword: result.keyword,\n    position: currentPosition,\n    previousPosition,\n    change,\n    changeType,\n    tier,\n    url: result.url,\n    title: result.title,\n    snippet: result.snippet,\n    features: result.serp_features || [],\n    localPack: result.local_pack || false,\n    featuredSnippet: result.featured_snippet || false,\n    volume: result.volume,\n    difficulty: result.difficulty,\n    location: result.location,\n    device: result.device,\n    competitors: result.competitors || []\n  };\n});\n\n// Calculate summary stats\nconst ranked = processedResults.filter(r => r.position);\nconst improved = processedResults.filter(r => r.changeType === 'improved');\nconst declined = processedResults.filter(r => r.changeType === 'declined');\nconst lost = processedResults.filter(r => r.changeType === 'lost_ranking');\nconst newRankings = processedResults.filter(r => r.changeType === 'new_ranking');\n\nconst summary = {\n  totalKeywords: processedResults.length,\n  ranked: ranked.length,\n  notRanked: processedResults.length - ranked.length,\n  avgPosition: ranked.length > 0 \n    ? Math.round(ranked.reduce((a, b) => a + b.position, 0) / ranked.length * 10) / 10\n    : null,\n  top3: processedResults.filter(r => r.tier === 'top3').length,\n  top10: processedResults.filter(r => r.tier === 'top10' || r.tier === 'top3').length,\n  top20: processedResults.filter(r => ['top3', 'top10', 'top20'].includes(r.tier)).length,\n  improved: improved.length,\n  declined: declined.length,\n  stable: processedResults.filter(r => r.changeType === 'stable').length,\n  newRankings: newRankings.length,\n  lostRankings: lost.length,\n  totalImprovement: improved.reduce((a, b) => a + b.change, 0),\n  totalDecline: Math.abs(declined.reduce((a, b) => a + b.change, 0)),\n  featuredSnippets: processedResults.filter(r => r.featuredSnippet).length,\n  localPack: processedResults.filter(r => r.localPack).length\n};\n\n// Identify significant changes (alerts)\nconst alerts = [\n  ...improved.filter(r => r.change >= 10).map(r => ({\n    type: 'big_improvement',\n    severity: 'positive',\n    keyword: r.keyword,\n    message: `Jumped ${r.change} positions to #${r.position}`\n  })),\n  ...declined.filter(r => Math.abs(r.change) >= 10).map(r => ({\n    type: 'big_decline',\n    severity: 'negative',\n    keyword: r.keyword,\n    message: `Dropped ${Math.abs(r.change)} positions to #${r.position}`\n  })),\n  ...lost.map(r => ({\n    type: 'lost_ranking',\n    severity: 'critical',\n    keyword: r.keyword,\n    message: `Lost ranking (was #${r.previousPosition})`\n  })),\n  ...newRankings.map(r => ({\n    type: 'new_ranking',\n    severity: 'positive',\n    keyword: r.keyword,\n    message: `New ranking at #${r.position}`\n  }))\n];\n\nreturn [{ json: {\n  trackingId: currentJob.trackingId,\n  campaignId: currentJob.campaignId,\n  domain: currentJob.domain,\n  checkDate: currentJob.checkDate,\n  timestamp: currentJob.timestamp,\n  summary,\n  alerts,\n  results: processedResults\n}}];"
+      },
+      "id": "process-results",
+      "name": "Process Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TRACKING_DB_URL }}/results",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-results",
+      "name": "Save Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "tracking-db-api",
+          "name": "Tracking DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-critical-alerts",
+              "leftValue": "={{ $json.alerts.filter(a => a.severity === 'critical' || a.severity === 'negative').length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-alerts",
+      "name": "Has Critical Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1750, 600]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.SEO_SLACK_CHANNEL }}",
+        "text": "=⚠️ *Rank Tracking Alert - {{ $json.domain }}*\n\n{{ $json.alerts.filter(a => a.severity === 'critical' || a.severity === 'negative').map(a => \n  `${a.severity === 'critical' ? '🔴' : '🟡'} *${a.keyword}*: ${a.message}`\n).join('\\n') }}\n\n📊 *Daily Summary:*\n• Average Position: {{ $json.summary.avgPosition || 'N/A' }}\n• Top 10 Rankings: {{ $json.summary.top10 }}\n• Improved: {{ $json.summary.improved }} (+{{ $json.summary.totalImprovement }} positions)\n• Declined: {{ $json.summary.declined }} (-{{ $json.summary.totalDecline }} positions)\n\n_Check dashboard for full details_",
+        "otherOptions": {}
+      },
+      "id": "alert-slack",
+      "name": "Send Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2000, 550],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "summary-email",
+              "name": "emailRequired",
+              "value": "={{ $json.summary.improved > 5 || $json.summary.declined > 5 }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-email",
+      "name": "Check Email Needed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2000, 750]
+    },
+    {
+      "parameters": {
+        "operation": "generateChart",
+        "chartConfig": "={\n  \"type\": \"line\",\n  \"data\": {\n    \"labels\": [\"7d ago\", \"6d ago\", \"5d ago\", \"4d ago\", \"3d ago\", \"2d ago\", \"Yesterday\", \"Today\"],\n    \"datasets\": [{\n      \"label\": \"Avg Position\",\n      \"data\": {{ JSON.stringify($json.historicalPositions || [0,0,0,0,0,0,0,$json.summary.avgPosition]) }},\n      \"borderColor\": \"#4285F4\",\n      \"fill\": false\n    }]\n  },\n  \"options\": {\n    \"scales\": {\n      \"y\": {\n        \"reverse\": true,\n        \"min\": 1\n      }\n    }\n  }\n}"
+      },
+      "id": "generate-chart",
+      "name": "Generate Chart",
+      "type": "n8n-nodes-base.quickChart",
+      "typeVersion": 1,
+      "position": [2250, 500]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.RANK_TRACKING_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Daily Rankings",
+          "mode": "list",
+          "cachedResultName": "Daily Rankings"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.checkDate }}",
+            "Domain": "={{ $json.domain }}",
+            "Keywords Tracked": "={{ $json.summary.totalKeywords }}",
+            "Avg Position": "={{ $json.summary.avgPosition }}",
+            "Top 3": "={{ $json.summary.top3 }}",
+            "Top 10": "={{ $json.summary.top10 }}",
+            "Top 20": "={{ $json.summary.top20 }}",
+            "Improved": "={{ $json.summary.improved }}",
+            "Declined": "={{ $json.summary.declined }}",
+            "Featured Snippets": "={{ $json.summary.featuredSnippets }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-sheets",
+      "name": "Log to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2250, 700],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Rank Check": {
+      "main": [
+        [{ "node": "Fetch Active Campaigns", "type": "main", "index": 0 }]
+      ]
+    },
+    "Manual Check Trigger": {
+      "main": [
+        [{ "node": "Fetch Active Campaigns", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Active Campaigns": {
+      "main": [
+        [{ "node": "Prepare Tracking Jobs", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Tracking Jobs": {
+      "main": [
+        [{ "node": "Batch Keywords", "type": "main", "index": 0 }]
+      ]
+    },
+    "Batch Keywords": {
+      "main": [
+        [{ "node": "Check SERP Rankings", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check SERP Rankings": {
+      "main": [
+        [{ "node": "Process Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Results": {
+      "main": [
+        [
+          { "node": "Save Results", "type": "main", "index": 0 },
+          { "node": "Has Critical Alerts?", "type": "main", "index": 0 },
+          { "node": "Generate Chart", "type": "main", "index": 0 },
+          { "node": "Log to Sheets", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Has Critical Alerts?": {
+      "main": [
+        [{ "node": "Send Alert", "type": "main", "index": 0 }],
+        [{ "node": "Check Email Needed", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "seo", "name": "seo" },
+    { "id": "ranking", "name": "ranking" },
+    { "id": "tracking", "name": "tracking" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

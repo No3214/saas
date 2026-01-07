@@ -1,0 +1,470 @@
+{
+  "name": "Grain Guest Feedback & Review v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "guest-feedback",
+        "options": {}
+      },
+      "id": "feedback-webhook",
+      "name": "Feedback Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "guest-feedback"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-survey",
+      "name": "Daily Survey Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/30 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "review-monitor",
+      "name": "Review Monitor (30min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process incoming feedback\nconst feedback = $input.first().json.body;\n\nconst feedbackData = {\n  feedbackId: `FB-${Date.now().toString(36).toUpperCase()}`,\n  guestId: feedback.guestId || feedback.customerId,\n  guestName: feedback.guestName,\n  guestEmail: feedback.guestEmail,\n  guestPhone: feedback.guestPhone,\n  restaurantId: feedback.restaurantId || feedback.locationId,\n  visitDate: feedback.visitDate || new Date().toISOString().split('T')[0],\n  visitType: feedback.visitType || 'dine_in', // dine_in, takeout, delivery\n  source: feedback.source || 'email_survey',\n  ratings: {\n    overall: feedback.overallRating || feedback.rating,\n    food: feedback.foodRating,\n    service: feedback.serviceRating,\n    ambiance: feedback.ambianceRating,\n    value: feedback.valueRating,\n    cleanliness: feedback.cleanlinessRating\n  },\n  nps: feedback.nps,\n  comment: feedback.comment || feedback.feedback,\n  wouldRecommend: feedback.wouldRecommend,\n  serverName: feedback.serverName,\n  orderDetails: feedback.orderDetails,\n  receivedAt: new Date().toISOString()\n};\n\n// Calculate sentiment\nconst avgRating = Object.values(feedbackData.ratings).filter(Boolean).reduce((a, b) => a + b, 0) / \n  Object.values(feedbackData.ratings).filter(Boolean).length;\n\nfeedbackData.sentiment = avgRating >= 4 ? 'positive' : avgRating >= 3 ? 'neutral' : 'negative';\nfeedbackData.avgRating = Math.round(avgRating * 10) / 10;\n\n// Determine if review request should be sent\nfeedbackData.eligibleForReviewRequest = avgRating >= 4 && feedbackData.nps >= 8;\n\n// Flag critical issues\nfeedbackData.criticalIssue = avgRating <= 2 || \n  (feedbackData.ratings.cleanliness && feedbackData.ratings.cleanliness <= 2) ||\n  (feedbackData.comment && /sick|ill|food poisoning|bug|hair|dirty|rude|worst/i.test(feedbackData.comment));\n\nreturn [{ json: feedbackData }];"
+      },
+      "id": "process-feedback",
+      "name": "Process Feedback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.RESTAURANT_DB_URL }}/visits/yesterday",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "hasFeedback",
+              "value": "false"
+            },
+            {
+              "name": "hasEmail",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-guests",
+      "name": "Fetch Guests for Survey",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "restaurant-db-api",
+          "name": "Restaurant DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.REVIEW_API_URL }}/reviews/new",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "platforms",
+              "value": "google,yelp,tripadvisor,facebook"
+            },
+            {
+              "name": "since",
+              "value": "30m"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-reviews",
+      "name": "Fetch New Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "review-api-key",
+          "name": "Review API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.FEEDBACK_DB_URL }}/feedback",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-feedback",
+      "name": "Save Feedback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "feedback-db-api",
+          "name": "Feedback DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "critical",
+              "leftValue": "={{ $json.criticalIssue }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-critical",
+      "name": "Critical Issue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.URGENT_SLACK_CHANNEL }}",
+        "text": "=🚨 *URGENT: Critical Guest Feedback*\n\n*Guest:* {{ $json.guestName || 'Anonymous' }}\n*Restaurant:* {{ $json.restaurantId }}\n*Visit Date:* {{ $json.visitDate }}\n\n⭐ *Ratings:*\n• Overall: {{ $json.ratings.overall || 'N/A' }}/5\n• Food: {{ $json.ratings.food || 'N/A' }}/5\n• Service: {{ $json.ratings.service || 'N/A' }}/5\n• Cleanliness: {{ $json.ratings.cleanliness || 'N/A' }}/5\n\n💬 *Comment:*\n```\n{{ $json.comment || 'No comment provided' }}\n```\n\n📧 *Contact:* {{ $json.guestEmail || $json.guestPhone || 'Not provided' }}\n\n_This requires immediate attention!_",
+        "otherOptions": {}
+      },
+      "id": "alert-critical",
+      "name": "Alert Critical Issue",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1000, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "eligible",
+              "leftValue": "={{ $json.eligibleForReviewRequest }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-review-eligible",
+      "name": "Eligible for Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 500]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.RESTAURANT_EMAIL }}",
+        "toEmail": "={{ $json.guestEmail }}",
+        "subject": "=We'd love your review, {{ $json.guestName }}! 🌟",
+        "emailType": "html",
+        "html": "=<h2>Thank you for your feedback, {{ $json.guestName }}!</h2>\n<p>We're thrilled to hear you had a great experience with us!</p>\n<p>Would you mind sharing your experience with others? Your review helps us reach more food lovers like you!</p>\n<p style=\"text-align: center;\">\n<a href=\"{{ $vars.GOOGLE_REVIEW_LINK }}\" style=\"display: inline-block; background: #4285F4; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 10px;\">Review on Google</a>\n<a href=\"{{ $vars.YELP_REVIEW_LINK }}\" style=\"display: inline-block; background: #D32323; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 10px;\">Review on Yelp</a>\n</p>\n<p>As a thank you, here's a special offer for your next visit:</p>\n<p style=\"text-align: center; font-size: 24px; color: #e74c3c;\"><strong>10% OFF</strong> your next order</p>\n<p style=\"text-align: center;\">Use code: <strong>THANKYOU10</strong></p>\n<p>Thank you for being part of our family!</p>",
+        "options": {}
+      },
+      "id": "send-review-request",
+      "name": "Send Review Request",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1250, 450],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare survey emails for yesterday's guests\nconst guests = $input.first().json.guests || [];\n\nconst surveyEmails = guests.map(guest => ({\n  guestId: guest.id,\n  guestName: guest.firstName,\n  guestEmail: guest.email,\n  restaurantId: guest.restaurantId,\n  visitDate: guest.visitDate,\n  visitType: guest.visitType,\n  orderId: guest.orderId,\n  serverName: guest.serverName,\n  surveyLink: `{{ $vars.SURVEY_BASE_URL }}?guest=${guest.id}&visit=${guest.visitDate}`\n}));\n\nreturn surveyEmails.map(s => ({ json: s }));"
+      },
+      "id": "prepare-surveys",
+      "name": "Prepare Survey Emails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 600]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.RESTAURANT_EMAIL }}",
+        "toEmail": "={{ $json.guestEmail }}",
+        "subject": "=How was your visit, {{ $json.guestName }}? Quick feedback (30 sec)",
+        "emailType": "html",
+        "html": "=<h2>Hi {{ $json.guestName }},</h2>\n<p>Thank you for dining with us{{ $json.serverName ? ` (served by ${$json.serverName})` : '' }}!</p>\n<p>We'd love to hear about your experience. It takes just 30 seconds:</p>\n<p style=\"text-align: center;\">\n<a href=\"{{ $json.surveyLink }}&rating=5\" style=\"font-size: 36px; text-decoration: none;\">⭐⭐⭐⭐⭐</a><br/>\n<a href=\"{{ $json.surveyLink }}&rating=4\" style=\"font-size: 36px; text-decoration: none;\">⭐⭐⭐⭐</a><br/>\n<a href=\"{{ $json.surveyLink }}&rating=3\" style=\"font-size: 36px; text-decoration: none;\">⭐⭐⭐</a><br/>\n<a href=\"{{ $json.surveyLink }}&rating=2\" style=\"font-size: 36px; text-decoration: none;\">⭐⭐</a><br/>\n<a href=\"{{ $json.surveyLink }}&rating=1\" style=\"font-size: 36px; text-decoration: none;\">⭐</a>\n</p>\n<p style=\"text-align: center;\"><em>Click a rating or <a href=\"{{ $json.surveyLink }}\">share detailed feedback</a></em></p>\n<p>Your feedback helps us serve you better!</p>",
+        "options": {}
+      },
+      "id": "send-survey",
+      "name": "Send Survey Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 600],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process new reviews from platforms\nconst reviews = $input.first().json.reviews || [];\n\nconst processedReviews = reviews.map(review => {\n  // Determine sentiment\n  let sentiment = 'neutral';\n  if (review.rating >= 4) sentiment = 'positive';\n  else if (review.rating <= 2) sentiment = 'negative';\n\n  // Check if response needed\n  const needsResponse = !review.ownerResponse;\n  const urgentResponse = review.rating <= 2 && !review.ownerResponse;\n\n  return {\n    reviewId: review.id,\n    platform: review.platform,\n    reviewerName: review.reviewerName,\n    rating: review.rating,\n    text: review.text,\n    date: review.date,\n    restaurantId: review.restaurantId || review.locationId,\n    sentiment,\n    needsResponse,\n    urgentResponse,\n    hasOwnerResponse: !!review.ownerResponse\n  };\n});\n\n// Filter reviews needing response\nconst needResponse = processedReviews.filter(r => r.needsResponse);\nconst urgent = processedReviews.filter(r => r.urgentResponse);\n\nreturn [{ json: {\n  totalNew: processedReviews.length,\n  needResponse: needResponse.length,\n  urgent: urgent.length,\n  reviews: processedReviews\n}}];"
+      },
+      "id": "process-reviews",
+      "name": "Process Reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-reviews",
+              "leftValue": "={{ $json.totalNew }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-reviews",
+      "name": "Has New Reviews?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 800]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Restaurant Review Response Specialist. Generate professional, warm, and personalized responses to customer reviews.\n\nGuidelines:\n1. Thank the reviewer by name if possible\n2. Address specific points mentioned in their review\n3. For negative reviews: apologize sincerely, don't make excuses, offer to make it right\n4. For positive reviews: express genuine gratitude, highlight what they enjoyed\n5. Keep responses concise (2-4 sentences)\n6. Include a call to action (visit again, contact us, etc.)\n7. Match the tone of the review",
+              "role": "system"
+            },
+            {
+              "content": "=Generate responses for these reviews:\n\n{{ $json.reviews.filter(r => r.needsResponse).slice(0, 5).map(r => `\n**Platform:** ${r.platform}\n**Reviewer:** ${r.reviewerName}\n**Rating:** ${r.rating}/5\n**Review:** \"${r.text}\"\n`).join('\\n---\\n') }}\n\nGenerate an appropriate response for each review.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        }
+      },
+      "id": "generate-responses",
+      "name": "Generate AI Responses",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1250, 750],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.REVIEWS_SLACK_CHANNEL }}",
+        "text": "=📝 *New Reviews Alert*\n\n*Summary:*\n• New Reviews: {{ $json.totalNew }}\n• Need Response: {{ $json.needResponse }}\n• Urgent (Negative): {{ $json.urgent }}\n\n{{ $json.reviews.slice(0, 5).map(r => \n  `${r.rating >= 4 ? '🌟' : r.rating >= 3 ? '⭐' : '⚠️'} *${r.platform}* - ${r.rating}/5 by ${r.reviewerName}\\n\"${r.text.substring(0, 100)}...\"${r.needsResponse ? '\\n_Response needed_' : ''}`\n).join('\\n\\n') }}\n\n<{{ $vars.REVIEW_DASHBOARD_URL }}|View All Reviews>",
+        "otherOptions": {}
+      },
+      "id": "notify-reviews",
+      "name": "Notify New Reviews",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 900],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"feedbackId\": \"{{ $json.feedbackId }}\",\n  \"sentiment\": \"{{ $json.sentiment }}\",\n  \"reviewRequestSent\": {{ $json.eligibleForReviewRequest }}\n}",
+        "options": {}
+      },
+      "id": "respond-feedback",
+      "name": "Respond Feedback",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1500, 400]
+    }
+  ],
+  "connections": {
+    "Feedback Received": {
+      "main": [
+        [{ "node": "Process Feedback", "type": "main", "index": 0 }]
+      ]
+    },
+    "Daily Survey Trigger": {
+      "main": [
+        [{ "node": "Fetch Guests for Survey", "type": "main", "index": 0 }]
+      ]
+    },
+    "Review Monitor (30min)": {
+      "main": [
+        [{ "node": "Fetch New Reviews", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Feedback": {
+      "main": [
+        [
+          { "node": "Save Feedback", "type": "main", "index": 0 },
+          { "node": "Critical Issue?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Save Feedback": {
+      "main": [
+        [{ "node": "Respond Feedback", "type": "main", "index": 0 }]
+      ]
+    },
+    "Critical Issue?": {
+      "main": [
+        [{ "node": "Alert Critical Issue", "type": "main", "index": 0 }],
+        [{ "node": "Eligible for Review?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Eligible for Review?": {
+      "main": [
+        [{ "node": "Send Review Request", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Fetch Guests for Survey": {
+      "main": [
+        [{ "node": "Prepare Survey Emails", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Survey Emails": {
+      "main": [
+        [{ "node": "Send Survey Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch New Reviews": {
+      "main": [
+        [{ "node": "Process Reviews", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Reviews": {
+      "main": [
+        [{ "node": "Has New Reviews?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has New Reviews?": {
+      "main": [
+        [
+          { "node": "Generate AI Responses", "type": "main", "index": 0 },
+          { "node": "Notify New Reviews", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "restaurant", "name": "restaurant" },
+    { "id": "feedback", "name": "feedback" },
+    { "id": "reviews", "name": "reviews" },
+    { "id": "ai", "name": "ai" }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,381 @@
+{
+  "name": "Grain Restaurant Loyalty Program v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "loyalty/transaction",
+        "options": {}
+      },
+      "id": "transaction-webhook",
+      "name": "Transaction Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "loyalty-transaction"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "loyalty/enroll",
+        "options": {}
+      },
+      "id": "enroll-webhook",
+      "name": "New Enrollment",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "loyalty-enroll"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "loyalty/redeem",
+        "options": {}
+      },
+      "id": "redeem-webhook",
+      "name": "Reward Redemption",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 800],
+      "webhookId": "loyalty-redeem"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process transaction and calculate points\nconst transaction = $input.first().json.body;\n\nconst txData = {\n  transactionId: `TXN-${Date.now().toString(36).toUpperCase()}`,\n  type: 'purchase',\n  memberId: transaction.memberId || transaction.customerId,\n  restaurantId: transaction.restaurantId || transaction.locationId,\n  orderId: transaction.orderId,\n  subtotal: transaction.subtotal || 0,\n  tax: transaction.tax || 0,\n  total: transaction.total || transaction.subtotal || 0,\n  items: transaction.items || [],\n  paymentMethod: transaction.paymentMethod,\n  timestamp: new Date().toISOString(),\n  source: transaction.source || 'pos'\n};\n\n// Calculate base points (1 point per dollar)\nlet basePoints = Math.floor(txData.subtotal);\n\n// Bonus multipliers\nlet multiplier = 1;\nconst bonuses = [];\n\n// Double points on specific days\nconst dayOfWeek = new Date().getDay();\nif (dayOfWeek === 2) { // Tuesday\n  multiplier *= 2;\n  bonuses.push({ type: 'double_tuesday', multiplier: 2 });\n}\n\n// Birthday bonus (checked later with member data)\ntxData.checkBirthday = true;\n\n// Happy hour bonus (3-6pm)\nconst hour = new Date().getHours();\nif (hour >= 15 && hour < 18) {\n  multiplier *= 1.5;\n  bonuses.push({ type: 'happy_hour', multiplier: 1.5 });\n}\n\n// Category bonuses\nconst premiumItems = txData.items.filter(i => \n  i.category === 'premium' || i.category === 'signature'\n);\nif (premiumItems.length > 0) {\n  const premiumBonus = premiumItems.reduce((a, b) => a + (b.price || 0), 0) * 0.5;\n  basePoints += Math.floor(premiumBonus);\n  bonuses.push({ type: 'premium_items', extra: Math.floor(premiumBonus) });\n}\n\ntxData.pointsCalculation = {\n  basePoints,\n  multiplier,\n  bonuses,\n  earnedPoints: Math.floor(basePoints * multiplier)\n};\n\nreturn [{ json: txData }];"
+      },
+      "id": "process-transaction",
+      "name": "Process Transaction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process new member enrollment\nconst enrollment = $input.first().json.body;\n\nconst memberData = {\n  enrollmentId: `ENR-${Date.now().toString(36).toUpperCase()}`,\n  type: 'enrollment',\n  member: {\n    id: `MEM-${Date.now().toString(36).toUpperCase()}`,\n    firstName: enrollment.firstName,\n    lastName: enrollment.lastName,\n    email: enrollment.email,\n    phone: enrollment.phone,\n    birthday: enrollment.birthday,\n    preferences: enrollment.preferences || {},\n    marketingConsent: enrollment.marketingConsent || false,\n    smsConsent: enrollment.smsConsent || false\n  },\n  restaurantId: enrollment.restaurantId,\n  enrollmentSource: enrollment.source || 'website',\n  welcomeBonus: 100, // Welcome bonus points\n  tier: 'bronze',\n  timestamp: new Date().toISOString()\n};\n\nreturn [{ json: memberData }];"
+      },
+      "id": "process-enrollment",
+      "name": "Process Enrollment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process reward redemption\nconst redemption = $input.first().json.body;\n\nconst redeemData = {\n  redemptionId: `RDM-${Date.now().toString(36).toUpperCase()}`,\n  type: 'redemption',\n  memberId: redemption.memberId,\n  rewardId: redemption.rewardId,\n  rewardType: redemption.rewardType,\n  pointsCost: redemption.pointsCost || 0,\n  restaurantId: redemption.restaurantId,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{ json: redeemData }];"
+      },
+      "id": "process-redemption",
+      "name": "Process Redemption",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 800]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.LOYALTY_DB_URL }}/members/{{ $json.memberId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-member",
+      "name": "Fetch Member",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "loyalty-db-api",
+          "name": "Loyalty DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate tier and update points\nconst transaction = $('Process Transaction').first().json;\nconst member = $input.first().json;\n\n// Add earned points to balance\nconst newBalance = (member.pointsBalance || 0) + transaction.pointsCalculation.earnedPoints;\nconst lifetimePoints = (member.lifetimePoints || 0) + transaction.pointsCalculation.earnedPoints;\nconst visitCount = (member.visitCount || 0) + 1;\n\n// Check birthday bonus\nlet birthdayBonus = 0;\nif (transaction.checkBirthday && member.birthday) {\n  const today = new Date();\n  const birthday = new Date(member.birthday);\n  if (today.getMonth() === birthday.getMonth() && today.getDate() === birthday.getDate()) {\n    birthdayBonus = 50;\n    transaction.pointsCalculation.bonuses.push({ type: 'birthday', extra: 50 });\n  }\n}\n\n// Calculate tier based on lifetime points\nlet newTier = 'bronze';\nlet tierBenefits = [];\n\nif (lifetimePoints >= 5000) {\n  newTier = 'platinum';\n  tierBenefits = [\n    '3x points on all purchases',\n    'Free appetizer monthly',\n    'Priority reservations',\n    'Exclusive events access',\n    'Birthday dinner complimentary'\n  ];\n} else if (lifetimePoints >= 2000) {\n  newTier = 'gold';\n  tierBenefits = [\n    '2x points on all purchases',\n    'Free dessert monthly',\n    'Early access to specials',\n    'Birthday 500 bonus points'\n  ];\n} else if (lifetimePoints >= 500) {\n  newTier = 'silver';\n  tierBenefits = [\n    '1.5x points on all purchases',\n    '10% off on Wednesdays',\n    'Birthday 250 bonus points'\n  ];\n} else {\n  tierBenefits = [\n    '1x points on all purchases',\n    'Birthday 100 bonus points'\n  ];\n}\n\nconst tierUpgrade = newTier !== member.tier && \n  ['silver', 'gold', 'platinum'].indexOf(newTier) > ['bronze', 'silver', 'gold', 'platinum'].indexOf(member.tier);\n\nconst memberUpdate = {\n  memberId: transaction.memberId,\n  previousBalance: member.pointsBalance || 0,\n  earnedPoints: transaction.pointsCalculation.earnedPoints + birthdayBonus,\n  newBalance: newBalance + birthdayBonus,\n  lifetimePoints,\n  visitCount,\n  previousTier: member.tier,\n  newTier,\n  tierUpgrade,\n  tierBenefits,\n  transaction: {\n    id: transaction.transactionId,\n    total: transaction.total,\n    bonuses: transaction.pointsCalculation.bonuses\n  },\n  timestamp: transaction.timestamp\n};\n\n// Calculate progress to next tier\nconst tierThresholds = { bronze: 500, silver: 2000, gold: 5000, platinum: Infinity };\nconst nextTierThreshold = tierThresholds[newTier];\nif (nextTierThreshold !== Infinity) {\n  memberUpdate.nextTierProgress = {\n    current: lifetimePoints,\n    needed: nextTierThreshold,\n    remaining: nextTierThreshold - lifetimePoints,\n    percentage: Math.round(lifetimePoints / nextTierThreshold * 100)\n  };\n}\n\n// Available rewards check\nconst rewards = [\n  { id: 'free_drink', name: 'Free Drink', points: 100, tier: 'bronze' },\n  { id: 'free_appetizer', name: 'Free Appetizer', points: 250, tier: 'bronze' },\n  { id: 'free_dessert', name: 'Free Dessert', points: 300, tier: 'bronze' },\n  { id: '10_off', name: '$10 Off', points: 500, tier: 'silver' },\n  { id: 'free_entree', name: 'Free Entrée', points: 1000, tier: 'silver' },\n  { id: '25_off', name: '$25 Off', points: 1200, tier: 'gold' },\n  { id: 'vip_dinner', name: 'VIP Dinner for Two', points: 2500, tier: 'platinum' }\n];\n\nmemberUpdate.availableRewards = rewards.filter(r => \n  newBalance >= r.points && \n  ['bronze', 'silver', 'gold', 'platinum'].indexOf(newTier) >= \n  ['bronze', 'silver', 'gold', 'platinum'].indexOf(r.tier)\n);\n\nreturn [{ json: memberUpdate }];"
+      },
+      "id": "calculate-update",
+      "name": "Calculate Points & Tier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $vars.LOYALTY_DB_URL }}/members/{{ $json.memberId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"pointsBalance\": {{ $json.newBalance }},\n  \"lifetimePoints\": {{ $json.lifetimePoints }},\n  \"visitCount\": {{ $json.visitCount }},\n  \"tier\": \"{{ $json.newTier }}\",\n  \"lastVisit\": \"{{ $json.timestamp }}\"\n}",
+        "options": {}
+      },
+      "id": "update-member",
+      "name": "Update Member",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "loyalty-db-api",
+          "name": "Loyalty DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LOYALTY_DB_URL }}/members",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.member) }}",
+        "options": {}
+      },
+      "id": "create-member",
+      "name": "Create Member",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "loyalty-db-api",
+          "name": "Loyalty DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "tier-upgrade",
+              "leftValue": "={{ $json.tierUpgrade }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-upgrade",
+      "name": "Tier Upgraded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.RESTAURANT_EMAIL }}",
+        "toEmail": "={{ $('Fetch Member').first().json.email }}",
+        "subject": "=🎉 Congratulations! You've reached {{ $json.newTier.charAt(0).toUpperCase() + $json.newTier.slice(1) }} status!",
+        "emailType": "html",
+        "html": "=<h2>Welcome to {{ $json.newTier.charAt(0).toUpperCase() + $json.newTier.slice(1) }} Tier!</h2>\n<p>Dear {{ $('Fetch Member').first().json.firstName }},</p>\n<p>Congratulations! Your loyalty has paid off - you've been upgraded to <strong>{{ $json.newTier.toUpperCase() }}</strong> member status!</p>\n<h3>Your New Benefits:</h3>\n<ul>\n{{ $json.tierBenefits.map(b => `<li>${b}</li>`).join('') }}\n</ul>\n<p><strong>Current Points Balance:</strong> {{ $json.newBalance.toLocaleString() }} points</p>\n<p>Thank you for being a valued member of our family!</p>",
+        "options": {}
+      },
+      "id": "send-upgrade-email",
+      "name": "Send Upgrade Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1750, 350],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "={{ $vars.TWILIO_PHONE }}",
+        "to": "={{ $('Fetch Member').first().json.phone }}",
+        "message": "=🎉 {{ $('Fetch Member').first().json.firstName }}, you earned {{ $json.earnedPoints }} points today! Balance: {{ $json.newBalance }} pts. {{ $json.availableRewards.length > 0 ? 'You have rewards available!' : '' }}"
+      },
+      "id": "send-sms",
+      "name": "Send Points SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [1750, 550],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio-credential",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.RESTAURANT_EMAIL }}",
+        "toEmail": "={{ $json.member.email }}",
+        "subject": "=🍽️ Welcome to our Loyalty Program! Here's {{ $json.welcomeBonus }} bonus points",
+        "emailType": "html",
+        "html": "=<h2>Welcome to the Family, {{ $json.member.firstName }}!</h2>\n<p>Thank you for joining our loyalty program!</p>\n<h3>Your Welcome Gift:</h3>\n<p style=\"font-size: 24px; color: #e74c3c;\"><strong>{{ $json.welcomeBonus }} Bonus Points</strong></p>\n<h3>How It Works:</h3>\n<ul>\n<li>Earn 1 point for every $1 spent</li>\n<li>Double points on Tuesdays</li>\n<li>1.5x points during happy hour (3-6pm)</li>\n<li>Special birthday rewards</li>\n</ul>\n<h3>Rewards You Can Earn:</h3>\n<ul>\n<li>100 pts - Free Drink</li>\n<li>250 pts - Free Appetizer</li>\n<li>500 pts - $10 Off</li>\n<li>1000 pts - Free Entrée</li>\n</ul>\n<p>We can't wait to see you soon!</p>",
+        "options": {}
+      },
+      "id": "send-welcome-email",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 600],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"memberId\": \"{{ $json.memberId }}\",\n  \"earnedPoints\": {{ $json.earnedPoints }},\n  \"newBalance\": {{ $json.newBalance }},\n  \"tier\": \"{{ $json.newTier }}\",\n  \"tierUpgrade\": {{ $json.tierUpgrade }},\n  \"availableRewards\": {{ $json.availableRewards.length }}\n}",
+        "options": {}
+      },
+      "id": "respond-transaction",
+      "name": "Respond Transaction",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 450]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"memberId\": \"{{ $json.member.id }}\",\n  \"welcomeBonus\": {{ $json.welcomeBonus }},\n  \"tier\": \"{{ $json.tier }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-enrollment",
+      "name": "Respond Enrollment",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1250, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LOYALTY_DB_URL }}/redemptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "record-redemption",
+      "name": "Record Redemption",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "loyalty-db-api",
+          "name": "Loyalty DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"redemptionId\": \"{{ $json.redemptionId }}\",\n  \"pointsDeducted\": {{ $json.pointsCost }}\n}",
+        "options": {}
+      },
+      "id": "respond-redemption",
+      "name": "Respond Redemption",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 800]
+    }
+  ],
+  "connections": {
+    "Transaction Received": {
+      "main": [
+        [{ "node": "Process Transaction", "type": "main", "index": 0 }]
+      ]
+    },
+    "New Enrollment": {
+      "main": [
+        [{ "node": "Process Enrollment", "type": "main", "index": 0 }]
+      ]
+    },
+    "Reward Redemption": {
+      "main": [
+        [{ "node": "Process Redemption", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Transaction": {
+      "main": [
+        [{ "node": "Fetch Member", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Enrollment": {
+      "main": [
+        [{ "node": "Create Member", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Redemption": {
+      "main": [
+        [{ "node": "Record Redemption", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Member": {
+      "main": [
+        [{ "node": "Calculate Points & Tier", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calculate Points & Tier": {
+      "main": [
+        [{ "node": "Update Member", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Member": {
+      "main": [
+        [
+          { "node": "Tier Upgraded?", "type": "main", "index": 0 },
+          { "node": "Send Points SMS", "type": "main", "index": 0 },
+          { "node": "Respond Transaction", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Create Member": {
+      "main": [
+        [
+          { "node": "Send Welcome Email", "type": "main", "index": 0 },
+          { "node": "Respond Enrollment", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Tier Upgraded?": {
+      "main": [
+        [{ "node": "Send Upgrade Email", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Record Redemption": {
+      "main": [
+        [{ "node": "Respond Redemption", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "restaurant", "name": "restaurant" },
+    { "id": "loyalty", "name": "loyalty" },
+    { "id": "rewards", "name": "rewards" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

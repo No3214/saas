@@ -1,0 +1,532 @@
+{
+  "name": "Grain Local SEO Automation Hub v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily 7 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://mybusinessbusinessinformation.googleapis.com/v1/accounts/{{ $vars.GOOGLE_ACCOUNT_ID }}/locations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "id": "fetch-gbp-locations",
+      "name": "Fetch GBP Locations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200],
+      "credentials": {
+        "googleApi": {
+          "id": "google-business-credential",
+          "name": "Google Business Profile OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://mybusinessperformance.googleapis.com/v1/locations/{{ $json.name }}/searchkeywords/impressions/monthly",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "monthlyRange.startMonth.year",
+              "value": "={{ $now.minus({ months: 3 }).year }}"
+            },
+            {
+              "name": "monthlyRange.startMonth.month",
+              "value": "={{ $now.minus({ months: 3 }).month }}"
+            },
+            {
+              "name": "monthlyRange.endMonth.year",
+              "value": "={{ $now.year }}"
+            },
+            {
+              "name": "monthlyRange.endMonth.month",
+              "value": "={{ $now.month }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-gbp-insights",
+      "name": "Fetch GBP Insights",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400],
+      "credentials": {
+        "googleApi": {
+          "id": "google-business-credential",
+          "name": "Google Business Profile OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://mybusinessreviews.googleapis.com/v1/accounts/{{ $vars.GOOGLE_ACCOUNT_ID }}/locations/{{ $json.locationId }}/reviews",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "pageSize",
+              "value": "50"
+            },
+            {
+              "name": "orderBy",
+              "value": "updateTime desc"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-google-reviews",
+      "name": "Fetch Google Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "googleApi": {
+          "id": "google-business-credential",
+          "name": "Google Business Profile OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.yelp.com/v3/businesses/{{ $vars.YELP_BUSINESS_ID }}/reviews",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-yelp-reviews",
+      "name": "Fetch Yelp Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yelp-api",
+          "name": "Yelp API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.tripadvisor.com/api/partner/2.0/location/{{ $vars.TRIPADVISOR_ID }}/reviews",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-tripadvisor-reviews",
+      "name": "Fetch TripAdvisor Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "tripadvisor-api",
+          "name": "TripAdvisor API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate reviews from all platforms\nconst googleReviews = $('Fetch Google Reviews').first().json.reviews || [];\nconst yelpReviews = $('Fetch Yelp Reviews').first().json.reviews || [];\nconst tripadvisorReviews = $('Fetch TripAdvisor Reviews').first().json.data || [];\n\nconst allReviews = [];\n\n// Process Google Reviews\ngoogleReviews.forEach(review => {\n  allReviews.push({\n    id: review.reviewId,\n    platform: 'google',\n    rating: review.starRating === 'FIVE' ? 5 : \n            review.starRating === 'FOUR' ? 4 : \n            review.starRating === 'THREE' ? 3 : \n            review.starRating === 'TWO' ? 2 : 1,\n    text: review.comment,\n    authorName: review.reviewer?.displayName,\n    createdAt: review.createTime,\n    replied: !!review.reviewReply,\n    replyText: review.reviewReply?.comment,\n    needsResponse: !review.reviewReply && review.comment\n  });\n});\n\n// Process Yelp Reviews\nyelpReviews.forEach(review => {\n  allReviews.push({\n    id: review.id,\n    platform: 'yelp',\n    rating: review.rating,\n    text: review.text,\n    authorName: review.user?.name,\n    createdAt: review.time_created,\n    replied: false, // Yelp doesn't support replies via API\n    needsResponse: review.rating <= 3\n  });\n});\n\n// Process TripAdvisor Reviews\ntripadvisorReviews.forEach(review => {\n  allReviews.push({\n    id: review.id,\n    platform: 'tripadvisor',\n    rating: review.rating,\n    text: review.text,\n    authorName: review.user?.username,\n    createdAt: review.published_date,\n    replied: !!review.owner_response,\n    needsResponse: !review.owner_response && review.text\n  });\n});\n\n// Calculate metrics\nconst metrics = {\n  totalReviews: allReviews.length,\n  avgRating: allReviews.length > 0 ? \n    (allReviews.reduce((a, b) => a + b.rating, 0) / allReviews.length).toFixed(2) : 0,\n  byPlatform: {\n    google: {\n      count: googleReviews.length,\n      avgRating: googleReviews.length > 0 ? \n        (googleReviews.reduce((a, b) => a + (b.starRating === 'FIVE' ? 5 : b.starRating === 'FOUR' ? 4 : b.starRating === 'THREE' ? 3 : b.starRating === 'TWO' ? 2 : 1), 0) / googleReviews.length).toFixed(2) : 0\n    },\n    yelp: {\n      count: yelpReviews.length,\n      avgRating: yelpReviews.length > 0 ? \n        (yelpReviews.reduce((a, b) => a + b.rating, 0) / yelpReviews.length).toFixed(2) : 0\n    },\n    tripadvisor: {\n      count: tripadvisorReviews.length,\n      avgRating: tripadvisorReviews.length > 0 ? \n        (tripadvisorReviews.reduce((a, b) => a + b.rating, 0) / tripadvisorReviews.length).toFixed(2) : 0\n    }\n  },\n  needingResponse: allReviews.filter(r => r.needsResponse).length,\n  negativeReviews: allReviews.filter(r => r.rating <= 2).length\n};\n\n// Sort by date (newest first)\nallReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));\n\nreturn [{ json: { reviews: allReviews, metrics, analyzedAt: new Date().toISOString() } }];"
+      },
+      "id": "aggregate-reviews",
+      "name": "Aggregate All Reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter reviews needing AI response\nconst data = $input.first().json;\nconst reviewsNeedingResponse = data.reviews.filter(r => r.needsResponse && r.platform === 'google');\n\nreturn reviewsNeedingResponse.map(r => ({ json: r }));"
+      },
+      "id": "filter-needs-response",
+      "name": "Filter Needs Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a professional review response specialist for a local business. Generate thoughtful, personalized responses to customer reviews.\n\nGuidelines:\n1. Thank the customer by name\n2. Address specific points they mentioned\n3. For positive reviews: Express genuine gratitude, mention specific praise\n4. For negative reviews: Apologize sincerely, explain steps to improve, offer to make it right\n5. Include a call to visit again\n6. Keep responses under 150 words\n7. Match the tone to the review sentiment\n8. Never be defensive or argumentative",
+              "role": "system"
+            },
+            {
+              "content": "=Generate a response for this {{ $json.rating }}-star review:\n\n**Platform:** {{ $json.platform }}\n**Author:** {{ $json.authorName }}\n**Rating:** {{ $json.rating }}/5 stars\n**Review:** {{ $json.text }}\n\nGenerate a professional, personalized response.",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.6,
+          "maxTokens": 300
+        }
+      },
+      "id": "generate-response",
+      "name": "Generate AI Response",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1300, 600],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "negative-review",
+              "leftValue": "={{ $json.rating }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-negative",
+      "name": "Negative Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1550, 600]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.REVIEWS_SLACK_CHANNEL }}",
+        "text": "=⚠️ *Negative Review Alert*\n\n*Platform:* {{ $('Filter Needs Response').item.json.platform }}\n*Rating:* {{ $('Filter Needs Response').item.json.rating }}/5 ⭐\n*Author:* {{ $('Filter Needs Response').item.json.authorName }}\n\n*Review:*\n> {{ $('Filter Needs Response').item.json.text }}\n\n💡 *Suggested Response:*\n{{ $json.message?.content || $json.choices?.[0]?.message?.content }}\n\n_Please review and approve before posting_",
+        "otherOptions": {}
+      },
+      "id": "alert-negative",
+      "name": "Alert Negative Review",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1800, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://mybusinessreviews.googleapis.com/v1/{{ $json.reviewId }}/reply",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"comment\": \"{{ $('Generate AI Response').item.json.message?.content || $('Generate AI Response').item.json.choices?.[0]?.message?.content }}\"\n}",
+        "options": {}
+      },
+      "id": "auto-reply-positive",
+      "name": "Auto-Reply Positive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1800, 700],
+      "credentials": {
+        "googleApi": {
+          "id": "google-business-credential",
+          "name": "Google Business Profile OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.brightlocal.com/v4/citations/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "business_name",
+              "value": "={{ $vars.BUSINESS_NAME }}"
+            },
+            {
+              "name": "country",
+              "value": "={{ $vars.COUNTRY_CODE }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-citations",
+      "name": "Check Citations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "brightlocal-api",
+          "name": "BrightLocal API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze citation consistency (NAP - Name, Address, Phone)\nconst citations = $input.first().json.citations || [];\nconst correctNAP = {\n  name: $vars.BUSINESS_NAME,\n  address: $vars.BUSINESS_ADDRESS,\n  phone: $vars.BUSINESS_PHONE\n};\n\nconst analysis = {\n  total: citations.length,\n  consistent: 0,\n  inconsistent: [],\n  missing: [],\n  directories: []\n};\n\ncitations.forEach(citation => {\n  const isConsistent = \n    citation.business_name === correctNAP.name &&\n    citation.address === correctNAP.address &&\n    citation.phone === correctNAP.phone;\n  \n  if (isConsistent) {\n    analysis.consistent++;\n  } else {\n    analysis.inconsistent.push({\n      directory: citation.directory_name,\n      url: citation.url,\n      issues: {\n        name: citation.business_name !== correctNAP.name,\n        address: citation.address !== correctNAP.address,\n        phone: citation.phone !== correctNAP.phone\n      },\n      found: {\n        name: citation.business_name,\n        address: citation.address,\n        phone: citation.phone\n      }\n    });\n  }\n  \n  analysis.directories.push(citation.directory_name);\n});\n\n// Check for missing important directories\nconst importantDirectories = [\n  'Google Business Profile', 'Yelp', 'Facebook', 'Apple Maps',\n  'Bing Places', 'Yellow Pages', 'BBB', 'Foursquare'\n];\n\nimportantDirectories.forEach(dir => {\n  if (!analysis.directories.includes(dir)) {\n    analysis.missing.push(dir);\n  }\n});\n\nanalysis.consistencyScore = analysis.total > 0 ? \n  Math.round((analysis.consistent / analysis.total) * 100) : 0;\n\nreturn [{ json: analysis }];"
+      },
+      "id": "analyze-citations",
+      "name": "Analyze Citation Consistency",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Local SEO Content Specialist. Create engaging Google Business Profile posts that drive local engagement.\n\nPost types to create:\n1. Offer/Promotion posts\n2. What's New updates\n3. Event announcements\n4. Product/Service highlights\n\nGuidelines:\n- Include a clear CTA\n- Use local keywords naturally\n- Keep posts 150-300 words\n- Make them timely and relevant\n- Include emoji for visual appeal",
+              "role": "system"
+            },
+            {
+              "content": "=Create 3 Google Business Profile posts for a {{ $vars.BUSINESS_TYPE }} business named \"{{ $vars.BUSINESS_NAME }}\" located in {{ $vars.BUSINESS_CITY }}.\n\nFocus on:\n1. A seasonal promotion\n2. A what's new update\n3. A product/service highlight\n\nReturn as JSON array with: type, title, content, cta_text, cta_url",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 1500
+        }
+      },
+      "id": "generate-gbp-posts",
+      "name": "Generate GBP Posts",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [800, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mybusiness.googleapis.com/v4/accounts/{{ $vars.GOOGLE_ACCOUNT_ID }}/locations/{{ $vars.GBP_LOCATION_ID }}/localPosts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"languageCode\": \"en-US\",\n  \"summary\": \"{{ $json.posts?.[0]?.content || $json[0]?.content }}\",\n  \"callToAction\": {\n    \"actionType\": \"LEARN_MORE\",\n    \"url\": \"{{ $vars.WEBSITE_URL }}\"\n  },\n  \"topicType\": \"STANDARD\"\n}",
+        "options": {}
+      },
+      "id": "publish-gbp-post",
+      "name": "Publish GBP Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 400],
+      "credentials": {
+        "googleApi": {
+          "id": "google-business-credential",
+          "name": "Google Business Profile OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.LOCAL_SEO_SLACK_CHANNEL }}",
+        "text": "=📊 *Daily Local SEO Report - {{ $now.format('MMMM d, yyyy') }}*\n\n⭐ *Review Summary:*\n• Total Reviews: {{ $('Aggregate All Reviews').first().json.metrics.totalReviews }}\n• Average Rating: {{ $('Aggregate All Reviews').first().json.metrics.avgRating }}/5\n• Needing Response: {{ $('Aggregate All Reviews').first().json.metrics.needingResponse }}\n• Negative Reviews: {{ $('Aggregate All Reviews').first().json.metrics.negativeReviews }}\n\n📍 *By Platform:*\n• Google: {{ $('Aggregate All Reviews').first().json.metrics.byPlatform.google.count }} ({{ $('Aggregate All Reviews').first().json.metrics.byPlatform.google.avgRating }}⭐)\n• Yelp: {{ $('Aggregate All Reviews').first().json.metrics.byPlatform.yelp.count }} ({{ $('Aggregate All Reviews').first().json.metrics.byPlatform.yelp.avgRating }}⭐)\n• TripAdvisor: {{ $('Aggregate All Reviews').first().json.metrics.byPlatform.tripadvisor.count }} ({{ $('Aggregate All Reviews').first().json.metrics.byPlatform.tripadvisor.avgRating }}⭐)\n\n🏢 *Citation Health:*\n• Consistency Score: {{ $('Analyze Citation Consistency').first().json.consistencyScore }}%\n• Inconsistent: {{ $('Analyze Citation Consistency').first().json.inconsistent.length }}\n• Missing Directories: {{ $('Analyze Citation Consistency').first().json.missing.join(', ') || 'None' }}\n\n✅ *GBP Post Published*",
+        "otherOptions": {}
+      },
+      "id": "daily-report",
+      "name": "Daily Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1300, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.LOCAL_SEO_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Daily Metrics",
+          "mode": "list",
+          "cachedResultName": "Daily Metrics"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.format('yyyy-MM-dd') }}",
+            "Total Reviews": "={{ $('Aggregate All Reviews').first().json.metrics.totalReviews }}",
+            "Avg Rating": "={{ $('Aggregate All Reviews').first().json.metrics.avgRating }}",
+            "Google Rating": "={{ $('Aggregate All Reviews').first().json.metrics.byPlatform.google.avgRating }}",
+            "Yelp Rating": "={{ $('Aggregate All Reviews').first().json.metrics.byPlatform.yelp.avgRating }}",
+            "Citation Score": "={{ $('Analyze Citation Consistency').first().json.consistencyScore }}",
+            "Responses Needed": "={{ $('Aggregate All Reviews').first().json.metrics.needingResponse }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-metrics",
+      "name": "Log Daily Metrics",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1550, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 7 AM": {
+      "main": [
+        [
+          { "node": "Fetch GBP Locations", "type": "main", "index": 0 },
+          { "node": "Fetch GBP Insights", "type": "main", "index": 0 },
+          { "node": "Fetch Google Reviews", "type": "main", "index": 0 },
+          { "node": "Fetch Yelp Reviews", "type": "main", "index": 0 },
+          { "node": "Fetch TripAdvisor Reviews", "type": "main", "index": 0 },
+          { "node": "Check Citations", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Google Reviews": {
+      "main": [
+        [{ "node": "Aggregate All Reviews", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Yelp Reviews": {
+      "main": [
+        [{ "node": "Aggregate All Reviews", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch TripAdvisor Reviews": {
+      "main": [
+        [{ "node": "Aggregate All Reviews", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate All Reviews": {
+      "main": [
+        [{ "node": "Filter Needs Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Filter Needs Response": {
+      "main": [
+        [{ "node": "Generate AI Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate AI Response": {
+      "main": [
+        [{ "node": "Negative Review?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Negative Review?": {
+      "main": [
+        [{ "node": "Alert Negative Review", "type": "main", "index": 0 }],
+        [{ "node": "Auto-Reply Positive", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Citations": {
+      "main": [
+        [{ "node": "Analyze Citation Consistency", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch GBP Insights": {
+      "main": [
+        [{ "node": "Generate GBP Posts", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate GBP Posts": {
+      "main": [
+        [{ "node": "Publish GBP Post", "type": "main", "index": 0 }]
+      ]
+    },
+    "Publish GBP Post": {
+      "main": [
+        [{ "node": "Daily Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Daily Report": {
+      "main": [
+        [{ "node": "Log Daily Metrics", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "local-seo", "name": "local-seo" },
+    { "id": "reviews", "name": "reviews" },
+    { "id": "gbp", "name": "gbp" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

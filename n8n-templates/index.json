@@ -1,5 +1,5 @@
 {
-  "count": 62,
+  "count": 72,
   "lastUpdated": "2026-01-07",
   "categories": {
     "hospitality": [
@@ -32,7 +32,8 @@
     "analytics": [
       "Grain_Unified_Analytics_Dashboard_v1.json",
       "Grain_AB_Testing_Engine_v1.json",
-      "Grain_Video_Performance_Tracker_v1.json"
+      "Grain_Video_Performance_Tracker_v1.json",
+      "Grain_Content_Performance_Analyzer_v1.json"
     ],
     "customer_success": [
       "Grain_Churn_Prediction_Prevention_v1.json",
@@ -53,6 +54,22 @@
     "intelligence": [
       "Grain_Competitive_Intelligence_v1.json",
       "Grain_Social_Listening_Sentiment_v1.json"
+    ],
+    "seo": [
+      "Grain_SEO_Site_Audit_v1.json",
+      "Grain_Keyword_Research_Pipeline_v1.json",
+      "Grain_Rank_Tracking_v1.json",
+      "Grain_Backlink_Monitor_v1.json",
+      "Grain_Local_Citation_Builder_v1.json"
+    ],
+    "local_seo": [
+      "Grain_Local_SEO_Automation_Hub_v1.json",
+      "Grain_Local_Citation_Builder_v1.json"
+    ],
+    "restaurant": [
+      "Grain_Restaurant_Marketing_Hub_v1.json",
+      "Grain_Restaurant_Loyalty_Program_v1.json",
+      "Grain_Guest_Feedback_Review_v1.json"
     ]
   },
   "files": [
@@ -276,6 +293,76 @@
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Social_Listening_Sentiment_v1.json",
       "category": "intelligence",
       "description": "Social media monitoring with sentiment analysis"
+    },
+    {
+      "filename": "Grain_SEO_Site_Audit_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SEO_Site_Audit_v1.json",
+      "category": "seo",
+      "description": "Comprehensive SEO site audit with 50+ technical checks (SEMrush-style)",
+      "roi": "20% organic traffic increase"
+    },
+    {
+      "filename": "Grain_Keyword_Research_Pipeline_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Keyword_Research_Pipeline_v1.json",
+      "category": "seo",
+      "description": "AI-powered keyword research with clustering and gap analysis (Ahrefs-style)",
+      "roi": "3x keyword opportunities discovered"
+    },
+    {
+      "filename": "Grain_Rank_Tracking_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Rank_Tracking_v1.json",
+      "category": "seo",
+      "description": "Daily SERP position tracking with alerts and trend analysis",
+      "roi": "Real-time ranking visibility"
+    },
+    {
+      "filename": "Grain_Backlink_Monitor_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Backlink_Monitor_v1.json",
+      "category": "seo",
+      "description": "Backlink profile monitoring with new/lost alerts and outreach automation",
+      "roi": "50% faster link recovery"
+    },
+    {
+      "filename": "Grain_Local_Citation_Builder_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Local_Citation_Builder_v1.json",
+      "category": "local_seo",
+      "description": "NAP consistency audit and automated citation submission",
+      "roi": "40% local ranking improvement"
+    },
+    {
+      "filename": "Grain_Local_SEO_Automation_Hub_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Local_SEO_Automation_Hub_v1.json",
+      "category": "local_seo",
+      "description": "Google Business Profile management with multi-platform review monitoring",
+      "roi": "25% more local visibility"
+    },
+    {
+      "filename": "Grain_Content_Performance_Analyzer_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Content_Performance_Analyzer_v1.json",
+      "category": "analytics",
+      "description": "Content scoring with traffic, SEO, engagement, and social metrics",
+      "roi": "2x content effectiveness"
+    },
+    {
+      "filename": "Grain_Restaurant_Marketing_Hub_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Restaurant_Marketing_Hub_v1.json",
+      "category": "restaurant",
+      "description": "Guest CDP with lifecycle campaigns (welcome, win-back, birthday)",
+      "roi": "30% repeat visit increase"
+    },
+    {
+      "filename": "Grain_Restaurant_Loyalty_Program_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Restaurant_Loyalty_Program_v1.json",
+      "category": "restaurant",
+      "description": "Points-based loyalty with tier upgrades and reward redemption",
+      "roi": "25% customer retention boost"
+    },
+    {
+      "filename": "Grain_Guest_Feedback_Review_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Guest_Feedback_Review_v1.json",
+      "category": "restaurant",
+      "description": "NPS surveys with AI review response generation",
+      "roi": "50% more positive reviews"
     },
     {
       "filename": "0 - MARKETING TEAM.json",

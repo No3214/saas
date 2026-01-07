@@ -1,0 +1,353 @@
+{
+  "name": "Grain SEO Site Audit v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "weekly-audit",
+      "name": "Weekly Audit Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "site-audit",
+        "options": {}
+      },
+      "id": "manual-audit",
+      "name": "Manual Audit Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "site-audit-trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize audit configuration\nconst input = $input.first().json;\n\nconst auditConfig = {\n  auditId: `AUDIT-${Date.now().toString(36).toUpperCase()}`,\n  domain: input.domain || input.body?.domain || $vars.DEFAULT_AUDIT_DOMAIN,\n  depth: input.depth || input.body?.depth || 'full',\n  maxPages: input.maxPages || input.body?.maxPages || 500,\n  categories: input.categories || input.body?.categories || [\n    'technical',\n    'content',\n    'performance',\n    'mobile',\n    'security',\n    'indexability'\n  ],\n  startedAt: new Date().toISOString(),\n  previousAuditId: input.previousAuditId || null\n};\n\n// Issue severity weights\nauditConfig.severityWeights = {\n  critical: 10,\n  high: 5,\n  medium: 3,\n  low: 1,\n  info: 0\n};\n\nreturn [{ json: auditConfig }];"
+      },
+      "id": "init-audit",
+      "name": "Initialize Audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CRAWLER_API_URL }}/crawl",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"domain\": \"{{ $json.domain }}\",\n  \"maxPages\": {{ $json.maxPages }},\n  \"depth\": \"{{ $json.depth }}\",\n  \"includeResources\": true,\n  \"followRedirects\": true,\n  \"respectRobots\": true,\n  \"userAgent\": \"GrainBot/1.0\",\n  \"extractMetadata\": true,\n  \"checkLinks\": true\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "crawl-site",
+      "name": "Crawl Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crawler-api-key",
+          "name": "Crawler API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PAGESPEED_API_URL }}/analyze",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "=https://{{ $('Initialize Audit').first().json.domain }}"
+            },
+            {
+              "name": "strategy",
+              "value": "mobile"
+            },
+            {
+              "name": "category",
+              "value": "performance,accessibility,best-practices,seo"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pagespeed-mobile",
+      "name": "PageSpeed Mobile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pagespeed-api-key",
+          "name": "PageSpeed API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.PAGESPEED_API_URL }}/analyze",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "=https://{{ $('Initialize Audit').first().json.domain }}"
+            },
+            {
+              "name": "strategy",
+              "value": "desktop"
+            },
+            {
+              "name": "category",
+              "value": "performance,accessibility,best-practices,seo"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "pagespeed-desktop",
+      "name": "PageSpeed Desktop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pagespeed-api-key",
+          "name": "PageSpeed API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze technical SEO issues\nconst config = $('Initialize Audit').first().json;\nconst crawlData = $('Crawl Website').first().json;\n\nconst pages = crawlData.pages || [];\nconst issues = [];\n\n// Check each page for technical issues\npages.forEach(page => {\n  // Title tag issues\n  if (!page.title) {\n    issues.push({\n      type: 'missing_title',\n      severity: 'critical',\n      category: 'content',\n      url: page.url,\n      message: 'Page is missing a title tag',\n      recommendation: 'Add a unique, descriptive title tag (50-60 characters)'\n    });\n  } else if (page.title.length < 30) {\n    issues.push({\n      type: 'short_title',\n      severity: 'medium',\n      category: 'content',\n      url: page.url,\n      message: `Title tag is too short (${page.title.length} chars)`,\n      recommendation: 'Expand title to 50-60 characters for better SEO'\n    });\n  } else if (page.title.length > 60) {\n    issues.push({\n      type: 'long_title',\n      severity: 'low',\n      category: 'content',\n      url: page.url,\n      message: `Title tag is too long (${page.title.length} chars)`,\n      recommendation: 'Shorten title to under 60 characters to avoid truncation'\n    });\n  }\n\n  // Meta description issues\n  if (!page.metaDescription) {\n    issues.push({\n      type: 'missing_meta_description',\n      severity: 'high',\n      category: 'content',\n      url: page.url,\n      message: 'Page is missing a meta description',\n      recommendation: 'Add a compelling meta description (150-160 characters)'\n    });\n  } else if (page.metaDescription.length < 70) {\n    issues.push({\n      type: 'short_meta_description',\n      severity: 'medium',\n      category: 'content',\n      url: page.url,\n      message: `Meta description is too short (${page.metaDescription.length} chars)`,\n      recommendation: 'Expand meta description to 150-160 characters'\n    });\n  }\n\n  // H1 tag issues\n  if (!page.h1 || page.h1.length === 0) {\n    issues.push({\n      type: 'missing_h1',\n      severity: 'high',\n      category: 'content',\n      url: page.url,\n      message: 'Page is missing an H1 tag',\n      recommendation: 'Add a single, descriptive H1 tag'\n    });\n  } else if (page.h1.length > 1) {\n    issues.push({\n      type: 'multiple_h1',\n      severity: 'medium',\n      category: 'content',\n      url: page.url,\n      message: `Page has ${page.h1.length} H1 tags`,\n      recommendation: 'Use only one H1 tag per page'\n    });\n  }\n\n  // Canonical issues\n  if (!page.canonical) {\n    issues.push({\n      type: 'missing_canonical',\n      severity: 'medium',\n      category: 'indexability',\n      url: page.url,\n      message: 'Page is missing a canonical tag',\n      recommendation: 'Add a self-referencing canonical tag'\n    });\n  }\n\n  // Broken links\n  if (page.brokenLinks && page.brokenLinks.length > 0) {\n    page.brokenLinks.forEach(link => {\n      issues.push({\n        type: 'broken_link',\n        severity: 'high',\n        category: 'technical',\n        url: page.url,\n        message: `Broken link found: ${link.href} (${link.statusCode})`,\n        recommendation: 'Fix or remove the broken link'\n      });\n    });\n  }\n\n  // Image alt text\n  if (page.images) {\n    page.images.filter(img => !img.alt).forEach(img => {\n      issues.push({\n        type: 'missing_alt_text',\n        severity: 'medium',\n        category: 'content',\n        url: page.url,\n        message: `Image missing alt text: ${img.src}`,\n        recommendation: 'Add descriptive alt text to all images'\n      });\n    });\n  }\n\n  // HTTPS issues\n  if (page.url.startsWith('http://')) {\n    issues.push({\n      type: 'not_https',\n      severity: 'critical',\n      category: 'security',\n      url: page.url,\n      message: 'Page is not served over HTTPS',\n      recommendation: 'Migrate to HTTPS for security and SEO benefits'\n    });\n  }\n\n  // Response time issues\n  if (page.responseTime > 3000) {\n    issues.push({\n      type: 'slow_response',\n      severity: 'high',\n      category: 'performance',\n      url: page.url,\n      message: `Slow server response (${page.responseTime}ms)`,\n      recommendation: 'Optimize server response time to under 200ms'\n    });\n  }\n\n  // Word count issues\n  if (page.wordCount && page.wordCount < 300) {\n    issues.push({\n      type: 'thin_content',\n      severity: 'medium',\n      category: 'content',\n      url: page.url,\n      message: `Thin content (${page.wordCount} words)`,\n      recommendation: 'Expand content to at least 300 words for better rankings'\n    });\n  }\n\n  // Redirect chain issues\n  if (page.redirectChain && page.redirectChain.length > 1) {\n    issues.push({\n      type: 'redirect_chain',\n      severity: 'medium',\n      category: 'technical',\n      url: page.url,\n      message: `Redirect chain detected (${page.redirectChain.length} hops)`,\n      recommendation: 'Update links to point directly to final URL'\n    });\n  }\n});\n\n// Check for duplicate content\nconst titleCounts = {};\nconst descriptionCounts = {};\n\npages.forEach(page => {\n  if (page.title) {\n    titleCounts[page.title] = (titleCounts[page.title] || []);\n    titleCounts[page.title].push(page.url);\n  }\n  if (page.metaDescription) {\n    descriptionCounts[page.metaDescription] = (descriptionCounts[page.metaDescription] || []);\n    descriptionCounts[page.metaDescription].push(page.url);\n  }\n});\n\nObject.entries(titleCounts).filter(([_, urls]) => urls.length > 1).forEach(([title, urls]) => {\n  issues.push({\n    type: 'duplicate_title',\n    severity: 'high',\n    category: 'content',\n    urls,\n    message: `Duplicate title found on ${urls.length} pages: \"${title.substring(0, 50)}...\"`,\n    recommendation: 'Create unique titles for each page'\n  });\n});\n\nObject.entries(descriptionCounts).filter(([_, urls]) => urls.length > 1).forEach(([desc, urls]) => {\n  issues.push({\n    type: 'duplicate_description',\n    severity: 'medium',\n    category: 'content',\n    urls,\n    message: `Duplicate meta description found on ${urls.length} pages`,\n    recommendation: 'Create unique descriptions for each page'\n  });\n});\n\nreturn [{ json: {\n  config,\n  crawlSummary: {\n    totalPages: pages.length,\n    avgResponseTime: pages.reduce((a, b) => a + (b.responseTime || 0), 0) / pages.length,\n    totalLinks: pages.reduce((a, b) => a + (b.links?.length || 0), 0)\n  },\n  issues\n}}];"
+      },
+      "id": "technical-analysis",
+      "name": "Technical SEO Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze PageSpeed results\nconst mobileResults = $('PageSpeed Mobile').first().json;\nconst desktopResults = $('PageSpeed Desktop').first().json;\nconst config = $('Initialize Audit').first().json;\n\nconst issues = [];\n\n// Process mobile performance\nconst mobilePerf = mobileResults.lighthouseResult?.categories?.performance?.score * 100 || 0;\nconst desktopPerf = desktopResults.lighthouseResult?.categories?.performance?.score * 100 || 0;\n\nif (mobilePerf < 50) {\n  issues.push({\n    type: 'poor_mobile_performance',\n    severity: 'critical',\n    category: 'performance',\n    url: `https://${config.domain}`,\n    message: `Poor mobile performance score: ${mobilePerf}/100`,\n    recommendation: 'Optimize images, reduce JavaScript, and improve Core Web Vitals'\n  });\n} else if (mobilePerf < 90) {\n  issues.push({\n    type: 'moderate_mobile_performance',\n    severity: 'medium',\n    category: 'performance',\n    url: `https://${config.domain}`,\n    message: `Mobile performance needs improvement: ${mobilePerf}/100`,\n    recommendation: 'Review Core Web Vitals and optimize critical rendering path'\n  });\n}\n\n// Core Web Vitals\nconst cwv = mobileResults.lighthouseResult?.audits;\nif (cwv) {\n  // LCP (Largest Contentful Paint)\n  const lcp = cwv['largest-contentful-paint']?.numericValue;\n  if (lcp > 4000) {\n    issues.push({\n      type: 'poor_lcp',\n      severity: 'critical',\n      category: 'performance',\n      url: `https://${config.domain}`,\n      message: `Poor LCP: ${(lcp/1000).toFixed(1)}s (should be under 2.5s)`,\n      recommendation: 'Optimize largest contentful paint element, consider lazy loading'\n    });\n  } else if (lcp > 2500) {\n    issues.push({\n      type: 'needs_improvement_lcp',\n      severity: 'high',\n      category: 'performance',\n      url: `https://${config.domain}`,\n      message: `LCP needs improvement: ${(lcp/1000).toFixed(1)}s`,\n      recommendation: 'Improve server response time and optimize resource loading'\n    });\n  }\n\n  // FID / TBT (Total Blocking Time as proxy)\n  const tbt = cwv['total-blocking-time']?.numericValue;\n  if (tbt > 600) {\n    issues.push({\n      type: 'poor_tbt',\n      severity: 'critical',\n      category: 'performance',\n      url: `https://${config.domain}`,\n      message: `High Total Blocking Time: ${tbt}ms (should be under 200ms)`,\n      recommendation: 'Reduce JavaScript execution time, split long tasks'\n    });\n  }\n\n  // CLS (Cumulative Layout Shift)\n  const cls = cwv['cumulative-layout-shift']?.numericValue;\n  if (cls > 0.25) {\n    issues.push({\n      type: 'poor_cls',\n      severity: 'high',\n      category: 'performance',\n      url: `https://${config.domain}`,\n      message: `High layout shift: ${cls.toFixed(3)} (should be under 0.1)`,\n      recommendation: 'Set dimensions for images and embeds, avoid inserting content above existing content'\n    });\n  }\n}\n\n// Accessibility issues\nconst accessibilityScore = mobileResults.lighthouseResult?.categories?.accessibility?.score * 100 || 0;\nif (accessibilityScore < 90) {\n  issues.push({\n    type: 'accessibility_issues',\n    severity: accessibilityScore < 50 ? 'critical' : 'high',\n    category: 'accessibility',\n    url: `https://${config.domain}`,\n    message: `Accessibility score: ${accessibilityScore}/100`,\n    recommendation: 'Review and fix accessibility issues for better usability'\n  });\n}\n\n// SEO score from PageSpeed\nconst seoScore = mobileResults.lighthouseResult?.categories?.seo?.score * 100 || 0;\nif (seoScore < 90) {\n  issues.push({\n    type: 'pagespeed_seo_issues',\n    severity: 'high',\n    category: 'technical',\n    url: `https://${config.domain}`,\n    message: `PageSpeed SEO score: ${seoScore}/100`,\n    recommendation: 'Review Lighthouse SEO audit for specific improvements'\n  });\n}\n\nconst performanceData = {\n  mobile: {\n    performance: mobilePerf,\n    accessibility: accessibilityScore,\n    bestPractices: mobileResults.lighthouseResult?.categories?.['best-practices']?.score * 100 || 0,\n    seo: seoScore,\n    lcp: cwv?.['largest-contentful-paint']?.numericValue,\n    tbt: cwv?.['total-blocking-time']?.numericValue,\n    cls: cwv?.['cumulative-layout-shift']?.numericValue\n  },\n  desktop: {\n    performance: desktopPerf,\n    accessibility: desktopResults.lighthouseResult?.categories?.accessibility?.score * 100 || 0,\n    bestPractices: desktopResults.lighthouseResult?.categories?.['best-practices']?.score * 100 || 0,\n    seo: desktopResults.lighthouseResult?.categories?.seo?.score * 100 || 0\n  }\n};\n\nreturn [{ json: { performanceData, issues } }];"
+      },
+      "id": "performance-analysis",
+      "name": "Performance Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile full audit report\nconst technicalData = $('Technical SEO Analysis').first().json;\nconst performanceData = $('Performance Analysis').first().json;\nconst config = technicalData.config;\n\n// Combine all issues\nconst allIssues = [\n  ...technicalData.issues,\n  ...performanceData.issues\n];\n\n// Calculate scores by category\nconst categoryScores = {};\nconst categories = ['technical', 'content', 'performance', 'mobile', 'security', 'indexability', 'accessibility'];\n\ncategories.forEach(cat => {\n  const catIssues = allIssues.filter(i => i.category === cat);\n  const penalty = catIssues.reduce((sum, issue) => {\n    return sum + (config.severityWeights[issue.severity] || 0);\n  }, 0);\n  categoryScores[cat] = Math.max(0, 100 - penalty);\n});\n\n// Overall health score\nconst overallScore = Math.round(\n  Object.values(categoryScores).reduce((a, b) => a + b, 0) / categories.length\n);\n\n// Group issues by severity\nconst issuesBySeverity = {\n  critical: allIssues.filter(i => i.severity === 'critical'),\n  high: allIssues.filter(i => i.severity === 'high'),\n  medium: allIssues.filter(i => i.severity === 'medium'),\n  low: allIssues.filter(i => i.severity === 'low')\n};\n\n// Top priorities\nconst priorities = [\n  ...issuesBySeverity.critical.slice(0, 5),\n  ...issuesBySeverity.high.slice(0, 5)\n].slice(0, 10);\n\nconst auditReport = {\n  auditId: config.auditId,\n  domain: config.domain,\n  completedAt: new Date().toISOString(),\n  startedAt: config.startedAt,\n  summary: {\n    overallScore,\n    categoryScores,\n    totalIssues: allIssues.length,\n    criticalIssues: issuesBySeverity.critical.length,\n    highIssues: issuesBySeverity.high.length,\n    mediumIssues: issuesBySeverity.medium.length,\n    lowIssues: issuesBySeverity.low.length,\n    pagesAnalyzed: technicalData.crawlSummary.totalPages\n  },\n  performance: performanceData.performanceData,\n  topPriorities: priorities,\n  issuesBySeverity,\n  allIssues,\n  crawlSummary: technicalData.crawlSummary\n};\n\nreturn [{ json: auditReport }];"
+      },
+      "id": "compile-report",
+      "name": "Compile Audit Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 550]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an SEO Expert Analyst. Analyze the site audit results and provide actionable recommendations.\n\nFor each major issue category, provide:\n1. Impact explanation\n2. Priority ranking\n3. Step-by-step fix instructions\n4. Expected improvement after fix\n\nBe specific and technical. Reference actual page URLs and metrics.",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze this SEO audit for {{ $json.domain }}:\n\n**Overall Health Score:** {{ $json.summary.overallScore }}/100\n\n**Category Scores:**\n{{ Object.entries($json.summary.categoryScores).map(([k,v]) => `- ${k}: ${v}/100`).join('\\n') }}\n\n**Issue Summary:**\n- Critical: {{ $json.summary.criticalIssues }}\n- High: {{ $json.summary.highIssues }}\n- Medium: {{ $json.summary.mediumIssues }}\n- Low: {{ $json.summary.lowIssues }}\n\n**Top 10 Priorities:**\n{{ $json.topPriorities.map((p, i) => `${i+1}. [${p.severity.toUpperCase()}] ${p.message}`).join('\\n') }}\n\n**Performance Metrics:**\n- Mobile Score: {{ $json.performance.mobile.performance }}/100\n- Desktop Score: {{ $json.performance.desktop.performance }}/100\n- LCP: {{ $json.performance.mobile.lcp }}ms\n- CLS: {{ $json.performance.mobile.cls }}\n\nProvide a prioritized action plan with specific recommendations.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 2500
+        }
+      },
+      "id": "ai-recommendations",
+      "name": "AI Recommendations",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1500, 450],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Finalize audit with AI recommendations\nconst report = $('Compile Audit Report').first().json;\nconst aiRecommendations = $('AI Recommendations').first().json;\n\nconst finalReport = {\n  ...report,\n  recommendations: aiRecommendations,\n  exportFormats: {\n    pdf: `{{ $vars.REPORT_BASE_URL }}/audit/${report.auditId}/pdf`,\n    csv: `{{ $vars.REPORT_BASE_URL }}/audit/${report.auditId}/csv`,\n    json: `{{ $vars.REPORT_BASE_URL }}/audit/${report.auditId}/json`\n  }\n};\n\nreturn [{ json: finalReport }];"
+      },
+      "id": "finalize-report",
+      "name": "Finalize Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.AUDIT_DB_URL }}/reports",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-report",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 350],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "audit-db-api",
+          "name": "Audit DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.SEO_SLACK_CHANNEL }}",
+        "text": "=🔍 *Site Audit Complete - {{ $json.domain }}*\n\n📊 *Health Score:* {{ $json.summary.overallScore }}/100\n\n*Category Breakdown:*\n{{ Object.entries($json.summary.categoryScores).map(([k,v]) => `• ${k.charAt(0).toUpperCase() + k.slice(1)}: ${v}/100`).join('\\n') }}\n\n⚠️ *Issues Found:*\n• Critical: {{ $json.summary.criticalIssues }}\n• High: {{ $json.summary.highIssues }}\n• Medium: {{ $json.summary.mediumIssues }}\n\n🚀 *Performance:*\n• Mobile: {{ $json.performance.mobile.performance }}/100\n• Desktop: {{ $json.performance.desktop.performance }}/100\n\n📄 <{{ $json.exportFormats.pdf }}|Download Full Report>",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2000, 550],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 750]
+    }
+  ],
+  "connections": {
+    "Weekly Audit Schedule": {
+      "main": [
+        [{ "node": "Initialize Audit", "type": "main", "index": 0 }]
+      ]
+    },
+    "Manual Audit Trigger": {
+      "main": [
+        [{ "node": "Initialize Audit", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize Audit": {
+      "main": [
+        [
+          { "node": "Crawl Website", "type": "main", "index": 0 },
+          { "node": "PageSpeed Mobile", "type": "main", "index": 0 },
+          { "node": "PageSpeed Desktop", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Crawl Website": {
+      "main": [
+        [{ "node": "Technical SEO Analysis", "type": "main", "index": 0 }]
+      ]
+    },
+    "PageSpeed Mobile": {
+      "main": [
+        [{ "node": "Performance Analysis", "type": "main", "index": 0 }]
+      ]
+    },
+    "PageSpeed Desktop": {
+      "main": [
+        [{ "node": "Performance Analysis", "type": "main", "index": 0 }]
+      ]
+    },
+    "Technical SEO Analysis": {
+      "main": [
+        [{ "node": "Compile Audit Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Performance Analysis": {
+      "main": [
+        [{ "node": "Compile Audit Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Audit Report": {
+      "main": [
+        [{ "node": "AI Recommendations", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Recommendations": {
+      "main": [
+        [{ "node": "Finalize Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Finalize Report": {
+      "main": [
+        [
+          { "node": "Save to Database", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "seo", "name": "seo" },
+    { "id": "audit", "name": "audit" },
+    { "id": "technical", "name": "technical" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}
