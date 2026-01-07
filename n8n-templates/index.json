@@ -1,5 +1,5 @@
 {
-  "count": 27,
+  "count": 29,
   "files": [
     {
       "filename": "0 - MARKETING TEAM.json",
@@ -104,6 +104,12 @@
       "notes": ""
     },
     {
+      "filename": "Grain_Multi_Platform_Publisher_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Multi_Platform_Publisher_v1.json",
+      "size_bytes": 20401,
+      "notes": ""
+    },
+    {
       "filename": "Instagram_DM_otomasyonu_V2.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Instagram_DM_otomasyonu_V2.json",
       "size_bytes": 3316,
@@ -143,6 +149,12 @@
       "filename": "generate-raw-urls.sh",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/generate-raw-urls.sh",
       "size_bytes": 442,
+      "notes": ""
+    },
+    {
+      "filename": "index.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/index.json",
+      "size_bytes": 6313,
       "notes": ""
     },
     {
