@@ -1,0 +1,493 @@
+{
+  "name": "Grain Intelligent CDP v1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-data-ingestion",
+      "name": "Data Ingestion Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "cdp-data-ingestion"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "scheduled-sync",
+      "name": "Scheduled Data Sync",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.segment.io/v1/users",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page_size",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "segment-fetch",
+      "name": "Fetch Segment Profiles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.hubspot.com/crm/v3/objects/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubSpotApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "100"
+            },
+            {
+              "name": "properties",
+              "value": "email,firstname,lastname,company,phone,lifecyclestage,hs_lead_status,hubspot_owner_id,createdate,lastmodifieddate"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "hubspot-fetch",
+      "name": "Fetch HubSpot Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.intercom.io/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "intercomApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "intercom-fetch",
+      "name": "Fetch Intercom Users",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mixpanel.com/engage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"$token\": \"{{ $env.MIXPANEL_TOKEN }}\",\n  \"$distinct_id\": \"\"\n}",
+        "options": {}
+      },
+      "id": "mixpanel-fetch",
+      "name": "Fetch Mixpanel Profiles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Identity Resolution Engine\n// Merges profiles from multiple sources into unified customer profiles\n\nconst segmentData = $('Fetch Segment Profiles').all();\nconst hubspotData = $('Fetch HubSpot Contacts').all();\nconst intercomData = $('Fetch Intercom Users').all();\nconst mixpanelData = $('Fetch Mixpanel Profiles').all();\n\n// Identity graph for resolution\nconst identityGraph = new Map();\n\n// Identity matching function\nfunction getIdentityKey(profile) {\n  // Primary: email\n  if (profile.email) return `email:${profile.email.toLowerCase()}`;\n  // Secondary: phone\n  if (profile.phone) return `phone:${profile.phone.replace(/\\D/g, '')}`;\n  // Tertiary: external_id\n  if (profile.external_id) return `ext:${profile.external_id}`;\n  // Fallback: anonymous_id\n  if (profile.anonymous_id) return `anon:${profile.anonymous_id}`;\n  return null;\n}\n\n// Merge profiles with conflict resolution\nfunction mergeProfiles(existing, newProfile, source) {\n  const merged = { ...existing };\n  \n  // Source priority for conflict resolution\n  const sourcePriority = {\n    'hubspot': 4,\n    'salesforce': 4,\n    'segment': 3,\n    'intercom': 2,\n    'mixpanel': 1\n  };\n  \n  const newPriority = sourcePriority[source] || 0;\n  const existingPriority = sourcePriority[merged._primarySource] || 0;\n  \n  // Merge fields with priority\n  for (const [key, value] of Object.entries(newProfile)) {\n    if (value !== null && value !== undefined && value !== '') {\n      if (!merged[key] || newPriority > existingPriority) {\n        merged[key] = value;\n      }\n    }\n  }\n  \n  // Track all sources\n  if (!merged._sources) merged._sources = [];\n  if (!merged._sources.includes(source)) merged._sources.push(source);\n  \n  // Update primary source if higher priority\n  if (newPriority > existingPriority) {\n    merged._primarySource = source;\n  }\n  \n  return merged;\n}\n\n// Process Segment profiles\nsegmentData.forEach(item => {\n  const users = item.json.users || [item.json];\n  users.forEach(profile => {\n    const key = getIdentityKey(profile);\n    if (key) {\n      const normalized = {\n        email: profile.email,\n        firstName: profile.traits?.first_name || profile.firstName,\n        lastName: profile.traits?.last_name || profile.lastName,\n        phone: profile.traits?.phone || profile.phone,\n        company: profile.traits?.company?.name || profile.company,\n        createdAt: profile.created_at,\n        lastSeen: profile.last_seen_at,\n        anonymous_id: profile.anonymous_id,\n        external_id: profile.user_id\n      };\n      \n      const existing = identityGraph.get(key) || {};\n      identityGraph.set(key, mergeProfiles(existing, normalized, 'segment'));\n    }\n  });\n});\n\n// Process HubSpot contacts\nhubspotData.forEach(item => {\n  const contacts = item.json.results || [item.json];\n  contacts.forEach(contact => {\n    const key = getIdentityKey({ email: contact.properties?.email });\n    if (key) {\n      const normalized = {\n        email: contact.properties?.email,\n        firstName: contact.properties?.firstname,\n        lastName: contact.properties?.lastname,\n        phone: contact.properties?.phone,\n        company: contact.properties?.company,\n        lifecycleStage: contact.properties?.lifecyclestage,\n        leadStatus: contact.properties?.hs_lead_status,\n        ownerId: contact.properties?.hubspot_owner_id,\n        createdAt: contact.properties?.createdate,\n        lastModified: contact.properties?.lastmodifieddate,\n        hubspotId: contact.id\n      };\n      \n      const existing = identityGraph.get(key) || {};\n      identityGraph.set(key, mergeProfiles(existing, normalized, 'hubspot'));\n    }\n  });\n});\n\n// Process Intercom users\nintercomData.forEach(item => {\n  const users = item.json.data || [item.json];\n  users.forEach(user => {\n    const key = getIdentityKey({ email: user.email });\n    if (key) {\n      const normalized = {\n        email: user.email,\n        firstName: user.name?.split(' ')[0],\n        lastName: user.name?.split(' ').slice(1).join(' '),\n        phone: user.phone,\n        company: user.companies?.data?.[0]?.name,\n        lastSeen: user.last_seen_at,\n        sessionCount: user.session_count,\n        unsubscribed: user.unsubscribed_from_emails,\n        intercomId: user.id\n      };\n      \n      const existing = identityGraph.get(key) || {};\n      identityGraph.set(key, mergeProfiles(existing, normalized, 'intercom'));\n    }\n  });\n});\n\n// Process Mixpanel profiles\nmixpanelData.forEach(item => {\n  const profiles = item.json.results || [item.json];\n  profiles.forEach(profile => {\n    const key = getIdentityKey({ email: profile.$properties?.$email });\n    if (key) {\n      const normalized = {\n        email: profile.$properties?.$email,\n        firstName: profile.$properties?.$first_name,\n        lastName: profile.$properties?.$last_name,\n        city: profile.$properties?.$city,\n        country: profile.$properties?.$country,\n        lastSeen: profile.$properties?.$last_seen,\n        mixpanelId: profile.$distinct_id\n      };\n      \n      const existing = identityGraph.get(key) || {};\n      identityGraph.set(key, mergeProfiles(existing, normalized, 'mixpanel'));\n    }\n  });\n});\n\n// Convert to array and add unified profile ID\nconst unifiedProfiles = Array.from(identityGraph.entries()).map(([key, profile], index) => {\n  return {\n    ...profile,\n    unifiedProfileId: `UP-${Date.now()}-${index}`,\n    identityKey: key,\n    resolvedAt: new Date().toISOString(),\n    sourceCount: profile._sources?.length || 1\n  };\n});\n\nreturn [{\n  json: {\n    totalProfiles: unifiedProfiles.length,\n    profiles: unifiedProfiles,\n    summary: {\n      bySource: {\n        segment: unifiedProfiles.filter(p => p._sources?.includes('segment')).length,\n        hubspot: unifiedProfiles.filter(p => p._sources?.includes('hubspot')).length,\n        intercom: unifiedProfiles.filter(p => p._sources?.includes('intercom')).length,\n        mixpanel: unifiedProfiles.filter(p => p._sources?.includes('mixpanel')).length\n      },\n      multiSourceProfiles: unifiedProfiles.filter(p => (p._sources?.length || 0) > 1).length\n    },\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "identity-resolution",
+      "name": "Identity Resolution Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Real-time Behavioral Analysis\n// Analyzes user behavior patterns and generates insights\n\nconst profiles = $input.first().json.profiles;\n\nconst analyzedProfiles = profiles.map(profile => {\n  // Calculate engagement score\n  let engagementScore = 0;\n  \n  // Session activity\n  if (profile.sessionCount > 10) engagementScore += 25;\n  else if (profile.sessionCount > 5) engagementScore += 15;\n  else if (profile.sessionCount > 0) engagementScore += 5;\n  \n  // Recency\n  const lastSeen = new Date(profile.lastSeen || profile.lastModified);\n  const daysSinceActive = (Date.now() - lastSeen.getTime()) / (1000 * 60 * 60 * 24);\n  if (daysSinceActive < 1) engagementScore += 30;\n  else if (daysSinceActive < 7) engagementScore += 20;\n  else if (daysSinceActive < 30) engagementScore += 10;\n  \n  // Profile completeness\n  const requiredFields = ['email', 'firstName', 'lastName', 'company', 'phone'];\n  const completedFields = requiredFields.filter(f => profile[f]);\n  engagementScore += (completedFields.length / requiredFields.length) * 20;\n  \n  // Multi-source data\n  if (profile.sourceCount > 2) engagementScore += 15;\n  else if (profile.sourceCount > 1) engagementScore += 10;\n  \n  // Determine lifecycle stage\n  let predictedStage = 'unknown';\n  if (profile.lifecycleStage) {\n    predictedStage = profile.lifecycleStage;\n  } else if (engagementScore >= 70) {\n    predictedStage = 'opportunity';\n  } else if (engagementScore >= 50) {\n    predictedStage = 'marketing_qualified_lead';\n  } else if (engagementScore >= 30) {\n    predictedStage = 'lead';\n  } else {\n    predictedStage = 'subscriber';\n  }\n  \n  // Churn risk assessment\n  let churnRisk = 'low';\n  if (daysSinceActive > 60 && engagementScore < 30) {\n    churnRisk = 'high';\n  } else if (daysSinceActive > 30 && engagementScore < 50) {\n    churnRisk = 'medium';\n  }\n  \n  return {\n    ...profile,\n    analysis: {\n      engagementScore: Math.min(100, Math.round(engagementScore)),\n      predictedStage,\n      churnRisk,\n      daysSinceActive: Math.round(daysSinceActive),\n      profileCompleteness: Math.round((completedFields.length / requiredFields.length) * 100),\n      recommendedActions: getRecommendedActions(engagementScore, churnRisk, predictedStage)\n    }\n  };\n});\n\nfunction getRecommendedActions(score, churnRisk, stage) {\n  const actions = [];\n  \n  if (churnRisk === 'high') {\n    actions.push('urgent_reengagement_campaign');\n    actions.push('personal_outreach');\n  } else if (churnRisk === 'medium') {\n    actions.push('nurture_sequence');\n  }\n  \n  if (score >= 70 && stage !== 'customer') {\n    actions.push('sales_handoff');\n    actions.push('demo_invitation');\n  } else if (score >= 50) {\n    actions.push('case_study_share');\n    actions.push('feature_highlight');\n  }\n  \n  return actions;\n}\n\n// Segment profiles for activation\nconst segments = {\n  highValue: analyzedProfiles.filter(p => p.analysis.engagementScore >= 70),\n  atRisk: analyzedProfiles.filter(p => p.analysis.churnRisk !== 'low'),\n  needsNurturing: analyzedProfiles.filter(p => \n    p.analysis.engagementScore >= 30 && \n    p.analysis.engagementScore < 70 &&\n    p.analysis.churnRisk === 'low'\n  ),\n  cold: analyzedProfiles.filter(p => p.analysis.engagementScore < 30)\n};\n\nreturn [{\n  json: {\n    profiles: analyzedProfiles,\n    segments: {\n      highValue: segments.highValue.length,\n      atRisk: segments.atRisk.length,\n      needsNurturing: segments.needsNurturing.length,\n      cold: segments.cold.length\n    },\n    segmentedProfiles: segments,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "behavioral-analysis",
+      "name": "Behavioral Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 500]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a Customer Data Platform AI that generates real-time insights and predictions from unified customer profiles.\n\nAnalyze the customer segments and provide:\n1. Key trends and patterns\n2. Actionable recommendations for each segment\n3. Predicted outcomes for different intervention strategies\n4. Priority accounts that need immediate attention\n\nReturn JSON:\n{\n  \"insights\": [\"insight1\", \"insight2\"],\n  \"segmentRecommendations\": {\n    \"highValue\": {\"strategy\": \"\", \"expectedOutcome\": \"\"},\n    \"atRisk\": {\"strategy\": \"\", \"expectedOutcome\": \"\"},\n    \"needsNurturing\": {\"strategy\": \"\", \"expectedOutcome\": \"\"},\n    \"cold\": {\"strategy\": \"\", \"expectedOutcome\": \"\"}\n  },\n  \"priorityAccounts\": [{\"email\": \"\", \"reason\": \"\", \"action\": \"\"}],\n  \"predictedMRRImpact\": \"$amount\",\n  \"churnRiskReduction\": \"percentage\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Analyze these customer segments:\n\nTotal Profiles: {{ $json.profiles.length }}\n\nSegment Distribution:\n- High Value: {{ $json.segments.highValue }}\n- At Risk: {{ $json.segments.atRisk }}\n- Needs Nurturing: {{ $json.segments.needsNurturing }}\n- Cold: {{ $json.segments.cold }}\n\nHigh Value Profiles:\n{{ JSON.stringify($json.segmentedProfiles.highValue.slice(0, 10), null, 2) }}\n\nAt Risk Profiles:\n{{ JSON.stringify($json.segmentedProfiles.atRisk.slice(0, 10), null, 2) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "ai-insights",
+      "name": "AI-Powered Insights",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Audience Activation - Prepare audiences for downstream systems\n\nconst profileData = $('Behavioral Analysis').first().json;\nconst aiInsights = $('AI-Powered Insights').first().json;\n\nconst activations = [];\n\n// High-value segment → Sales handoff\nprofileData.segmentedProfiles.highValue.forEach(profile => {\n  activations.push({\n    destination: 'salesforce',\n    action: 'upsert_lead',\n    profile: {\n      email: profile.email,\n      firstName: profile.firstName,\n      lastName: profile.lastName,\n      company: profile.company,\n      leadScore: profile.analysis.engagementScore,\n      stage: 'Qualified',\n      source: 'CDP High-Value Segment'\n    }\n  });\n});\n\n// At-risk segment → Retention campaign\nprofileData.segmentedProfiles.atRisk.forEach(profile => {\n  activations.push({\n    destination: 'customer_io',\n    action: 'trigger_campaign',\n    campaign: 'retention_win_back',\n    profile: {\n      email: profile.email,\n      firstName: profile.firstName,\n      churnRisk: profile.analysis.churnRisk,\n      daysSinceActive: profile.analysis.daysSinceActive\n    }\n  });\n});\n\n// Needs nurturing → Marketing automation\nprofileData.segmentedProfiles.needsNurturing.forEach(profile => {\n  activations.push({\n    destination: 'hubspot',\n    action: 'add_to_workflow',\n    workflow: 'nurture_sequence_v2',\n    profile: {\n      email: profile.email,\n      firstName: profile.firstName,\n      lifecycleStage: profile.analysis.predictedStage,\n      engagementScore: profile.analysis.engagementScore\n    }\n  });\n});\n\n// Priority accounts → Slack notification\nconst priorityNotifications = aiInsights.priorityAccounts?.map(account => ({\n  destination: 'slack',\n  action: 'send_message',\n  channel: '#priority-accounts',\n  message: `🎯 Priority Account Alert\\n*${account.email}*\\nReason: ${account.reason}\\nRecommended Action: ${account.action}`\n})) || [];\n\nreturn [{\n  json: {\n    totalActivations: activations.length,\n    activations,\n    priorityNotifications,\n    insights: aiInsights,\n    activatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "audience-activation",
+      "name": "Audience Activation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://track.customer.io/api/v1/customers/{{ $json.profile.email }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $json.profile.email }}\",\n  \"first_name\": \"{{ $json.profile.firstName }}\",\n  \"churn_risk\": \"{{ $json.profile.churnRisk }}\",\n  \"days_since_active\": {{ $json.profile.daysSinceActive }},\n  \"segment\": \"at_risk\"\n}",
+        "options": {}
+      },
+      "id": "sync-to-customerio",
+      "name": "Sync to Customer.io",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubspot.com/crm/v3/objects/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubSpotApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"email\": \"{{ $json.profile.email }}\",\n    \"firstname\": \"{{ $json.profile.firstName }}\",\n    \"lifecyclestage\": \"{{ $json.profile.lifecycleStage }}\",\n    \"hs_lead_status\": \"OPEN\",\n    \"cdp_engagement_score\": \"{{ $json.profile.engagementScore }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "sync-to-hubspot",
+      "name": "Sync to HubSpot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.segment.io/v1/identify",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"userId\": \"{{ $json.profile.email }}\",\n  \"traits\": {\n    \"email\": \"{{ $json.profile.email }}\",\n    \"first_name\": \"{{ $json.profile.firstName }}\",\n    \"last_name\": \"{{ $json.profile.lastName }}\",\n    \"company\": \"{{ $json.profile.company }}\",\n    \"engagement_score\": {{ $json.engagementScore || 0 }},\n    \"predicted_stage\": \"{{ $json.predictedStage }}\",\n    \"churn_risk\": \"{{ $json.churnRisk }}\",\n    \"cdp_unified_profile_id\": \"{{ $json.unifiedProfileId }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "sync-to-segment",
+      "name": "Sync to Segment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 800]
+    },
+    {
+      "parameters": {
+        "channel": "#customer-data",
+        "text": "=📊 *CDP Sync Report*\n\n*Profiles Processed:* {{ $('Behavioral Analysis').first().json.profiles.length }}\n\n*Segment Distribution:*\n• High Value: {{ $('Behavioral Analysis').first().json.segments.highValue }}\n• At Risk: {{ $('Behavioral Analysis').first().json.segments.atRisk }}\n• Needs Nurturing: {{ $('Behavioral Analysis').first().json.segments.needsNurturing }}\n• Cold: {{ $('Behavioral Analysis').first().json.segments.cold }}\n\n*AI Insights:*\n{{ $('AI-Powered Insights').first().json.insights?.slice(0, 3).map((i, idx) => (idx + 1) + '. ' + i).join('\\n') }}\n\n*Predicted MRR Impact:* {{ $('AI-Powered Insights').first().json.predictedMRRImpact }}\n*Churn Risk Reduction:* {{ $('AI-Powered Insights').first().json.churnRiskReduction }}\n\n*Activations:* {{ $json.totalActivations }} profiles synced to downstream systems",
+        "otherOptions": {}
+      },
+      "id": "slack-cdp-report",
+      "name": "Slack CDP Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 500]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.CDP_ANALYTICS_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Profile History",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ new Date().toISOString() }}",
+            "total_profiles": "={{ $('Behavioral Analysis').first().json.profiles.length }}",
+            "high_value": "={{ $('Behavioral Analysis').first().json.segments.highValue }}",
+            "at_risk": "={{ $('Behavioral Analysis').first().json.segments.atRisk }}",
+            "needs_nurturing": "={{ $('Behavioral Analysis').first().json.segments.needsNurturing }}",
+            "cold": "={{ $('Behavioral Analysis').first().json.segments.cold }}",
+            "activations": "={{ $json.totalActivations }}"
+          }
+        }
+      },
+      "id": "log-to-sheets",
+      "name": "Log CDP Analytics",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1750, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"profilesProcessed\": {{ $('Behavioral Analysis').first().json.profiles.length }},\n  \"segments\": {{ JSON.stringify($('Behavioral Analysis').first().json.segments) }},\n  \"activations\": {{ $json.totalActivations }},\n  \"insights\": {{ JSON.stringify($('AI-Powered Insights').first().json.insights) }},\n  \"timestamp\": \"{{ new Date().toISOString() }}\"\n}"
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1750, 300]
+    }
+  ],
+  "connections": {
+    "Data Ingestion Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch Segment Profiles",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch HubSpot Contacts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Intercom Users",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Mixpanel Profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scheduled Data Sync": {
+      "main": [
+        [
+          {
+            "node": "Fetch Segment Profiles",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch HubSpot Contacts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Intercom Users",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Mixpanel Profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Segment Profiles": {
+      "main": [
+        [
+          {
+            "node": "Identity Resolution Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HubSpot Contacts": {
+      "main": [
+        [
+          {
+            "node": "Identity Resolution Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Intercom Users": {
+      "main": [
+        [
+          {
+            "node": "Identity Resolution Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Mixpanel Profiles": {
+      "main": [
+        [
+          {
+            "node": "Identity Resolution Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identity Resolution Engine": {
+      "main": [
+        [
+          {
+            "node": "Behavioral Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Behavioral Analysis": {
+      "main": [
+        [
+          {
+            "node": "AI-Powered Insights",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Audience Activation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI-Powered Insights": {
+      "main": [
+        [
+          {
+            "node": "Audience Activation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audience Activation": {
+      "main": [
+        [
+          {
+            "node": "Sync to Customer.io",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sync to HubSpot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sync to Segment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack CDP Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log CDP Analytics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-saas-cdp"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 2,
+  "tags": [
+    {
+      "name": "CDP",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Customer Data",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Identity Resolution",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}

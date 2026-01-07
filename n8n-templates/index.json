@@ -1,5 +1,5 @@
 {
-  "count": 37,
+  "count": 44,
   "files": [
     {
       "filename": "0 - MARKETING TEAM.json",
@@ -104,9 +104,21 @@
       "notes": ""
     },
     {
+      "filename": "Grain_AB_Testing_Engine_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AB_Testing_Engine_v1.json",
+      "size_bytes": 23102,
+      "notes": ""
+    },
+    {
       "filename": "Grain_AI_Visual_Content_Generator_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Visual_Content_Generator_v1.json",
       "size_bytes": 23422,
+      "notes": ""
+    },
+    {
+      "filename": "Grain_Agentic_AI_Orchestrator_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Agentic_AI_Orchestrator_v1.json",
+      "size_bytes": 27928,
       "notes": ""
     },
     {
@@ -119,6 +131,24 @@
       "filename": "Grain_Customer_Support_Automation_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Customer_Support_Automation_v1.json",
       "size_bytes": 23482,
+      "notes": ""
+    },
+    {
+      "filename": "Grain_Email_Marketing_Automation_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Email_Marketing_Automation_v1.json",
+      "size_bytes": 27736,
+      "notes": ""
+    },
+    {
+      "filename": "Grain_Intelligent_CDP_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Intelligent_CDP_v1.json",
+      "size_bytes": 27955,
+      "notes": ""
+    },
+    {
+      "filename": "Grain_Landing_Page_CRO_Hub_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Landing_Page_CRO_Hub_v1.json",
+      "size_bytes": 24034,
       "notes": ""
     },
     {
@@ -146,9 +176,21 @@
       "notes": ""
     },
     {
+      "filename": "Grain_RevOps_Hub_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_RevOps_Hub_v1.json",
+      "size_bytes": 22982,
+      "notes": ""
+    },
+    {
       "filename": "Grain_Social_Listening_Sentiment_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Social_Listening_Sentiment_v1.json",
       "size_bytes": 22241,
+      "notes": ""
+    },
+    {
+      "filename": "Grain_Unified_Analytics_Dashboard_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Unified_Analytics_Dashboard_v1.json",
+      "size_bytes": 26139,
       "notes": ""
     },
     {
@@ -202,7 +244,7 @@
     {
       "filename": "index.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/index.json",
-      "size_bytes": 8448,
+      "size_bytes": 8692,
       "notes": ""
     },
     {
