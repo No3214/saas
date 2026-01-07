@@ -1,0 +1,456 @@
+{
+  "name": "Grain A/B Testing Engine v1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-create-test",
+      "name": "Create Test Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "ab-test-create"
+    },
+    {
+      "parameters": {},
+      "id": "webhook-track-event",
+      "name": "Track Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 500],
+      "webhookId": "ab-test-track"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "scheduled-analysis",
+      "name": "Scheduled Analysis",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// A/B Test Configuration & Variant Assignment\nconst input = $input.first().json;\n\n// Test configuration\nconst testConfig = {\n  testId: input.testId || `test-${Date.now()}`,\n  testName: input.testName || 'Unnamed Test',\n  testType: input.testType || 'ab', // ab, multivariate, bandit\n  status: 'active',\n  createdAt: new Date().toISOString(),\n  \n  // Traffic allocation\n  trafficAllocation: input.trafficAllocation || 100, // percentage of users in test\n  \n  // Variants\n  variants: input.variants || [\n    { id: 'control', name: 'Control', weight: 50 },\n    { id: 'variant_a', name: 'Variant A', weight: 50 }\n  ],\n  \n  // Success metrics\n  primaryMetric: input.primaryMetric || 'conversion_rate',\n  secondaryMetrics: input.secondaryMetrics || ['click_rate', 'engagement_time'],\n  \n  // Statistical settings\n  confidenceLevel: input.confidenceLevel || 95,\n  minimumSampleSize: input.minimumSampleSize || 1000,\n  minimumDetectableEffect: input.mde || 5, // 5% minimum detectable effect\n  \n  // Test duration\n  maxDuration: input.maxDurationDays || 30,\n  autoStop: input.autoStop !== false, // Auto-stop when significant\n  \n  // Segmentation\n  segments: input.segments || ['all'],\n  \n  // Current stats\n  stats: {\n    totalVisitors: 0,\n    variantStats: {}\n  }\n};\n\n// Initialize variant stats\ntestConfig.variants.forEach(v => {\n  testConfig.stats.variantStats[v.id] = {\n    visitors: 0,\n    conversions: 0,\n    revenue: 0,\n    bounces: 0,\n    engagementTime: 0\n  };\n});\n\n// Weighted random assignment function\nfunction assignVariant(variants, userId) {\n  // Deterministic assignment based on userId hash\n  const hash = userId.split('').reduce((a, b) => {\n    a = ((a << 5) - a) + b.charCodeAt(0);\n    return a & a;\n  }, 0);\n  \n  const normalizedHash = Math.abs(hash) % 100;\n  let cumulative = 0;\n  \n  for (const variant of variants) {\n    cumulative += variant.weight;\n    if (normalizedHash < cumulative) {\n      return variant.id;\n    }\n  }\n  \n  return variants[0].id; // Fallback to control\n}\n\nreturn [{ json: testConfig }];"
+      },
+      "id": "test-config",
+      "name": "Test Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an A/B Test Variant Generator. Given a control version and test goals, generate compelling test variants.\n\nFor each variant, provide:\n- Clear hypothesis\n- What's being changed\n- Expected impact\n- Risk assessment\n\nReturn JSON:\n{\n  \"variants\": [\n    {\n      \"id\": \"variant_id\",\n      \"name\": \"Variant Name\",\n      \"hypothesis\": \"If we change X, then Y will improve because Z\",\n      \"changes\": [\"change 1\", \"change 2\"],\n      \"expectedImpact\": \"percentage or description\",\n      \"riskLevel\": \"low|medium|high\",\n      \"content\": {\n        \"headline\": \"\",\n        \"subheadline\": \"\",\n        \"cta\": \"\",\n        \"image\": \"\"\n      }\n    }\n  ],\n  \"testDuration\": \"recommended days\",\n  \"sampleSizeNeeded\": 0,\n  \"successCriteria\": \"\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Generate A/B test variants for:\n\nTest Name: {{ $json.testName }}\nTest Type: {{ $json.testType }}\nPrimary Metric: {{ $json.primaryMetric }}\n\nControl Content:\n{{ JSON.stringify($json.control || { headline: 'Original headline', cta: 'Sign Up' }, null, 2) }}\n\nGoals:\n{{ $json.goals || 'Increase conversion rate' }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-variant-generator",
+      "name": "AI Variant Generator",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Event Tracking & Data Collection\nconst event = $input.first().json;\n\n// Validate event structure\nconst trackedEvent = {\n  eventId: `evt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,\n  testId: event.testId,\n  variantId: event.variantId,\n  userId: event.userId || event.sessionId,\n  eventType: event.eventType || 'pageview', // pageview, click, conversion, bounce\n  timestamp: new Date().toISOString(),\n  \n  // Event details\n  details: {\n    page: event.page,\n    element: event.element,\n    value: event.value || 0, // For revenue events\n    duration: event.duration || 0, // For engagement events\n    referrer: event.referrer,\n    device: event.device,\n    browser: event.browser,\n    country: event.country\n  },\n  \n  // Session info\n  session: {\n    id: event.sessionId,\n    isNew: event.isNewSession || false,\n    pageViews: event.pageViews || 1\n  }\n};\n\n// Determine if this is a conversion event\nconst conversionEvents = ['purchase', 'signup', 'lead', 'subscription'];\ntrackedEvent.isConversion = conversionEvents.includes(event.eventType?.toLowerCase());\n\n// Calculate event weight for Bayesian analysis\ntrackedEvent.weight = trackedEvent.isConversion ? 1 : \n  (event.eventType === 'click' ? 0.3 : 0.1);\n\nreturn [{ json: trackedEvent }];"
+      },
+      "id": "event-tracker",
+      "name": "Event Tracker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.AB_TEST_DATA_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Events",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_id": "={{ $json.eventId }}",
+            "test_id": "={{ $json.testId }}",
+            "variant_id": "={{ $json.variantId }}",
+            "user_id": "={{ $json.userId }}",
+            "event_type": "={{ $json.eventType }}",
+            "is_conversion": "={{ $json.isConversion }}",
+            "value": "={{ $json.details.value }}",
+            "timestamp": "={{ $json.timestamp }}",
+            "device": "={{ $json.details.device }}",
+            "country": "={{ $json.details.country }}"
+          }
+        }
+      },
+      "id": "store-event",
+      "name": "Store Event Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.AB_TEST_DATA_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Events",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "id": "fetch-test-data",
+      "name": "Fetch Test Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [450, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Statistical Analysis Engine\n// Calculates significance, confidence intervals, and winner determination\n\nconst events = $input.all().map(i => i.json);\n\n// Group events by test and variant\nconst testResults = {};\n\nevents.forEach(event => {\n  if (!testResults[event.test_id]) {\n    testResults[event.test_id] = {\n      testId: event.test_id,\n      variants: {},\n      totalVisitors: 0,\n      totalConversions: 0,\n      startDate: event.timestamp,\n      endDate: event.timestamp\n    };\n  }\n  \n  const test = testResults[event.test_id];\n  \n  if (!test.variants[event.variant_id]) {\n    test.variants[event.variant_id] = {\n      variantId: event.variant_id,\n      visitors: new Set(),\n      conversions: 0,\n      revenue: 0,\n      clicks: 0,\n      bounces: 0\n    };\n  }\n  \n  const variant = test.variants[event.variant_id];\n  variant.visitors.add(event.user_id);\n  \n  if (event.is_conversion === 'true' || event.is_conversion === true) {\n    variant.conversions++;\n    variant.revenue += parseFloat(event.value) || 0;\n  }\n  \n  if (event.event_type === 'click') variant.clicks++;\n  if (event.event_type === 'bounce') variant.bounces++;\n  \n  // Update date range\n  if (event.timestamp < test.startDate) test.startDate = event.timestamp;\n  if (event.timestamp > test.endDate) test.endDate = event.timestamp;\n});\n\n// Calculate statistics for each test\nconst analysisResults = Object.values(testResults).map(test => {\n  const variants = Object.values(test.variants).map(v => ({\n    ...v,\n    visitorCount: v.visitors.size,\n    conversionRate: v.visitors.size > 0 ? (v.conversions / v.visitors.size * 100) : 0,\n    clickRate: v.visitors.size > 0 ? (v.clicks / v.visitors.size * 100) : 0,\n    bounceRate: v.visitors.size > 0 ? (v.bounces / v.visitors.size * 100) : 0,\n    avgRevenue: v.conversions > 0 ? (v.revenue / v.conversions) : 0\n  }));\n  \n  // Find control and treatment\n  const control = variants.find(v => v.variantId === 'control') || variants[0];\n  const treatments = variants.filter(v => v.variantId !== control.variantId);\n  \n  // Calculate statistical significance using Z-test\n  function calculateZScore(control, treatment) {\n    const p1 = control.conversionRate / 100;\n    const p2 = treatment.conversionRate / 100;\n    const n1 = control.visitorCount;\n    const n2 = treatment.visitorCount;\n    \n    if (n1 === 0 || n2 === 0) return 0;\n    \n    const pooledP = (p1 * n1 + p2 * n2) / (n1 + n2);\n    const se = Math.sqrt(pooledP * (1 - pooledP) * (1/n1 + 1/n2));\n    \n    if (se === 0) return 0;\n    return (p2 - p1) / se;\n  }\n  \n  function getConfidenceLevel(zScore) {\n    const absZ = Math.abs(zScore);\n    if (absZ >= 2.576) return { level: 99, significant: true };\n    if (absZ >= 1.96) return { level: 95, significant: true };\n    if (absZ >= 1.645) return { level: 90, significant: true };\n    return { level: Math.round((1 - 2 * (1 - normalCDF(absZ))) * 100), significant: false };\n  }\n  \n  function normalCDF(x) {\n    const a1 =  0.254829592;\n    const a2 = -0.284496736;\n    const a3 =  1.421413741;\n    const a4 = -1.453152027;\n    const a5 =  1.061405429;\n    const p  =  0.3275911;\n    \n    const sign = x < 0 ? -1 : 1;\n    x = Math.abs(x) / Math.sqrt(2);\n    \n    const t = 1.0 / (1.0 + p * x);\n    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);\n    \n    return 0.5 * (1.0 + sign * y);\n  }\n  \n  // Analyze each treatment vs control\n  const comparisons = treatments.map(treatment => {\n    const zScore = calculateZScore(control, treatment);\n    const confidence = getConfidenceLevel(zScore);\n    const lift = control.conversionRate > 0 ? \n      ((treatment.conversionRate - control.conversionRate) / control.conversionRate * 100) : 0;\n    \n    return {\n      treatmentId: treatment.variantId,\n      controlRate: control.conversionRate.toFixed(2),\n      treatmentRate: treatment.conversionRate.toFixed(2),\n      lift: lift.toFixed(2),\n      zScore: zScore.toFixed(3),\n      confidenceLevel: confidence.level,\n      isSignificant: confidence.significant,\n      status: confidence.significant ? \n        (lift > 0 ? 'winner' : 'loser') : \n        'inconclusive',\n      sampleSize: control.visitorCount + treatment.visitorCount\n    };\n  });\n  \n  // Determine overall winner\n  const significantWinners = comparisons.filter(c => c.status === 'winner');\n  const overallWinner = significantWinners.length > 0 ?\n    significantWinners.sort((a, b) => parseFloat(b.lift) - parseFloat(a.lift))[0] :\n    null;\n  \n  return {\n    testId: test.testId,\n    variants,\n    comparisons,\n    summary: {\n      totalVisitors: variants.reduce((sum, v) => sum + v.visitorCount, 0),\n      totalConversions: variants.reduce((sum, v) => sum + v.conversions, 0),\n      testDuration: Math.ceil((new Date(test.endDate) - new Date(test.startDate)) / (1000 * 60 * 60 * 24)),\n      overallWinner: overallWinner?.treatmentId || 'no_winner_yet',\n      winnerLift: overallWinner?.lift || '0',\n      recommendation: overallWinner ? \n        `Implement ${overallWinner.treatmentId} (${overallWinner.lift}% lift, ${overallWinner.confidenceLevel}% confidence)` :\n        'Continue testing - no significant winner yet'\n    },\n    analyzedAt: new Date().toISOString()\n  };\n});\n\nreturn [{ json: { tests: analysisResults } }];"
+      },
+      "id": "statistical-analysis",
+      "name": "Statistical Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an A/B Testing Analyst AI. Analyze test results and provide actionable insights.\n\nReview the statistical analysis and provide:\n1. Plain-language interpretation of results\n2. Business impact assessment\n3. Confidence in the results\n4. Recommendations for next steps\n5. Potential follow-up tests\n\nReturn JSON:\n{\n  \"interpretation\": \"Plain language summary\",\n  \"businessImpact\": {\n    \"revenueImpact\": \"$X per month\",\n    \"conversionImpact\": \"X% improvement\",\n    \"confidenceStatement\": \"\"\n  },\n  \"keyFindings\": [],\n  \"recommendations\": [],\n  \"followUpTests\": [\n    {\"hypothesis\": \"\", \"expectedImpact\": \"\"}\n  ],\n  \"riskFactors\": [],\n  \"confidenceScore\": 0\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Analyze these A/B test results:\n\n{{ JSON.stringify($json.tests, null, 2) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "ai-analysis",
+      "name": "AI Result Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [950, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-winner",
+              "leftValue": "={{ $json.tests[0]?.summary?.overallWinner }}",
+              "rightValue": "no_winner_yet",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "winner-check",
+      "name": "Has Winner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [1200, 600]
+    },
+    {
+      "parameters": {
+        "channel": "#ab-testing",
+        "text": "=🏆 *A/B Test Winner Found!*\n\n{{ $('Statistical Analysis').first().json.tests.map(test => {\n  return `*Test:* ${test.testId}\\n` +\n    `*Winner:* ${test.summary.overallWinner}\\n` +\n    `*Lift:* +${test.summary.winnerLift}%\\n` +\n    `*Sample Size:* ${test.summary.totalVisitors}\\n` +\n    `*Test Duration:* ${test.summary.testDuration} days\\n\\n` +\n    `*Recommendation:* ${test.summary.recommendation}\\n\\n` +\n    `*AI Analysis:*\\n${$('AI Result Analysis').first().json.interpretation}`;\n}).join('\\n\\n---\\n\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-winner-alert",
+      "name": "Slack Winner Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1450, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#ab-testing",
+        "text": "=📊 *A/B Test Progress Update*\n\n{{ $('Statistical Analysis').first().json.tests.map(test => {\n  return `*Test:* ${test.testId}\\n` +\n    `*Status:* Still collecting data\\n` +\n    `*Visitors:* ${test.summary.totalVisitors}\\n` +\n    `*Conversions:* ${test.summary.totalConversions}\\n` +\n    `*Duration:* ${test.summary.testDuration} days\\n\\n` +\n    `*Current Results:*\\n` +\n    test.comparisons.map(c => `• ${c.treatmentId}: ${c.treatmentRate}% (${c.lift > 0 ? '+' : ''}${c.lift}% vs control)`).join('\\n');\n}).join('\\n\\n---\\n\\n') }}\\n\\n_Confidence not yet reached. Continue testing._",
+        "otherOptions": {}
+      },
+      "id": "slack-progress-update",
+      "name": "Slack Progress Update",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1450, 700]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.AB_TEST_DATA_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Analysis History",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ new Date().toISOString() }}",
+            "test_id": "={{ $('Statistical Analysis').first().json.tests[0]?.testId }}",
+            "total_visitors": "={{ $('Statistical Analysis').first().json.tests[0]?.summary?.totalVisitors }}",
+            "winner": "={{ $('Statistical Analysis').first().json.tests[0]?.summary?.overallWinner }}",
+            "lift": "={{ $('Statistical Analysis').first().json.tests[0]?.summary?.winnerLift }}",
+            "ai_confidence": "={{ $('AI Result Analysis').first().json.confidenceScore }}",
+            "recommendation": "={{ $('Statistical Analysis').first().json.tests[0]?.summary?.recommendation }}"
+          }
+        }
+      },
+      "id": "log-analysis",
+      "name": "Log Analysis Results",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1450, 900]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"testId\": \"{{ $json.testId }}\",\n  \"variants\": {{ JSON.stringify($json.variants || []) }},\n  \"message\": \"Test created successfully\",\n  \"createdAt\": \"{{ $json.createdAt }}\"\n}"
+      },
+      "id": "webhook-response-create",
+      "name": "Create Test Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [950, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"tracked\",\n  \"eventId\": \"{{ $json.eventId }}\",\n  \"testId\": \"{{ $json.testId }}\",\n  \"variantId\": \"{{ $json.variantId }}\",\n  \"timestamp\": \"{{ $json.timestamp }}\"\n}"
+      },
+      "id": "webhook-response-track",
+      "name": "Track Event Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [950, 500]
+    }
+  ],
+  "connections": {
+    "Create Test Webhook": {
+      "main": [
+        [
+          {
+            "node": "Test Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Track Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Event Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scheduled Analysis": {
+      "main": [
+        [
+          {
+            "node": "Fetch Test Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Configuration": {
+      "main": [
+        [
+          {
+            "node": "AI Variant Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Variant Generator": {
+      "main": [
+        [
+          {
+            "node": "Create Test Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event Tracker": {
+      "main": [
+        [
+          {
+            "node": "Store Event Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Event Data": {
+      "main": [
+        [
+          {
+            "node": "Track Event Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Test Data": {
+      "main": [
+        [
+          {
+            "node": "Statistical Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Statistical Analysis": {
+      "main": [
+        [
+          {
+            "node": "AI Result Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Winner?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Result Analysis": {
+      "main": [
+        [
+          {
+            "node": "Log Analysis Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Winner?": {
+      "main": [
+        [
+          {
+            "node": "Slack Winner Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack Progress Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-saas-ab-testing"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 3,
+  "tags": [
+    {
+      "name": "A/B Testing",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Experimentation",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Analytics",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}

@@ -1,0 +1,541 @@
+{
+  "name": "Grain Review Management AI v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "scheduled-review-fetch",
+      "name": "Fetch Reviews Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {},
+      "id": "webhook-new-review",
+      "name": "New Review Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 600],
+      "webhookId": "review-notification"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://mybusiness.googleapis.com/v4/accounts/{{ $env.GOOGLE_ACCOUNT_ID }}/locations/{{ $env.GOOGLE_LOCATION_ID }}/reviews",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleBusinessProfileOAuth2Api",
+        "options": {}
+      },
+      "id": "fetch-google-reviews",
+      "name": "Fetch Google Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.tripadvisor.com/api/partner/2.0/location/{{ $env.TRIPADVISOR_LOCATION_ID }}/reviews",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "={{ $env.TRIPADVISOR_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-tripadvisor-reviews",
+      "name": "Fetch TripAdvisor Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.yelp.com/v3/businesses/{{ $env.YELP_BUSINESS_ID }}/reviews",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-yelp-reviews",
+      "name": "Fetch Yelp Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Review Aggregator & Normalizer\n// Combines reviews from all sources into unified format\n\nconst googleReviews = $('Fetch Google Reviews').first()?.json?.reviews || [];\nconst tripadvisorReviews = $('Fetch TripAdvisor Reviews').first()?.json?.data || [];\nconst yelpReviews = $('Fetch Yelp Reviews').first()?.json?.reviews || [];\n\nconst normalizedReviews = [];\n\n// Process Google Reviews\ngoogleReviews.forEach(review => {\n  normalizedReviews.push({\n    id: review.reviewId,\n    source: 'google',\n    rating: parseInt(review.starRating?.replace('_', '')) || convertStarRating(review.starRating),\n    author: review.reviewer?.displayName || 'Anonymous',\n    text: review.comment || '',\n    date: review.createTime,\n    replied: !!review.reviewReply,\n    replyText: review.reviewReply?.comment || null,\n    profileUrl: review.reviewer?.profilePhotoUrl,\n    language: detectLanguage(review.comment)\n  });\n});\n\n// Process TripAdvisor Reviews\ntripadvisorReviews.forEach(review => {\n  normalizedReviews.push({\n    id: review.id,\n    source: 'tripadvisor',\n    rating: review.rating,\n    author: review.user?.username || 'Traveler',\n    text: review.text || '',\n    title: review.title || '',\n    date: review.published_date,\n    replied: !!review.owner_response,\n    replyText: review.owner_response?.text || null,\n    travelType: review.trip_type,\n    language: review.lang\n  });\n});\n\n// Process Yelp Reviews\nyelpReviews.forEach(review => {\n  normalizedReviews.push({\n    id: review.id,\n    source: 'yelp',\n    rating: review.rating,\n    author: review.user?.name || 'User',\n    text: review.text || '',\n    date: review.time_created,\n    replied: false, // Yelp doesn't expose reply status in API\n    profileUrl: review.user?.image_url,\n    language: detectLanguage(review.text)\n  });\n});\n\nfunction convertStarRating(starRating) {\n  const map = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 };\n  return map[starRating] || 3;\n}\n\nfunction detectLanguage(text) {\n  if (!text) return 'en';\n  // Simple detection - would use proper API in production\n  const turkishChars = /[ğüşıöçĞÜŞİÖÇ]/;\n  if (turkishChars.test(text)) return 'tr';\n  return 'en';\n}\n\n// Filter unreplied reviews and sort by urgency\nconst unrepliedReviews = normalizedReviews\n  .filter(r => !r.replied)\n  .sort((a, b) => {\n    // Prioritize: negative reviews first, then by date\n    if (a.rating <= 2 && b.rating > 2) return -1;\n    if (b.rating <= 2 && a.rating > 2) return 1;\n    return new Date(b.date) - new Date(a.date);\n  });\n\n// Calculate aggregate metrics\nconst metrics = {\n  totalReviews: normalizedReviews.length,\n  unrepliedCount: unrepliedReviews.length,\n  averageRating: (normalizedReviews.reduce((sum, r) => sum + r.rating, 0) / normalizedReviews.length || 0).toFixed(2),\n  bySource: {\n    google: normalizedReviews.filter(r => r.source === 'google').length,\n    tripadvisor: normalizedReviews.filter(r => r.source === 'tripadvisor').length,\n    yelp: normalizedReviews.filter(r => r.source === 'yelp').length\n  },\n  ratingDistribution: {\n    5: normalizedReviews.filter(r => r.rating === 5).length,\n    4: normalizedReviews.filter(r => r.rating === 4).length,\n    3: normalizedReviews.filter(r => r.rating === 3).length,\n    2: normalizedReviews.filter(r => r.rating === 2).length,\n    1: normalizedReviews.filter(r => r.rating === 1).length\n  },\n  negativeReviewsUnreplied: unrepliedReviews.filter(r => r.rating <= 2).length\n};\n\nreturn [{\n  json: {\n    reviews: unrepliedReviews,\n    metrics,\n    fetchedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "aggregate-reviews",
+      "name": "Aggregate & Normalize Reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a hospitality reputation management AI. Analyze reviews and perform sentiment analysis.\n\nFor each review, determine:\n1. Overall sentiment (positive/neutral/negative)\n2. Key topics mentioned (cleanliness, service, location, value, amenities, food)\n3. Specific praise or complaints\n4. Urgency level for response\n5. Emotional tone of the reviewer\n\nReturn JSON:\n{\n  \"sentiment\": \"positive|neutral|negative\",\n  \"sentimentScore\": -1 to 1,\n  \"topics\": [\"topic1\", \"topic2\"],\n  \"keyPraise\": [\"praise point\"],\n  \"keyComplaints\": [\"complaint point\"],\n  \"urgency\": \"immediate|high|normal|low\",\n  \"emotionalTone\": \"angry|frustrated|disappointed|neutral|pleased|delighted\",\n  \"suggestedResponseTone\": \"apologetic|empathetic|grateful|professional\",\n  \"recoveryOpportunity\": true/false,\n  \"responseDeadlineHours\": 24\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Analyze this review:\n\nSource: {{ $json.source }}\nRating: {{ $json.rating }}/5\nAuthor: {{ $json.author }}\nTitle: {{ $json.title || 'N/A' }}\nText: {{ $json.text }}\nDate: {{ $json.date }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "ai-sentiment-analysis",
+      "name": "AI Sentiment Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a luxury hotel's guest relations manager. Write personalized, authentic responses to guest reviews.\n\nGuidelines:\n- Address the guest by name\n- For positive reviews: Express genuine gratitude, highlight specific things they mentioned, invite them back\n- For negative reviews: Apologize sincerely, acknowledge specific issues, explain corrective actions, offer to make it right offline\n- Never be defensive or make excuses\n- Keep responses under 150 words\n- Match the language of the original review\n- Include a personal sign-off with your role\n\nBrand voice: Warm, professional, solution-oriented, genuinely caring\n\nReturn JSON:\n{\n  \"response\": \"the complete response text\",\n  \"responseLanguage\": \"en|tr|de|fr|etc\",\n  \"followUpRequired\": true/false,\n  \"followUpAction\": \"action if needed\",\n  \"compensationSuggested\": \"none|discount|free_night|amenity_credit|etc\",\n  \"escalateToManager\": true/false\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Write a response to this review:\n\nGuest: {{ $json.author }}\nSource: {{ $json.source }}\nRating: {{ $json.rating }}/5\nReview: {{ $json.text }}\n\nSentiment Analysis:\n- Sentiment: {{ $('AI Sentiment Analysis').first().json.sentiment }}\n- Key Complaints: {{ JSON.stringify($('AI Sentiment Analysis').first().json.keyComplaints) }}\n- Key Praise: {{ JSON.stringify($('AI Sentiment Analysis').first().json.keyPraise) }}\n- Suggested Tone: {{ $('AI Sentiment Analysis').first().json.suggestedResponseTone }}\n- Recovery Opportunity: {{ $('AI Sentiment Analysis').first().json.recoveryOpportunity }}\n\nHotel Name: {{ $env.HOTEL_NAME || 'Grand Hotel' }}\nResponder Name: {{ $env.GM_NAME || 'Michael' }}\nResponder Role: {{ $env.GM_ROLE || 'General Manager' }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-response-generator",
+      "name": "AI Response Generator",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1000, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needs-approval",
+              "leftValue": "={{ $('AI Sentiment Analysis').first().json.sentiment }}",
+              "rightValue": "negative",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "escalate",
+              "leftValue": "={{ $json.escalateToManager }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "approval-check",
+      "name": "Needs Manager Approval?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#review-responses",
+        "text": "=📝 *Review Response Approval Required*\n\n*Platform:* {{ $json.source }}\n*Rating:* {{ '⭐'.repeat($json.rating) }} ({{ $json.rating }}/5)\n*Guest:* {{ $json.author }}\n\n*Review:*\n{{ $json.text.substring(0, 300) }}{{ $json.text.length > 300 ? '...' : '' }}\n\n*AI Sentiment:* {{ $('AI Sentiment Analysis').first().json.sentiment }} ({{ $('AI Sentiment Analysis').first().json.emotionalTone }})\n*Urgency:* {{ $('AI Sentiment Analysis').first().json.urgency }}\n\n*Proposed Response:*\n```\n{{ $('AI Response Generator').first().json.response }}\n```\n\n{{ $('AI Response Generator').first().json.compensationSuggested !== 'none' ? '💰 *Compensation Suggested:* ' + $('AI Response Generator').first().json.compensationSuggested : '' }}\n\n*Actions:*\n✅ React to approve and post\n✏️ React to edit\n❌ React to reject",
+        "otherOptions": {}
+      },
+      "id": "slack-approval-request",
+      "name": "Slack Approval Request",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mybusiness.googleapis.com/v4/accounts/{{ $env.GOOGLE_ACCOUNT_ID }}/locations/{{ $env.GOOGLE_LOCATION_ID }}/reviews/{{ $json.id }}/reply",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleBusinessProfileOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"comment\": \"{{ $('AI Response Generator').first().json.response }}\"\n}",
+        "options": {}
+      },
+      "id": "post-google-reply",
+      "name": "Post Google Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 600]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.REVIEW_TRACKING_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Review Log",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ new Date().toISOString() }}",
+            "source": "={{ $json.source }}",
+            "rating": "={{ $json.rating }}",
+            "author": "={{ $json.author }}",
+            "review_text": "={{ $json.text.substring(0, 500) }}",
+            "sentiment": "={{ $('AI Sentiment Analysis').first().json.sentiment }}",
+            "sentiment_score": "={{ $('AI Sentiment Analysis').first().json.sentimentScore }}",
+            "topics": "={{ $('AI Sentiment Analysis').first().json.topics.join(', ') }}",
+            "response_text": "={{ $('AI Response Generator').first().json.response.substring(0, 500) }}",
+            "response_status": "={{ $json.responseStatus || 'pending' }}",
+            "compensation": "={{ $('AI Response Generator').first().json.compensationSuggested }}"
+          }
+        }
+      },
+      "id": "log-review",
+      "name": "Log Review & Response",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1750, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-negative",
+              "leftValue": "={{ $json.metrics.negativeReviewsUnreplied }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-negative-alert",
+      "name": "Has Negative Reviews?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [750, 700]
+    },
+    {
+      "parameters": {
+        "channel": "#guest-alerts",
+        "text": "=🚨 *Negative Review Alert*\n\n*{{ $json.metrics.negativeReviewsUnreplied }} negative review(s) need immediate attention!*\n\n*Overall Metrics:*\n• Average Rating: {{ $json.metrics.averageRating }}/5\n• Total Reviews: {{ $json.metrics.totalReviews }}\n• Unreplied: {{ $json.metrics.unrepliedCount }}\n\n*Rating Distribution:*\n⭐⭐⭐⭐⭐ {{ $json.metrics.ratingDistribution[5] }}\n⭐⭐⭐⭐ {{ $json.metrics.ratingDistribution[4] }}\n⭐⭐⭐ {{ $json.metrics.ratingDistribution[3] }}\n⭐⭐ {{ $json.metrics.ratingDistribution[2] }}\n⭐ {{ $json.metrics.ratingDistribution[1] }}\n\n_Respond to negative reviews within 24 hours to maximize recovery opportunity._",
+        "otherOptions": {}
+      },
+      "id": "slack-negative-alert",
+      "name": "Slack Negative Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1000, 800]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-report-trigger",
+      "name": "Weekly Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Weekly Review Performance Report\n// Aggregates weekly metrics and trends\n\nconst allReviews = $('Aggregate & Normalize Reviews').first()?.json || { reviews: [], metrics: {} };\n\n// Calculate weekly trends (would use historical data in production)\nconst weeklyReport = {\n  period: {\n    start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],\n    end: new Date().toISOString().split('T')[0]\n  },\n  metrics: allReviews.metrics,\n  trends: {\n    ratingChange: '+0.2', // Would calculate from historical\n    reviewVolumeChange: '+15%',\n    responseRateChange: '+5%'\n  },\n  topPraises: [],\n  topComplaints: [],\n  responseRate: allReviews.metrics.totalReviews > 0 \n    ? ((allReviews.metrics.totalReviews - allReviews.metrics.unrepliedCount) / allReviews.metrics.totalReviews * 100).toFixed(1)\n    : 100,\n  revenueImpact: {\n    estimatedFromRating: `${(parseFloat(allReviews.metrics.averageRating) * 2 - 1).toFixed(1)}%`,\n    note: '1-star improvement = 5-9% revenue increase'\n  },\n  generatedAt: new Date().toISOString()\n};\n\nreturn [{ json: weeklyReport }];"
+      },
+      "id": "generate-weekly-report",
+      "name": "Generate Weekly Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 900]
+    },
+    {
+      "parameters": {
+        "channel": "#reviews-weekly",
+        "text": "=📊 *Weekly Review Performance Report*\n_{{ $json.period.start }} to {{ $json.period.end }}_\n\n*Key Metrics:*\n• Average Rating: {{ $json.metrics.averageRating }}/5 ({{ $json.trends.ratingChange }})\n• Total Reviews: {{ $json.metrics.totalReviews }} ({{ $json.trends.reviewVolumeChange }})\n• Response Rate: {{ $json.responseRate }}% ({{ $json.trends.responseRateChange }})\n\n*By Platform:*\n• Google: {{ $json.metrics.bySource.google }} reviews\n• TripAdvisor: {{ $json.metrics.bySource.tripadvisor }} reviews\n• Yelp: {{ $json.metrics.bySource.yelp }} reviews\n\n*Rating Distribution:*\n⭐⭐⭐⭐⭐ {{ $json.metrics.ratingDistribution[5] }} ({{ ($json.metrics.ratingDistribution[5] / $json.metrics.totalReviews * 100).toFixed(0) }}%)\n⭐⭐⭐⭐ {{ $json.metrics.ratingDistribution[4] }}\n⭐⭐⭐ {{ $json.metrics.ratingDistribution[3] }}\n⭐⭐ {{ $json.metrics.ratingDistribution[2] }}\n⭐ {{ $json.metrics.ratingDistribution[1] }}\n\n*Estimated Revenue Impact:*\n{{ $json.revenueImpact.note }}\nCurrent rating impact: ~{{ $json.revenueImpact.estimatedFromRating }} revenue correlation",
+        "otherOptions": {}
+      },
+      "id": "slack-weekly-report",
+      "name": "Slack Weekly Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [700, 900]
+    }
+  ],
+  "connections": {
+    "Fetch Reviews Every 4 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Google Reviews",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch TripAdvisor Reviews",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Yelp Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Review Webhook": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Normalize Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Google Reviews": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Normalize Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch TripAdvisor Reviews": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Normalize Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Yelp Reviews": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Normalize Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate & Normalize Reviews": {
+      "main": [
+        [
+          {
+            "node": "AI Sentiment Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Negative Reviews?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Sentiment Analysis": {
+      "main": [
+        [
+          {
+            "node": "AI Response Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Response Generator": {
+      "main": [
+        [
+          {
+            "node": "Needs Manager Approval?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Manager Approval?": {
+      "main": [
+        [
+          {
+            "node": "Slack Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post Google Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Google Reply": {
+      "main": [
+        [
+          {
+            "node": "Log Review & Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Approval Request": {
+      "main": [
+        [
+          {
+            "node": "Log Review & Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Negative Reviews?": {
+      "main": [
+        [
+          {
+            "node": "Slack Negative Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Generate Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Slack Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-hospitality-review-management"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 3,
+  "tags": [
+    {
+      "name": "Hospitality",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Reviews",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Reputation",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}

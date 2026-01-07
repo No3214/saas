@@ -1,0 +1,711 @@
+{
+  "name": "Grain Multi-Platform Publisher v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Content_Calendar"
+        },
+        "options": {
+          "range": "A:Z"
+        }
+      },
+      "id": "google-sheets-read",
+      "name": "Get Content Calendar",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 300],
+      "typeVersion": 4.2,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-status",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "condition-published",
+              "leftValue": "={{ $json.published }}",
+              "rightValue": "FALSE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-approved",
+      "name": "Filter Approved & Unpublished",
+      "type": "n8n-nodes-base.filter",
+      "position": [650, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if scheduled time has passed\nconst now = new Date();\nconst scheduledTime = new Date($input.item.json.scheduled_datetime);\n\n// Return item if time has come\nif (scheduledTime <= now) {\n  return $input.item;\n}\n\n// Return empty if not ready\nreturn [];"
+      },
+      "id": "check-time",
+      "name": "Check If Time Ready",
+      "type": "n8n-nodes-base.code",
+      "position": [850, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-posts",
+      "name": "Process Each Post",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [1050, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir sosyal medya uzmanisın. Tek bir icerik icin farkli platformlara ozel caption ureteceksin.\n\nKURALLAR:\n\nINSTAGRAM:\n- Max 2,200 karakter\n- Ilk 125 karakter cok onemli (preview)\n- Emoji kullan\n- 20-30 hashtag (sonda)\n- CTA ekle\n\nFACEBOOK:\n- Max 500 karakter\n- Samimi ton\n- 3-5 hashtag\n- Soru sor\n\nTWITTER:\n- MAX 280 karakter (KESIN!)\n- Punchy\n- 1-2 hashtag\n\nLINKEDIN:\n- Profesyonel ton\n- 1,000 karakter\n- Istatistik ekle\n- 3-5 hashtag\n\nTIKTOK:\n- Max 150 karakter\n- Gen-Z dili\n- Trending hashtag\n\nTurkce uret. JSON formatinda dondur:\n{\n  \"instagram\": \"caption + hashtags\",\n  \"facebook\": \"caption\",\n  \"twitter\": \"max 280 char\",\n  \"linkedin\": \"professional caption\",\n  \"tiktok\": \"short caption\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Icerik: {{ $json.original_caption }}\nMarka: {{ $json.client_name }}\nSektor: {{ $json.industry }}\nIcerik turu: {{ $json.content_type }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "openai-captions",
+      "name": "AI Generate Captions",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1250, 300],
+      "typeVersion": 1.4,
+      "credentials": {
+        "openAiApi": {
+          "id": "",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response\nconst aiResponse = $input.item.json.message.content;\nlet captions;\n\ntry {\n  // Parse JSON\n  captions = JSON.parse(aiResponse);\n} catch (e) {\n  // Use original caption if parse fails\n  captions = {\n    instagram: $input.item.json.original_caption,\n    facebook: $input.item.json.original_caption,\n    twitter: $input.item.json.original_caption.substring(0, 280),\n    linkedin: $input.item.json.original_caption,\n    tiktok: $input.item.json.original_caption.substring(0, 150)\n  };\n}\n\n// Parse platform list\nconst platforms = $input.item.json.platforms.split(',').map(p => p.trim().toLowerCase());\n\nreturn {\n  json: {\n    ...$input.item.json,\n    captions: captions,\n    platform_list: platforms,\n    post_to_instagram: platforms.includes('instagram') || platforms.includes('ig'),\n    post_to_facebook: platforms.includes('facebook') || platforms.includes('fb'),\n    post_to_twitter: platforms.includes('twitter') || platforms.includes('tw'),\n    post_to_linkedin: platforms.includes('linkedin') || platforms.includes('li'),\n    post_to_tiktok: platforms.includes('tiktok') || platforms.includes('tt')\n  }\n};"
+      },
+      "id": "parse-captions",
+      "name": "Parse AI Captions",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-ig",
+              "leftValue": "={{ $json.post_to_instagram }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-instagram",
+      "name": "If Instagram",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 100],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.IG_BUSINESS_ID }}/media",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ $json.media_url }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.captions.instagram }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $env.META_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "instagram-create-media",
+      "name": "Instagram Create Media",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 0],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.IG_BUSINESS_ID }}/media_publish",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $env.META_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "instagram-publish",
+      "name": "Instagram Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2050, 0],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-fb",
+              "leftValue": "={{ $json.post_to_facebook }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-facebook",
+      "name": "If Facebook",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.FB_PAGE_ID }}/photos",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.media_url }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.captions.facebook }}"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $env.META_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "facebook-post",
+      "name": "Facebook Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 300],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-li",
+              "leftValue": "={{ $json.post_to_linkedin }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-linkedin",
+      "name": "If LinkedIn",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Restli-Protocol-Version",
+              "value": "2.0.0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"author\": \"urn:li:organization:{{ $env.LINKEDIN_ORG_ID }}\",\n  \"lifecycleState\": \"PUBLISHED\",\n  \"specificContent\": {\n    \"com.linkedin.ugc.ShareContent\": {\n      \"shareCommentary\": {\n        \"text\": \"{{ $json.captions.linkedin }}\"\n      },\n      \"shareMediaCategory\": \"IMAGE\",\n      \"media\": [\n        {\n          \"status\": \"READY\",\n          \"originalUrl\": \"{{ $json.media_url }}\"\n        }\n      ]\n    }\n  },\n  \"visibility\": {\n    \"com.linkedin.ugc.MemberNetworkVisibility\": \"PUBLIC\"\n  }\n}",
+        "options": {}
+      },
+      "id": "linkedin-post",
+      "name": "LinkedIn Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 500],
+      "typeVersion": 4.2,
+      "credentials": {
+        "oAuth2Api": {
+          "id": "",
+          "name": "LinkedIn OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-tw",
+              "leftValue": "={{ $json.post_to_twitter }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-twitter",
+      "name": "If Twitter",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 700],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.captions.twitter }}",
+        "additionalFields": {}
+      },
+      "id": "twitter-post",
+      "name": "Twitter Post",
+      "type": "n8n-nodes-base.twitter",
+      "position": [1850, 700],
+      "typeVersion": 2,
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "",
+          "name": "Twitter OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge all platform results\nconst results = {\n  post_id: $input.item.json.post_id,\n  client_name: $input.item.json.client_name,\n  row_number: $input.item.json.row_number,\n  published_platforms: [],\n  post_ids: {},\n  errors: []\n};\n\n// Check each platform result\nif ($input.item.json.instagram_result) {\n  results.published_platforms.push('instagram');\n  results.post_ids.instagram = $input.item.json.instagram_result.id;\n}\nif ($input.item.json.facebook_result) {\n  results.published_platforms.push('facebook');\n  results.post_ids.facebook = $input.item.json.facebook_result.id;\n}\nif ($input.item.json.linkedin_result) {\n  results.published_platforms.push('linkedin');\n  results.post_ids.linkedin = $input.item.json.linkedin_result.id;\n}\nif ($input.item.json.twitter_result) {\n  results.published_platforms.push('twitter');\n  results.post_ids.twitter = $input.item.json.twitter_result.data.id;\n}\n\nreturn {\n  json: results\n};"
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.code",
+      "position": [2250, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Content_Calendar"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "published": "TRUE",
+            "published_at": "={{ $now.format('YYYY-MM-DD HH:mm:ss') }}",
+            "instagram_post_id": "={{ $json.post_ids.instagram || '' }}",
+            "facebook_post_id": "={{ $json.post_ids.facebook || '' }}",
+            "linkedin_post_id": "={{ $json.post_ids.linkedin || '' }}",
+            "twitter_post_id": "={{ $json.post_ids.twitter || '' }}",
+            "published_platforms": "={{ $json.published_platforms.join(', ') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-sheet",
+      "name": "Update Sheet Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2450, 300],
+      "typeVersion": 4.2,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#social-posts",
+        "text": "=*Icerik Paylasildi*\n\n*Musteri:* {{ $json.client_name }}\n*Post ID:* {{ $json.post_id }}\n*Zaman:* {{ $now.format('DD.MM.YYYY HH:mm') }}\n\n*Paylasilan Platformlar:*\n{{ $json.published_platforms.map(p => '- ' + p).join('\\n') }}\n\n*Post IDler:*\n{{ Object.entries($json.post_ids).map(([k,v]) => k + ': ' + v).join('\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [2650, 300],
+      "typeVersion": 2.1,
+      "credentials": {
+        "slackApi": {
+          "id": "",
+          "name": "Slack"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Content Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Content Calendar": {
+      "main": [
+        [
+          {
+            "node": "Filter Approved & Unpublished",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Approved & Unpublished": {
+      "main": [
+        [
+          {
+            "node": "Check If Time Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Time Ready": {
+      "main": [
+        [
+          {
+            "node": "Process Each Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Each Post": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Captions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Captions": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Captions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Captions": {
+      "main": [
+        [
+          {
+            "node": "If Instagram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Facebook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If LinkedIn",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Twitter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Instagram": {
+      "main": [
+        [
+          {
+            "node": "Instagram Create Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Create Media": {
+      "main": [
+        [
+          {
+            "node": "Instagram Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Publish": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Facebook": {
+      "main": [
+        [
+          {
+            "node": "Facebook Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facebook Post": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Post": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Twitter": {
+      "main": [
+        [
+          {
+            "node": "Twitter Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twitter Post": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Update Sheet Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Sheet Status": {
+      "main": [
+        [
+          {
+            "node": "Notify Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "grain-automation"
+    },
+    {
+      "name": "social-media"
+    },
+    {
+      "name": "multi-platform"
+    }
+  ],
+  "meta": {
+    "templateId": "grain-mpp-v1",
+    "version": "1.0.0",
+    "description": "Multi-platform content publisher for agencies. Reads from Google Sheets calendar, generates AI captions per platform, posts to Instagram, Facebook, LinkedIn, Twitter.",
+    "author": "Grain Automation Suite",
+    "requiredCredentials": [
+      "Google Sheets OAuth2",
+      "OpenAI API",
+      "Meta Access Token (Instagram/Facebook)",
+      "LinkedIn OAuth2",
+      "Twitter OAuth2",
+      "Slack (optional)"
+    ],
+    "requiredEnvVars": [
+      "IG_BUSINESS_ID",
+      "FB_PAGE_ID",
+      "META_ACCESS_TOKEN",
+      "LINKEDIN_ORG_ID"
+    ]
+  }
+}

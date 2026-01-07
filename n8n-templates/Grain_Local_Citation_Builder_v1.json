@@ -1,0 +1,335 @@
+{
+  "name": "Grain Local Citation Builder v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "citation-build",
+        "options": {}
+      },
+      "id": "build-webhook",
+      "name": "Citation Build Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "citation-build"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-audit",
+      "name": "Weekly Citation Audit",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize citation build request\nconst request = $input.first().json.body || $input.first().json;\n\nconst buildRequest = {\n  buildId: `CIT-${Date.now().toString(36).toUpperCase()}`,\n  business: {\n    name: request.businessName,\n    address: request.address,\n    city: request.city,\n    state: request.state,\n    zip: request.zip,\n    country: request.country || 'US',\n    phone: request.phone,\n    website: request.website,\n    email: request.email,\n    categories: request.categories || [],\n    description: request.description,\n    hours: request.hours || {},\n    images: request.images || [],\n    socialProfiles: request.socialProfiles || {}\n  },\n  targetDirectories: request.directories || 'all',\n  priority: request.priority || 'standard',\n  startedAt: new Date().toISOString()\n};\n\n// Normalize NAP\nbuildRequest.nap = {\n  name: buildRequest.business.name.trim(),\n  address: `${buildRequest.business.address}, ${buildRequest.business.city}, ${buildRequest.business.state} ${buildRequest.business.zip}`.trim(),\n  phone: buildRequest.business.phone.replace(/\\D/g, '').replace(/^1/, '')\n};\n\nreturn [{ json: buildRequest }];"
+      },
+      "id": "init-build",
+      "name": "Initialize Build",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CITATION_DB_URL }}/businesses/active",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-businesses",
+      "name": "Fetch Businesses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "citation-db-api",
+          "name": "Citation DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CITATION_API_URL }}/directories",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "country",
+              "value": "={{ $json.business.country }}"
+            },
+            {
+              "name": "categories",
+              "value": "={{ $json.business.categories.join(',') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-directories",
+      "name": "Fetch Target Directories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "citation-api-key",
+          "name": "Citation API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CITATION_API_URL }}/scan",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"businessName\": \"{{ $json.business.name }}\",\n  \"phone\": \"{{ $json.business.phone }}\",\n  \"address\": \"{{ $json.business.address }}\",\n  \"city\": \"{{ $json.business.city }}\",\n  \"state\": \"{{ $json.business.state }}\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "scan-existing",
+      "name": "Scan Existing Citations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "citation-api-key",
+          "name": "Citation API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze existing citations and find gaps\nconst buildRequest = $('Initialize Build').first().json;\nconst directories = $('Fetch Target Directories').first().json;\nconst existingCitations = $('Scan Existing Citations').first().json;\n\nconst allDirectories = directories.directories || [];\nconst existing = existingCitations.citations || [];\n\n// Create directory map\nconst existingMap = new Map();\nexisting.forEach(citation => {\n  existingMap.set(citation.directory.toLowerCase(), citation);\n});\n\n// Analyze each directory\nconst analysis = {\n  buildId: buildRequest.buildId,\n  business: buildRequest.business,\n  nap: buildRequest.nap,\n  directories: [],\n  summary: {\n    total: allDirectories.length,\n    existing: 0,\n    missing: 0,\n    inconsistent: 0,\n    correct: 0\n  }\n};\n\nallDirectories.forEach(dir => {\n  const dirName = dir.name.toLowerCase();\n  const existingCitation = existingMap.get(dirName);\n  \n  let status = 'missing';\n  let issues = [];\n  \n  if (existingCitation) {\n    analysis.summary.existing++;\n    \n    // Check NAP consistency\n    const nameMatch = existingCitation.name?.toLowerCase() === buildRequest.nap.name.toLowerCase();\n    const addressMatch = existingCitation.address?.toLowerCase().includes(buildRequest.business.address.toLowerCase());\n    const phoneMatch = existingCitation.phone?.replace(/\\D/g, '') === buildRequest.nap.phone;\n    \n    if (nameMatch && addressMatch && phoneMatch) {\n      status = 'correct';\n      analysis.summary.correct++;\n    } else {\n      status = 'inconsistent';\n      analysis.summary.inconsistent++;\n      \n      if (!nameMatch) issues.push({ field: 'name', expected: buildRequest.nap.name, found: existingCitation.name });\n      if (!addressMatch) issues.push({ field: 'address', expected: buildRequest.business.address, found: existingCitation.address });\n      if (!phoneMatch) issues.push({ field: 'phone', expected: buildRequest.business.phone, found: existingCitation.phone });\n    }\n  } else {\n    analysis.summary.missing++;\n  }\n  \n  analysis.directories.push({\n    name: dir.name,\n    url: dir.url,\n    category: dir.category,\n    domainAuthority: dir.domainAuthority || dir.da,\n    priority: dir.priority || 'standard',\n    status,\n    existingListing: existingCitation || null,\n    issues,\n    submissionUrl: dir.submissionUrl,\n    requiresManual: dir.requiresManual || false\n  });\n});\n\n// Sort by priority and DA\nanalysis.directories.sort((a, b) => {\n  if (a.status === 'missing' && b.status !== 'missing') return -1;\n  if (a.status !== 'missing' && b.status === 'missing') return 1;\n  if (a.status === 'inconsistent' && b.status === 'correct') return -1;\n  return (b.domainAuthority || 0) - (a.domainAuthority || 0);\n});\n\n// Calculate NAP score\nanalysis.napScore = analysis.summary.total > 0 \n  ? Math.round(analysis.summary.correct / analysis.summary.total * 100)\n  : 0;\n\nreturn [{ json: analysis }];"
+      },
+      "id": "analyze-citations",
+      "name": "Analyze Citations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate submission tasks for missing/inconsistent citations\nconst analysis = $input.first().json;\n\nconst tasks = [];\n\n// Add tasks for missing citations\nanalysis.directories\n  .filter(d => d.status === 'missing')\n  .slice(0, 50) // Limit batch size\n  .forEach(dir => {\n    tasks.push({\n      taskId: `TASK-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`,\n      type: 'new_submission',\n      directory: dir.name,\n      url: dir.submissionUrl || dir.url,\n      domainAuthority: dir.domainAuthority,\n      priority: dir.domainAuthority >= 70 ? 'high' : dir.domainAuthority >= 40 ? 'medium' : 'low',\n      status: 'pending',\n      requiresManual: dir.requiresManual,\n      data: {\n        name: analysis.business.name,\n        address: analysis.business.address,\n        city: analysis.business.city,\n        state: analysis.business.state,\n        zip: analysis.business.zip,\n        phone: analysis.business.phone,\n        website: analysis.business.website,\n        email: analysis.business.email,\n        categories: analysis.business.categories,\n        description: analysis.business.description,\n        hours: analysis.business.hours\n      }\n    });\n  });\n\n// Add tasks for inconsistent citations\nanalysis.directories\n  .filter(d => d.status === 'inconsistent')\n  .forEach(dir => {\n    tasks.push({\n      taskId: `TASK-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`,\n      type: 'update_listing',\n      directory: dir.name,\n      url: dir.existingListing?.listingUrl || dir.url,\n      domainAuthority: dir.domainAuthority,\n      priority: 'high', // Inconsistencies are high priority\n      status: 'pending',\n      requiresManual: true, // Updates usually require manual\n      issues: dir.issues,\n      existingData: dir.existingListing,\n      correctData: {\n        name: analysis.business.name,\n        address: analysis.business.address,\n        city: analysis.business.city,\n        state: analysis.business.state,\n        zip: analysis.business.zip,\n        phone: analysis.business.phone\n      }\n    });\n  });\n\n// Sort by priority\nconst priorityOrder = { high: 0, medium: 1, low: 2 };\ntasks.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);\n\nreturn [{ json: {\n  buildId: analysis.buildId,\n  business: analysis.business,\n  napScore: analysis.napScore,\n  summary: analysis.summary,\n  tasks,\n  directories: analysis.directories\n}}];"
+      },
+      "id": "generate-tasks",
+      "name": "Generate Submission Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process automated submissions for supported directories\nconst data = $input.first().json;\nconst automatedTasks = data.tasks.filter(t => !t.requiresManual && t.type === 'new_submission');\n\n// Return tasks that can be automated\nreturn automatedTasks.map(task => ({ json: task }));"
+      },
+      "id": "filter-automated",
+      "name": "Filter Automated Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CITATION_API_URL }}/submit",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"directory\": \"{{ $json.directory }}\",\n  \"businessData\": {{ JSON.stringify($json.data) }}\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "submit-citation",
+      "name": "Submit to Directory",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "citation-api-key",
+          "name": "Citation API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CITATION_DB_URL }}/tasks",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-tasks",
+      "name": "Save Tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "citation-db-api",
+          "name": "Citation DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.SEO_SLACK_CHANNEL }}",
+        "text": "=📍 *Citation Build Report - {{ $json.business.name }}*\n\n📊 *NAP Consistency Score:* {{ $json.napScore }}%\n\n*Citation Summary:*\n• Total Directories: {{ $json.summary.total }}\n• ✅ Correct: {{ $json.summary.correct }}\n• ⚠️ Inconsistent: {{ $json.summary.inconsistent }}\n• ❌ Missing: {{ $json.summary.missing }}\n\n📋 *Tasks Generated:* {{ $json.tasks.length }}\n• High Priority: {{ $json.tasks.filter(t => t.priority === 'high').length }}\n• Medium Priority: {{ $json.tasks.filter(t => t.priority === 'medium').length }}\n• Manual Required: {{ $json.tasks.filter(t => t.requiresManual).length }}\n\n*Top Missing (High DA):*\n{{ $json.directories.filter(d => d.status === 'missing').slice(0, 5).map(d => `• ${d.name} (DA: ${d.domainAuthority})`).join('\\n') }}\n\n<{{ $vars.CITATION_DASHBOARD_URL }}|View Full Report>",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.CITATION_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Citation Report",
+          "mode": "list",
+          "cachedResultName": "Citation Report"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ new Date().toISOString().split('T')[0] }}",
+            "Business": "={{ $json.business.name }}",
+            "NAP Score": "={{ $json.napScore }}",
+            "Total Directories": "={{ $json.summary.total }}",
+            "Correct": "={{ $json.summary.correct }}",
+            "Inconsistent": "={{ $json.summary.inconsistent }}",
+            "Missing": "={{ $json.summary.missing }}",
+            "Tasks Created": "={{ $json.tasks.length }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-sheets",
+      "name": "Log to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1750, 700],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"buildId\": \"{{ $json.buildId }}\",\n  \"napScore\": {{ $json.napScore }},\n  \"summary\": {{ JSON.stringify($json.summary) }},\n  \"tasksCreated\": {{ $json.tasks.length }}\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 400]
+    }
+  ],
+  "connections": {
+    "Citation Build Request": {
+      "main": [
+        [{ "node": "Initialize Build", "type": "main", "index": 0 }]
+      ]
+    },
+    "Weekly Citation Audit": {
+      "main": [
+        [{ "node": "Fetch Businesses", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize Build": {
+      "main": [
+        [
+          { "node": "Fetch Target Directories", "type": "main", "index": 0 },
+          { "node": "Scan Existing Citations", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Target Directories": {
+      "main": [
+        [{ "node": "Analyze Citations", "type": "main", "index": 0 }]
+      ]
+    },
+    "Scan Existing Citations": {
+      "main": [
+        [{ "node": "Analyze Citations", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze Citations": {
+      "main": [
+        [{ "node": "Generate Submission Tasks", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Submission Tasks": {
+      "main": [
+        [
+          { "node": "Filter Automated Tasks", "type": "main", "index": 0 },
+          { "node": "Save Tasks", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Log to Sheets", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Filter Automated Tasks": {
+      "main": [
+        [{ "node": "Submit to Directory", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "local-seo", "name": "local-seo" },
+    { "id": "citations", "name": "citations" },
+    { "id": "nap", "name": "nap" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

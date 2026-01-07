@@ -1,0 +1,364 @@
+{
+  "name": "Grain Keyword Research Pipeline v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "keyword-research",
+        "options": {}
+      },
+      "id": "research-webhook",
+      "name": "Research Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "keyword-research"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize keyword research\nconst request = $input.first().json.body;\n\nconst researchConfig = {\n  researchId: `KW-${Date.now().toString(36).toUpperCase()}`,\n  seedKeywords: request.seedKeywords || [],\n  domain: request.domain,\n  competitors: request.competitors || [],\n  country: request.country || 'US',\n  language: request.language || 'en',\n  intent: request.intent || 'all', // all, informational, transactional, navigational, commercial\n  difficulty: request.maxDifficulty || 100,\n  minVolume: request.minVolume || 10,\n  maxVolume: request.maxVolume || null,\n  includeQuestions: request.includeQuestions !== false,\n  includeRelated: request.includeRelated !== false,\n  includeLongTail: request.includeLongTail !== false,\n  limit: request.limit || 500,\n  startedAt: new Date().toISOString()\n};\n\nreturn [{ json: researchConfig }];"
+      },
+      "id": "init-research",
+      "name": "Initialize Research",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.KEYWORD_API_URL }}/research",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"keywords\": {{ JSON.stringify($json.seedKeywords) }},\n  \"country\": \"{{ $json.country }}\",\n  \"language\": \"{{ $json.language }}\",\n  \"includeMetrics\": true,\n  \"limit\": {{ $json.limit }}\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "fetch-seed-metrics",
+      "name": "Fetch Seed Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "keyword-api-key",
+          "name": "Keyword API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.KEYWORD_API_URL }}/related",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"keywords\": {{ JSON.stringify($json.seedKeywords) }},\n  \"country\": \"{{ $json.country }}\",\n  \"language\": \"{{ $json.language }}\",\n  \"depth\": 2,\n  \"limit\": {{ Math.floor($json.limit / 2) }}\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "fetch-related",
+      "name": "Fetch Related Keywords",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "keyword-api-key",
+          "name": "Keyword API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.KEYWORD_API_URL }}/questions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"keywords\": {{ JSON.stringify($json.seedKeywords) }},\n  \"country\": \"{{ $json.country }}\",\n  \"language\": \"{{ $json.language }}\",\n  \"questionTypes\": [\"what\", \"how\", \"why\", \"when\", \"where\", \"which\", \"who\", \"can\", \"does\", \"is\"],\n  \"limit\": 100\n}",
+        "options": {}
+      },
+      "id": "fetch-questions",
+      "name": "Fetch Question Keywords",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "keyword-api-key",
+          "name": "Keyword API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.KEYWORD_API_URL }}/competitors/keywords",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domains",
+              "value": "={{ $json.competitors.join(',') }}"
+            },
+            {
+              "name": "country",
+              "value": "={{ $json.country }}"
+            },
+            {
+              "name": "limit",
+              "value": "={{ Math.floor($json.limit / 3) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-competitor-keywords",
+      "name": "Competitor Keywords",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "keyword-api-key",
+          "name": "Keyword API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge and deduplicate all keywords\nconst config = $('Initialize Research').first().json;\nconst seedData = $('Fetch Seed Metrics').first().json;\nconst relatedData = $('Fetch Related Keywords').first().json;\nconst questionData = $('Fetch Question Keywords').first().json;\nconst competitorData = $('Competitor Keywords').first().json;\n\n// Collect all keywords\nconst allKeywords = new Map();\n\n// Process seed keywords\n(seedData.keywords || []).forEach(kw => {\n  allKeywords.set(kw.keyword.toLowerCase(), {\n    ...kw,\n    source: 'seed',\n    keyword: kw.keyword.toLowerCase()\n  });\n});\n\n// Process related keywords\n(relatedData.keywords || []).forEach(kw => {\n  const key = kw.keyword.toLowerCase();\n  if (!allKeywords.has(key)) {\n    allKeywords.set(key, {\n      ...kw,\n      source: 'related',\n      keyword: key\n    });\n  }\n});\n\n// Process question keywords\n(questionData.keywords || []).forEach(kw => {\n  const key = kw.keyword.toLowerCase();\n  if (!allKeywords.has(key)) {\n    allKeywords.set(key, {\n      ...kw,\n      source: 'question',\n      keyword: key,\n      isQuestion: true\n    });\n  } else {\n    allKeywords.get(key).isQuestion = true;\n  }\n});\n\n// Process competitor keywords\n(competitorData.keywords || []).forEach(kw => {\n  const key = kw.keyword.toLowerCase();\n  if (!allKeywords.has(key)) {\n    allKeywords.set(key, {\n      ...kw,\n      source: 'competitor',\n      keyword: key\n    });\n  } else {\n    allKeywords.get(key).competitorRanking = kw.position;\n  }\n});\n\n// Convert to array and filter\nlet keywords = Array.from(allKeywords.values())\n  .filter(kw => {\n    if (kw.volume < config.minVolume) return false;\n    if (config.maxVolume && kw.volume > config.maxVolume) return false;\n    if (kw.difficulty > config.difficulty) return false;\n    if (config.intent !== 'all' && kw.intent !== config.intent) return false;\n    return true;\n  });\n\n// Classify intent if not present\nkeywords = keywords.map(kw => {\n  if (!kw.intent) {\n    const keyword = kw.keyword;\n    if (/buy|price|cheap|discount|deal|order|shop/.test(keyword)) {\n      kw.intent = 'transactional';\n    } else if (/best|top|review|vs|compare|alternative/.test(keyword)) {\n      kw.intent = 'commercial';\n    } else if (/how|what|why|when|where|guide|tutorial|learn/.test(keyword)) {\n      kw.intent = 'informational';\n    } else {\n      kw.intent = 'navigational';\n    }\n  }\n  \n  // Calculate opportunity score\n  kw.opportunityScore = Math.round(\n    (kw.volume / 1000) * (100 - kw.difficulty) / 10\n  );\n  \n  // Classify as long-tail\n  kw.isLongTail = kw.keyword.split(' ').length >= 4;\n  \n  return kw;\n});\n\n// Sort by opportunity score\nkeywords.sort((a, b) => b.opportunityScore - a.opportunityScore);\n\nreturn [{ json: {\n  config,\n  keywords: keywords.slice(0, config.limit),\n  totalFound: keywords.length\n}}];"
+      },
+      "id": "merge-keywords",
+      "name": "Merge & Deduplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 600]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an SEO Keyword Strategist. Analyze the keyword data and create strategic clusters for content planning.\n\nFor each cluster, provide:\n1. Cluster name and theme\n2. Primary keyword (highest opportunity)\n3. Supporting keywords (semantically related)\n4. Content type recommendation (blog, landing page, product page, FAQ)\n5. Estimated traffic potential\n6. Priority score (1-10)",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze these keywords for {{ $json.config.domain }}:\n\n**Seed Keywords:** {{ $json.config.seedKeywords.join(', ') }}\n**Total Keywords Found:** {{ $json.totalFound }}\n\n**Top 50 Keywords by Opportunity:**\n{{ $json.keywords.slice(0, 50).map(k => \n  `- ${k.keyword} (Vol: ${k.volume}, KD: ${k.difficulty}, Intent: ${k.intent}, Score: ${k.opportunityScore})`\n).join('\\n') }}\n\n**Question Keywords:**\n{{ $json.keywords.filter(k => k.isQuestion).slice(0, 20).map(k => `- ${k.keyword}`).join('\\n') }}\n\nCreate strategic keyword clusters for content planning.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 3000
+        }
+      },
+      "id": "ai-clustering",
+      "name": "AI Keyword Clustering",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1250, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an SEO Content Strategist. Based on keyword data, identify content gaps and opportunities.\n\nAnalyze:\n1. Keywords competitors rank for that we don't\n2. Question keywords that need FAQ/guide content\n3. Long-tail opportunities for quick wins\n4. High-volume keywords worth targeting\n5. Seasonal/trending keywords to plan for",
+              "role": "system"
+            },
+            {
+              "content": "=Identify content gaps for {{ $json.config.domain }}:\n\n**Competitor Keywords (we don't rank):**\n{{ $json.keywords.filter(k => k.source === 'competitor').slice(0, 30).map(k => \n  `- ${k.keyword} (Vol: ${k.volume}, Competitor Rank: ${k.competitorRanking || 'Top 10'})`\n).join('\\n') }}\n\n**Long-tail Opportunities:**\n{{ $json.keywords.filter(k => k.isLongTail && k.difficulty < 30).slice(0, 20).map(k => \n  `- ${k.keyword} (Vol: ${k.volume}, KD: ${k.difficulty})`\n).join('\\n') }}\n\n**High-Volume Keywords (KD < 50):**\n{{ $json.keywords.filter(k => k.volume > 1000 && k.difficulty < 50).slice(0, 15).map(k => \n  `- ${k.keyword} (Vol: ${k.volume}, KD: ${k.difficulty})`\n).join('\\n') }}\n\nIdentify the best content opportunities.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 2000
+        }
+      },
+      "id": "ai-gap-analysis",
+      "name": "AI Gap Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1250, 700],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final research report\nconst mergedData = $('Merge & Deduplicate').first().json;\nconst clusters = $('AI Keyword Clustering').first().json;\nconst gapAnalysis = $('AI Gap Analysis').first().json;\nconst config = mergedData.config;\n\n// Calculate summary stats\nconst keywords = mergedData.keywords;\nconst avgVolume = Math.round(keywords.reduce((a, b) => a + b.volume, 0) / keywords.length);\nconst avgDifficulty = Math.round(keywords.reduce((a, b) => a + b.difficulty, 0) / keywords.length);\n\nconst intentDistribution = {\n  informational: keywords.filter(k => k.intent === 'informational').length,\n  transactional: keywords.filter(k => k.intent === 'transactional').length,\n  commercial: keywords.filter(k => k.intent === 'commercial').length,\n  navigational: keywords.filter(k => k.intent === 'navigational').length\n};\n\nconst report = {\n  researchId: config.researchId,\n  domain: config.domain,\n  seedKeywords: config.seedKeywords,\n  completedAt: new Date().toISOString(),\n  summary: {\n    totalKeywords: keywords.length,\n    avgVolume,\n    avgDifficulty,\n    totalSearchVolume: keywords.reduce((a, b) => a + b.volume, 0),\n    questionKeywords: keywords.filter(k => k.isQuestion).length,\n    longTailKeywords: keywords.filter(k => k.isLongTail).length,\n    lowCompetition: keywords.filter(k => k.difficulty < 30).length,\n    intentDistribution\n  },\n  topOpportunities: keywords.slice(0, 20).map(k => ({\n    keyword: k.keyword,\n    volume: k.volume,\n    difficulty: k.difficulty,\n    intent: k.intent,\n    opportunityScore: k.opportunityScore\n  })),\n  quickWins: keywords.filter(k => k.difficulty < 30 && k.volume > 100).slice(0, 10),\n  clusters: clusters.clusters || clusters,\n  gapAnalysis,\n  allKeywords: keywords,\n  exportUrls: {\n    csv: `{{ $vars.EXPORT_BASE_URL }}/keywords/${config.researchId}/csv`,\n    xlsx: `{{ $vars.EXPORT_BASE_URL }}/keywords/${config.researchId}/xlsx`\n  }\n};\n\nreturn [{ json: report }];"
+      },
+      "id": "compile-report",
+      "name": "Compile Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.KEYWORD_DB_URL }}/research",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-research",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "keyword-db-api",
+          "name": "Keyword DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.SEO_SLACK_CHANNEL }}",
+        "text": "=🔑 *Keyword Research Complete*\n\n*Domain:* {{ $json.domain }}\n*Seeds:* {{ $json.seedKeywords.join(', ') }}\n\n📊 *Summary:*\n• Total Keywords: {{ $json.summary.totalKeywords }}\n• Avg Volume: {{ $json.summary.avgVolume }}\n• Avg Difficulty: {{ $json.summary.avgDifficulty }}\n• Total Search Volume: {{ $json.summary.totalSearchVolume.toLocaleString() }}\n\n🎯 *Quick Wins (Low KD, Good Volume):*\n{{ $json.quickWins.slice(0, 5).map(k => `• ${k.keyword} - Vol: ${k.volume}, KD: ${k.difficulty}`).join('\\n') }}\n\n🏆 *Top Opportunities:*\n{{ $json.topOpportunities.slice(0, 5).map(k => `• ${k.keyword} (Score: ${k.opportunityScore})`).join('\\n') }}\n\n📥 <{{ $json.exportUrls.csv }}|Download CSV> | <{{ $json.exportUrls.xlsx }}|Download Excel>",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 700],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1750, 900]
+    }
+  ],
+  "connections": {
+    "Research Request": {
+      "main": [
+        [{ "node": "Initialize Research", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize Research": {
+      "main": [
+        [
+          { "node": "Fetch Seed Metrics", "type": "main", "index": 0 },
+          { "node": "Fetch Related Keywords", "type": "main", "index": 0 },
+          { "node": "Fetch Question Keywords", "type": "main", "index": 0 },
+          { "node": "Competitor Keywords", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Seed Metrics": {
+      "main": [
+        [{ "node": "Merge & Deduplicate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Related Keywords": {
+      "main": [
+        [{ "node": "Merge & Deduplicate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Question Keywords": {
+      "main": [
+        [{ "node": "Merge & Deduplicate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Competitor Keywords": {
+      "main": [
+        [{ "node": "Merge & Deduplicate", "type": "main", "index": 0 }]
+      ]
+    },
+    "Merge & Deduplicate": {
+      "main": [
+        [
+          { "node": "AI Keyword Clustering", "type": "main", "index": 0 },
+          { "node": "AI Gap Analysis", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "AI Keyword Clustering": {
+      "main": [
+        [{ "node": "Compile Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Gap Analysis": {
+      "main": [
+        [{ "node": "Compile Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Report": {
+      "main": [
+        [
+          { "node": "Save to Database", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "seo", "name": "seo" },
+    { "id": "keywords", "name": "keywords" },
+    { "id": "research", "name": "research" },
+    { "id": "ai", "name": "ai" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

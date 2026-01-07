@@ -1,0 +1,602 @@
+{
+  "name": "Grain Restaurant Marketing Hub v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "restaurant-guest",
+        "options": {}
+      },
+      "id": "guest-webhook",
+      "name": "New Guest Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "restaurant-guest"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily 10 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse new guest data from POS or reservation system\nconst data = $input.first().json.body;\n\nconst guest = {\n  guestId: data.guestId || `GUEST-${Date.now().toString(36).toUpperCase()}`,\n  firstName: data.firstName,\n  lastName: data.lastName,\n  email: data.email,\n  phone: data.phone,\n  source: data.source || 'walk-in', // reservation, walk-in, online-order\n  visitType: data.visitType || 'first_visit',\n  visitDate: data.visitDate || new Date().toISOString(),\n  partySize: data.partySize || 1,\n  orderTotal: data.orderTotal || 0,\n  items: data.items || [],\n  preferences: data.preferences || {},\n  tags: data.tags || [],\n  marketingConsent: data.marketingConsent !== false,\n  birthday: data.birthday || null,\n  anniversary: data.anniversary || null\n};\n\n// Determine guest segment\nlet segment = 'new';\nif (data.visitCount > 10) segment = 'vip';\nelse if (data.visitCount > 5) segment = 'regular';\nelse if (data.visitCount > 1) segment = 'returning';\n\nguest.segment = segment;\nguest.visitCount = data.visitCount || 1;\n\nreturn [{ json: guest }];"
+      },
+      "id": "parse-guest",
+      "name": "Parse Guest Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CDP_API_URL }}/guests/upsert",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-to-cdp",
+      "name": "Save to Guest CDP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cdp-api-key",
+          "name": "CDP API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "first-visit",
+              "leftValue": "={{ $json.visitType }}",
+              "rightValue": "first_visit",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "has-email",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-first-visit",
+      "name": "First Visit?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Welcome to {{ $vars.RESTAURANT_NAME }}! 🎉",
+        "message": "=Hi {{ $json.firstName }},\n\nThank you for dining with us at {{ $vars.RESTAURANT_NAME }}! We hope you had a wonderful experience.\n\n🎁 **Welcome Gift:**\nAs a thank you for visiting, here's a special offer:\n\n**15% OFF** your next visit!\nUse code: **WELCOME15**\n\n📱 **Join Our Loyalty Program:**\nEarn points on every visit and unlock exclusive rewards!\n\n[Join Now]({{ $vars.LOYALTY_SIGNUP_URL }})\n\nWe can't wait to see you again!\n\nBest,\nThe {{ $vars.RESTAURANT_NAME }} Team\n\n---\n📍 {{ $vars.RESTAURANT_ADDRESS }}\n📞 {{ $vars.RESTAURANT_PHONE }}\n🌐 {{ $vars.RESTAURANT_WEBSITE }}",
+        "options": {}
+      },
+      "id": "send-welcome-email",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/{{ $vars.TWILIO_ACCOUNT_SID }}/Messages.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "twilioApi",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $vars.TWILIO_PHONE_NUMBER }}"
+            },
+            {
+              "name": "Body",
+              "value": "=Thanks for visiting {{ $vars.RESTAURANT_NAME }}! 🍽️ Here's 15% off your next visit: WELCOME15. See you soon!"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-welcome-sms",
+      "name": "Send Welcome SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 500],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio-credential",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CDP_API_URL }}/guests/segments/at-risk",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "days_since_visit",
+              "value": "30"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-at-risk",
+      "name": "Fetch At-Risk Guests",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cdp-api-key",
+          "name": "CDP API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CDP_API_URL }}/guests/segments/birthdays",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "days_ahead",
+              "value": "7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-birthdays",
+      "name": "Fetch Upcoming Birthdays",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cdp-api-key",
+          "name": "CDP API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CDP_API_URL }}/guests/segments/vip",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-vips",
+      "name": "Fetch VIP Guests",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cdp-api-key",
+          "name": "CDP API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process at-risk guests for win-back campaign\nconst guests = $input.first().json.guests || [];\n\nconst winBackCampaign = guests.map(guest => {\n  const daysSinceVisit = Math.floor(\n    (new Date() - new Date(guest.last_visit)) / (1000 * 60 * 60 * 24)\n  );\n  \n  // Determine offer based on guest value\n  let offer = '10% off';\n  let offerCode = 'COMEBACK10';\n  if (guest.lifetime_value > 500) {\n    offer = '25% off';\n    offerCode = 'VIP25';\n  } else if (guest.lifetime_value > 200) {\n    offer = '20% off';\n    offerCode = 'MISSYOU20';\n  } else if (guest.lifetime_value > 100) {\n    offer = '15% off';\n    offerCode = 'RETURN15';\n  }\n  \n  return {\n    guestId: guest.id,\n    firstName: guest.first_name,\n    email: guest.email,\n    phone: guest.phone,\n    daysSinceVisit,\n    lifetimeValue: guest.lifetime_value,\n    visitCount: guest.visit_count,\n    offer,\n    offerCode,\n    favoriteItems: guest.favorite_items || []\n  };\n});\n\nreturn winBackCampaign.map(g => ({ json: g }));"
+      },
+      "id": "prepare-winback",
+      "name": "Prepare Win-Back Campaign",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 600]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a restaurant marketing copywriter. Create personalized win-back messages for guests who haven't visited recently.\n\nGuidelines:\n1. Address guest by first name\n2. Reference their favorite items if known\n3. Create urgency without being pushy\n4. Highlight the special offer\n5. Keep it warm and inviting\n6. Include a clear CTA",
+              "role": "system"
+            },
+            {
+              "content": "=Create a personalized win-back email for:\n\n**Guest:** {{ $json.firstName }}\n**Days Since Visit:** {{ $json.daysSinceVisit }}\n**Visit Count:** {{ $json.visitCount }}\n**Favorite Items:** {{ $json.favoriteItems.join(', ') || 'Not tracked' }}\n**Offer:** {{ $json.offer }} with code {{ $json.offerCode }}\n**Restaurant:** {{ $vars.RESTAURANT_NAME }}\n\nGenerate subject line and email body.",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        }
+      },
+      "id": "generate-winback-email",
+      "name": "Generate Win-Back Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 600],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Prepare Win-Back Campaign').item.json.email }}",
+        "subject": "=We miss you, {{ $('Prepare Win-Back Campaign').item.json.firstName }}! 💝",
+        "message": "={{ $json.message?.content || $json.choices?.[0]?.message?.content }}",
+        "options": {}
+      },
+      "id": "send-winback-email",
+      "name": "Send Win-Back Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1250, 600],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process birthday guests\nconst guests = $input.first().json.guests || [];\n\nreturn guests.map(guest => ({\n  json: {\n    guestId: guest.id,\n    firstName: guest.first_name,\n    email: guest.email,\n    phone: guest.phone,\n    birthday: guest.birthday,\n    daysUntilBirthday: Math.ceil(\n      (new Date(guest.birthday_this_year) - new Date()) / (1000 * 60 * 60 * 24)\n    ),\n    segment: guest.segment,\n    offer: guest.segment === 'vip' ? 'Complimentary dessert + 20% off' : 'Complimentary dessert',\n    offerCode: 'BIRTHDAY' + new Date().getFullYear()\n  }\n}));"
+      },
+      "id": "prepare-birthday",
+      "name": "Prepare Birthday Campaign",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 800]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=🎂 Happy Birthday, {{ $json.firstName }}! A gift awaits you",
+        "message": "=Happy Birthday, {{ $json.firstName }}! 🎉\n\nEveryone at {{ $vars.RESTAURANT_NAME }} wishes you a fantastic birthday!\n\n🎁 **Your Birthday Gift:**\n{{ $json.offer }}!\n\nUse code: **{{ $json.offerCode }}**\n\nValid for 2 weeks around your birthday. Bring your friends and family to celebrate with us!\n\n📅 Book your table: {{ $vars.RESERVATION_URL }}\n\nLooking forward to celebrating with you!\n\n❤️ The {{ $vars.RESTAURANT_NAME }} Team",
+        "options": {}
+      },
+      "id": "send-birthday-email",
+      "name": "Send Birthday Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 800],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate VIP exclusive offer\nconst vipGuests = $input.first().json.guests || [];\n\nconst campaign = {\n  type: 'vip_exclusive',\n  name: 'VIP Early Access',\n  guests: vipGuests.map(g => ({\n    guestId: g.id,\n    firstName: g.first_name,\n    email: g.email,\n    phone: g.phone,\n    lifetimeValue: g.lifetime_value,\n    visitCount: g.visit_count\n  })),\n  offer: {\n    title: 'VIP Exclusive: New Menu Preview',\n    description: 'Be the first to try our new seasonal menu',\n    discount: '30%',\n    code: 'VIPFIRST',\n    validDays: 7\n  },\n  createdAt: new Date().toISOString()\n};\n\nreturn [{ json: campaign }];"
+      },
+      "id": "prepare-vip-campaign",
+      "name": "Prepare VIP Campaign",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 1000]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EMAIL_API_URL }}/campaigns/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"template_id\": \"{{ $vars.VIP_EMAIL_TEMPLATE }}\",\n  \"recipients\": {{ JSON.stringify($json.guests.map(g => ({ email: g.email, name: g.firstName }))) }},\n  \"variables\": {\n    \"offer_title\": \"{{ $json.offer.title }}\",\n    \"offer_description\": \"{{ $json.offer.description }}\",\n    \"discount\": \"{{ $json.offer.discount }}\",\n    \"code\": \"{{ $json.offer.code }}\",\n    \"restaurant_name\": \"{{ $vars.RESTAURANT_NAME }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-vip-campaign",
+      "name": "Send VIP Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "email-api-key",
+          "name": "Email API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "feedback-submit",
+        "options": {}
+      },
+      "id": "feedback-webhook",
+      "name": "Feedback Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 1200],
+      "webhookId": "restaurant-feedback"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process guest feedback\nconst feedback = $input.first().json.body;\n\nconst processedFeedback = {\n  feedbackId: `FB-${Date.now().toString(36).toUpperCase()}`,\n  guestId: feedback.guestId,\n  guestName: feedback.guestName,\n  email: feedback.email,\n  visitDate: feedback.visitDate,\n  ratings: {\n    food: feedback.foodRating || 0,\n    service: feedback.serviceRating || 0,\n    ambiance: feedback.ambianceRating || 0,\n    value: feedback.valueRating || 0,\n    overall: feedback.overallRating || 0\n  },\n  comments: feedback.comments,\n  wouldRecommend: feedback.wouldRecommend,\n  submittedAt: new Date().toISOString()\n};\n\n// Calculate NPS category\nif (feedback.npsScore >= 9) {\n  processedFeedback.npsCategory = 'promoter';\n} else if (feedback.npsScore >= 7) {\n  processedFeedback.npsCategory = 'passive';\n} else {\n  processedFeedback.npsCategory = 'detractor';\n}\nprocessedFeedback.npsScore = feedback.npsScore;\n\n// Determine sentiment\nconst avgRating = (processedFeedback.ratings.food + processedFeedback.ratings.service + \n  processedFeedback.ratings.ambiance + processedFeedback.ratings.value) / 4;\nprocessedFeedback.sentiment = avgRating >= 4 ? 'positive' : avgRating >= 3 ? 'neutral' : 'negative';\n\nreturn [{ json: processedFeedback }];"
+      },
+      "id": "process-feedback",
+      "name": "Process Feedback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 1200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-promoter",
+              "leftValue": "={{ $json.npsCategory }}",
+              "rightValue": "promoter",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-promoter",
+      "name": "Is Promoter?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 1200]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Thank you for the amazing feedback! ⭐",
+        "message": "=Hi {{ $json.guestName }},\n\nWow! Thank you so much for your wonderful feedback! It means the world to us. 🙏\n\nWe noticed you had a great experience, and we'd love to ask a small favor:\n\n⭐ **Would you mind sharing your experience on Google?**\n[Leave a Review]({{ $vars.GOOGLE_REVIEW_URL }})\n\nYour review helps other food lovers discover us and means so much to our team!\n\n🎁 **As a thank you:** Here's 10% off your next visit\nCode: **THANKS10**\n\nSee you soon!\n\n❤️ {{ $vars.RESTAURANT_NAME }}",
+        "options": {}
+      },
+      "id": "request-review",
+      "name": "Request Google Review",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 1100],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.RESTAURANT_SLACK_CHANNEL }}",
+        "text": "=⚠️ *Negative Feedback Alert*\n\n*Guest:* {{ $json.guestName }}\n*NPS Score:* {{ $json.npsScore }}/10 ({{ $json.npsCategory }})\n*Visit Date:* {{ $json.visitDate }}\n\n*Ratings:*\n🍽️ Food: {{ $json.ratings.food }}/5\n👨‍🍳 Service: {{ $json.ratings.service }}/5\n🏠 Ambiance: {{ $json.ratings.ambiance }}/5\n💰 Value: {{ $json.ratings.value }}/5\n\n*Comments:*\n> {{ $json.comments || 'No comments provided' }}\n\n_Please follow up with this guest within 24 hours_",
+        "otherOptions": {}
+      },
+      "id": "alert-negative-feedback",
+      "name": "Alert Negative Feedback",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1000, 1300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.RESTAURANT_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guest Feedback",
+          "mode": "list",
+          "cachedResultName": "Guest Feedback"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Feedback ID": "={{ $json.feedbackId }}",
+            "Guest Name": "={{ $json.guestName }}",
+            "Visit Date": "={{ $json.visitDate }}",
+            "NPS Score": "={{ $json.npsScore }}",
+            "NPS Category": "={{ $json.npsCategory }}",
+            "Food Rating": "={{ $json.ratings.food }}",
+            "Service Rating": "={{ $json.ratings.service }}",
+            "Ambiance Rating": "={{ $json.ratings.ambiance }}",
+            "Value Rating": "={{ $json.ratings.value }}",
+            "Overall Rating": "={{ $json.ratings.overall }}",
+            "Comments": "={{ $json.comments }}",
+            "Submitted At": "={{ $json.submittedAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-feedback",
+      "name": "Log Feedback",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1250, 1200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "New Guest Webhook": {
+      "main": [
+        [{ "node": "Parse Guest Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Guest Data": {
+      "main": [
+        [
+          { "node": "Save to Guest CDP", "type": "main", "index": 0 },
+          { "node": "First Visit?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "First Visit?": {
+      "main": [
+        [
+          { "node": "Send Welcome Email", "type": "main", "index": 0 },
+          { "node": "Send Welcome SMS", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Daily 10 AM": {
+      "main": [
+        [
+          { "node": "Fetch At-Risk Guests", "type": "main", "index": 0 },
+          { "node": "Fetch Upcoming Birthdays", "type": "main", "index": 0 },
+          { "node": "Fetch VIP Guests", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch At-Risk Guests": {
+      "main": [
+        [{ "node": "Prepare Win-Back Campaign", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Win-Back Campaign": {
+      "main": [
+        [{ "node": "Generate Win-Back Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Win-Back Email": {
+      "main": [
+        [{ "node": "Send Win-Back Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Upcoming Birthdays": {
+      "main": [
+        [{ "node": "Prepare Birthday Campaign", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Birthday Campaign": {
+      "main": [
+        [{ "node": "Send Birthday Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch VIP Guests": {
+      "main": [
+        [{ "node": "Prepare VIP Campaign", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare VIP Campaign": {
+      "main": [
+        [{ "node": "Send VIP Campaign", "type": "main", "index": 0 }]
+      ]
+    },
+    "Feedback Webhook": {
+      "main": [
+        [{ "node": "Process Feedback", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Feedback": {
+      "main": [
+        [
+          { "node": "Is Promoter?", "type": "main", "index": 0 },
+          { "node": "Log Feedback", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Is Promoter?": {
+      "main": [
+        [{ "node": "Request Google Review", "type": "main", "index": 0 }],
+        [{ "node": "Alert Negative Feedback", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "restaurant", "name": "restaurant" },
+    { "id": "marketing", "name": "marketing" },
+    { "id": "loyalty", "name": "loyalty" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,340 @@
+{
+  "name": "Grain Personalization Engine v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "personalize",
+        "options": {}
+      },
+      "id": "personalization-webhook",
+      "name": "Personalization Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "personalization-engine"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse personalization request\nconst request = $input.first().json.body;\n\nconst context = {\n  requestId: `PERS-${Date.now().toString(36).toUpperCase()}`,\n  userId: request.userId || request.visitorId,\n  sessionId: request.sessionId,\n  context: request.context || 'website',\n  page: request.page || 'homepage',\n  touchpoint: request.touchpoint || 'web',\n  device: request.device || 'desktop',\n  location: request.location,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{ json: context }];"
+      },
+      "id": "parse-context",
+      "name": "Parse Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CDP_API_URL }}/profiles/{{ $json.userId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "include",
+              "value": "traits,segments,events,predictions"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-profile",
+      "name": "Fetch User Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cdp-api-key",
+          "name": "CDP API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CDP_API_URL }}/profiles/{{ $json.userId }}/history",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "types",
+              "value": "page_view,product_view,purchase,search,email_click"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-behavior",
+      "name": "Fetch Behavior History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cdp-api-key",
+          "name": "CDP API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build comprehensive user context\nconst requestContext = $('Parse Context').first().json;\nconst profile = $('Fetch User Profile').first().json;\nconst behavior = $('Fetch Behavior History').first().json;\n\n// Extract key traits\nconst traits = profile.traits || {};\nconst segments = profile.segments || [];\nconst predictions = profile.predictions || {};\n\n// Analyze behavior patterns\nconst events = behavior.events || [];\nconst recentProducts = events\n  .filter(e => e.type === 'product_view')\n  .slice(0, 10)\n  .map(e => e.properties?.product);\n\nconst recentCategories = [...new Set(\n  recentProducts.map(p => p?.category).filter(Boolean)\n)];\n\nconst recentSearches = events\n  .filter(e => e.type === 'search')\n  .slice(0, 5)\n  .map(e => e.properties?.query);\n\nconst purchaseHistory = events\n  .filter(e => e.type === 'purchase')\n  .map(e => e.properties);\n\n// Calculate engagement score\nlet engagementScore = 0;\nif (events.length > 20) engagementScore += 30;\nelse if (events.length > 10) engagementScore += 20;\nelse if (events.length > 5) engagementScore += 10;\n\nif (purchaseHistory.length > 0) engagementScore += 30;\nif (traits.email_verified) engagementScore += 10;\nif (segments.includes('vip') || segments.includes('loyal')) engagementScore += 20;\n\n// Determine user stage\nlet userStage = 'awareness';\nif (purchaseHistory.length > 3) userStage = 'loyalty';\nelse if (purchaseHistory.length > 0) userStage = 'retention';\nelse if (events.some(e => e.type === 'cart_add')) userStage = 'decision';\nelse if (recentProducts.length > 3) userStage = 'consideration';\n\nconst userContext = {\n  ...requestContext,\n  profile: {\n    id: profile.id,\n    name: traits.first_name || 'Visitor',\n    email: traits.email,\n    lifetime_value: traits.ltv || 0,\n    total_orders: purchaseHistory.length,\n    avg_order_value: purchaseHistory.length > 0 \n      ? purchaseHistory.reduce((a, b) => a + (b.total || 0), 0) / purchaseHistory.length \n      : 0\n  },\n  segments,\n  predictions: {\n    purchase_likelihood: predictions.purchase_likelihood || 0.5,\n    churn_risk: predictions.churn_risk || 0.2,\n    predicted_ltv: predictions.ltv || 100\n  },\n  behavior: {\n    engagementScore,\n    userStage,\n    recentProducts,\n    recentCategories,\n    recentSearches,\n    lastPurchase: purchaseHistory[0] || null,\n    totalEvents: events.length\n  },\n  preferences: {\n    favoriteCategories: recentCategories.slice(0, 3),\n    priceRange: traits.preferred_price_range || 'mid',\n    communicationPreference: traits.communication_preference || 'email'\n  }\n};\n\nreturn [{ json: userContext }];"
+      },
+      "id": "build-context",
+      "name": "Build User Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.RECOMMENDATION_API_URL }}/products",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "={{ $json.profile.id }}"
+            },
+            {
+              "name": "categories",
+              "value": "={{ $json.preferences.favoriteCategories.join(',') }}"
+            },
+            {
+              "name": "exclude_purchased",
+              "value": "true"
+            },
+            {
+              "name": "limit",
+              "value": "12"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-recommendations",
+      "name": "Fetch Product Recommendations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "recommendation-api",
+          "name": "Recommendation API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CMS_API_URL }}/content/personalized",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "segments",
+              "value": "={{ $json.segments.join(',') }}"
+            },
+            {
+              "name": "stage",
+              "value": "={{ $json.behavior.userStage }}"
+            },
+            {
+              "name": "page",
+              "value": "={{ $json.page }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-content",
+      "name": "Fetch Personalized Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cms-api-key",
+          "name": "CMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Personalization AI. Generate personalized messaging based on user context.\n\nRules:\n1. Address user by name if known\n2. Reference relevant products/categories\n3. Match tone to user stage\n4. Create urgency for high-intent users\n5. Be helpful, not pushy",
+              "role": "system"
+            },
+            {
+              "content": "=Generate personalized messages for this user context:\n\n**User Stage:** {{ $json.behavior.userStage }}\n**Name:** {{ $json.profile.name }}\n**Recent Interests:** {{ $json.preferences.favoriteCategories.join(', ') }}\n**Engagement Score:** {{ $json.behavior.engagementScore }}/100\n**Purchase Likelihood:** {{ Math.round($json.predictions.purchase_likelihood * 100) }}%\n\nGenerate:\n1. Headline (personalized greeting)\n2. Subheadline (value proposition)\n3. CTA button text\n4. Banner message\n5. Exit intent popup message",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.6,
+          "maxTokens": 1000
+        }
+      },
+      "id": "ai-personalization",
+      "name": "AI Personalization",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1250, 700],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile personalization response\nconst userContext = $('Build User Context').first().json;\nconst recommendations = $('Fetch Product Recommendations').first().json;\nconst content = $('Fetch Personalized Content').first().json;\nconst aiMessages = $('AI Personalization').first().json;\n\n// Select offers based on user stage and predictions\nconst offers = [];\nif (userContext.predictions.purchase_likelihood > 0.7) {\n  offers.push({\n    type: 'discount',\n    code: 'WELCOME10',\n    value: '10%',\n    message: 'Complete your purchase with 10% off!'\n  });\n}\n\nif (userContext.behavior.userStage === 'consideration' && userContext.behavior.engagementScore > 50) {\n  offers.push({\n    type: 'free_shipping',\n    threshold: 50,\n    message: 'Free shipping on orders over $50'\n  });\n}\n\nif (userContext.predictions.churn_risk > 0.5) {\n  offers.push({\n    type: 'loyalty',\n    code: 'COMEBACK20',\n    value: '20%',\n    message: 'We miss you! Here\\'s 20% off your next order'\n  });\n}\n\nconst response = {\n  requestId: userContext.requestId,\n  userId: userContext.profile.id,\n  personalization: {\n    messages: aiMessages,\n    recommendations: recommendations.products?.slice(0, 8) || [],\n    content: content.blocks || [],\n    offers,\n    layout: {\n      heroVariant: userContext.segments.includes('vip') ? 'premium' : 'standard',\n      showRecentlyViewed: userContext.behavior.recentProducts.length > 0,\n      showRecommendations: true,\n      showSocialProof: userContext.behavior.userStage === 'decision'\n    }\n  },\n  context: {\n    userStage: userContext.behavior.userStage,\n    engagementScore: userContext.behavior.engagementScore,\n    segments: userContext.segments,\n    predictions: userContext.predictions\n  },\n  tracking: {\n    experimentId: 'pers-v1',\n    variant: 'personalized',\n    timestamp: new Date().toISOString()\n  }\n};\n\nreturn [{ json: response }];"
+      },
+      "id": "compile-response",
+      "name": "Compile Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "private, max-age=300"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1750, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.ANALYTICS_API_URL }}/events",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"personalization_served\",\n  \"user_id\": \"{{ $json.userId }}\",\n  \"request_id\": \"{{ $json.requestId }}\",\n  \"variant\": \"{{ $json.tracking.variant }}\",\n  \"user_stage\": \"{{ $json.context.userStage }}\",\n  \"recommendations_count\": {{ $json.personalization.recommendations.length }},\n  \"offers_count\": {{ $json.personalization.offers.length }},\n  \"timestamp\": \"{{ $json.tracking.timestamp }}\"\n}",
+        "options": {}
+      },
+      "id": "track-event",
+      "name": "Track Personalization",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "analytics-api-key",
+          "name": "Analytics API Key"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Personalization Request": {
+      "main": [
+        [{ "node": "Parse Context", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Context": {
+      "main": [
+        [
+          { "node": "Fetch User Profile", "type": "main", "index": 0 },
+          { "node": "Fetch Behavior History", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch User Profile": {
+      "main": [
+        [{ "node": "Build User Context", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Behavior History": {
+      "main": [
+        [{ "node": "Build User Context", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build User Context": {
+      "main": [
+        [
+          { "node": "Fetch Product Recommendations", "type": "main", "index": 0 },
+          { "node": "Fetch Personalized Content", "type": "main", "index": 0 },
+          { "node": "AI Personalization", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Product Recommendations": {
+      "main": [
+        [{ "node": "Compile Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Personalized Content": {
+      "main": [
+        [{ "node": "Compile Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Personalization": {
+      "main": [
+        [{ "node": "Compile Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Response": {
+      "main": [
+        [
+          { "node": "Respond", "type": "main", "index": 0 },
+          { "node": "Track Personalization", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "personalization", "name": "personalization" },
+    { "id": "marketing", "name": "marketing" },
+    { "id": "ai", "name": "ai" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

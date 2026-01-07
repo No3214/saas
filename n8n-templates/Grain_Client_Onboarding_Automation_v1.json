@@ -1,0 +1,409 @@
+{
+  "name": "Grain Client Onboarding Automation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-client",
+        "options": {}
+      },
+      "id": "new-client-webhook",
+      "name": "New Client Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "new-client-onboarding"
+    },
+    {
+      "parameters": {
+        "triggerOn": "newDeal",
+        "filters": {
+          "pipeline_id": "={{ $vars.SALES_PIPELINE_ID }}",
+          "stage_id": "={{ $vars.WON_STAGE_ID }}"
+        }
+      },
+      "id": "hubspot-deal-trigger",
+      "name": "HubSpot Deal Won",
+      "type": "n8n-nodes-base.hubspotTrigger",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "credentials": {
+        "hubspotDeveloperApi": {
+          "id": "hubspot-credential",
+          "name": "HubSpot Developer API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize client data from different sources\nconst input = $input.first().json;\nlet clientData = {};\n\n// Check if from webhook or HubSpot\nif (input.body) {\n  // From webhook\n  const body = input.body;\n  clientData = {\n    source: 'webhook',\n    companyName: body.companyName || body.company_name,\n    contactName: body.contactName || body.contact_name,\n    email: body.email,\n    phone: body.phone,\n    industry: body.industry,\n    website: body.website,\n    services: body.services || [],\n    monthlyBudget: body.monthlyBudget || body.monthly_budget,\n    startDate: body.startDate || body.start_date || new Date().toISOString(),\n    notes: body.notes,\n    dealId: body.dealId || body.deal_id,\n    accountManager: body.accountManager || body.account_manager\n  };\n} else if (input.properties) {\n  // From HubSpot\n  const props = input.properties;\n  clientData = {\n    source: 'hubspot',\n    companyName: props.dealname?.value || props.company?.value,\n    contactName: props.contact_name?.value,\n    email: props.contact_email?.value,\n    phone: props.contact_phone?.value,\n    industry: props.industry?.value,\n    website: props.website?.value,\n    services: props.services?.value?.split(';') || [],\n    monthlyBudget: parseFloat(props.amount?.value) || 0,\n    startDate: props.closedate?.value || new Date().toISOString(),\n    notes: props.description?.value,\n    dealId: input.dealId || input.objectId,\n    accountManager: props.hubspot_owner_id?.value\n  };\n}\n\n// Generate unique client ID\nclientData.clientId = `CLT-${Date.now().toString(36).toUpperCase()}`;\nclientData.createdAt = new Date().toISOString();\nclientData.status = 'onboarding';\n\nreturn [{ json: clientData }];"
+      },
+      "id": "normalize-client-data",
+      "name": "Normalize Client Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CRM_API_URL }}/clients",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "create-client-record",
+      "name": "Create Client Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.clickup.com/api/v2/list/{{ $vars.ONBOARDING_LIST_ID }}/task",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "clickUpApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"Onboarding: {{ $json.companyName }}\",\n  \"description\": \"New client onboarding checklist for {{ $json.companyName }}\\n\\nContact: {{ $json.contactName }}\\nEmail: {{ $json.email }}\\nServices: {{ $json.services.join(', ') }}\\nMonthly Budget: ${{ $json.monthlyBudget }}\\nStart Date: {{ $json.startDate }}\",\n  \"assignees\": [{{ $vars.DEFAULT_ONBOARDING_ASSIGNEE }}],\n  \"due_date\": {{ Date.now() + (7 * 24 * 60 * 60 * 1000) }},\n  \"priority\": 2,\n  \"custom_fields\": [\n    { \"id\": \"{{ $vars.CLIENT_ID_FIELD }}\", \"value\": \"{{ $json.clientId }}\" },\n    { \"id\": \"{{ $vars.BUDGET_FIELD }}\", \"value\": {{ $json.monthlyBudget }} }\n  ]\n}",
+        "options": {}
+      },
+      "id": "create-clickup-task",
+      "name": "Create ClickUp Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500],
+      "credentials": {
+        "clickUpApi": {
+          "id": "clickup-credential",
+          "name": "ClickUp API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate onboarding checklist based on services\nconst client = $input.first().json;\nconst services = client.services || [];\n\nconst subtasks = [\n  // Standard onboarding tasks\n  { name: 'Send welcome email', priority: 'high', dueOffset: 0 },\n  { name: 'Schedule kickoff call', priority: 'high', dueOffset: 1 },\n  { name: 'Collect brand assets and guidelines', priority: 'high', dueOffset: 3 },\n  { name: 'Set up client folder in Drive', priority: 'medium', dueOffset: 1 },\n  { name: 'Create Slack channel for client', priority: 'medium', dueOffset: 1 },\n  { name: 'Set up billing and invoicing', priority: 'high', dueOffset: 2 },\n  { name: 'Complete onboarding questionnaire review', priority: 'high', dueOffset: 3 }\n];\n\n// Service-specific tasks\nif (services.includes('SEO') || services.includes('seo')) {\n  subtasks.push(\n    { name: 'Conduct initial SEO audit', priority: 'high', dueOffset: 5 },\n    { name: 'Set up Google Search Console access', priority: 'high', dueOffset: 2 },\n    { name: 'Create keyword research document', priority: 'medium', dueOffset: 7 },\n    { name: 'Set up rank tracking', priority: 'medium', dueOffset: 5 }\n  );\n}\n\nif (services.includes('PPC') || services.includes('Google Ads') || services.includes('ppc')) {\n  subtasks.push(\n    { name: 'Get Google Ads account access', priority: 'high', dueOffset: 2 },\n    { name: 'Conduct initial account audit', priority: 'high', dueOffset: 5 },\n    { name: 'Set up conversion tracking', priority: 'high', dueOffset: 3 },\n    { name: 'Create campaign strategy document', priority: 'medium', dueOffset: 7 }\n  );\n}\n\nif (services.includes('Social Media') || services.includes('social')) {\n  subtasks.push(\n    { name: 'Get social media account access', priority: 'high', dueOffset: 2 },\n    { name: 'Audit current social presence', priority: 'medium', dueOffset: 5 },\n    { name: 'Create content calendar template', priority: 'medium', dueOffset: 7 },\n    { name: 'Set up social scheduling tool', priority: 'low', dueOffset: 5 }\n  );\n}\n\nif (services.includes('Content') || services.includes('content')) {\n  subtasks.push(\n    { name: 'Conduct content audit', priority: 'medium', dueOffset: 5 },\n    { name: 'Create content strategy document', priority: 'high', dueOffset: 10 },\n    { name: 'Set up editorial calendar', priority: 'medium', dueOffset: 7 }\n  );\n}\n\nif (services.includes('Email Marketing') || services.includes('email')) {\n  subtasks.push(\n    { name: 'Get ESP account access', priority: 'high', dueOffset: 2 },\n    { name: 'Audit email list and segments', priority: 'medium', dueOffset: 5 },\n    { name: 'Review email templates', priority: 'low', dueOffset: 7 }\n  );\n}\n\nif (services.includes('Analytics') || services.includes('analytics')) {\n  subtasks.push(\n    { name: 'Set up GA4 access', priority: 'high', dueOffset: 2 },\n    { name: 'Configure analytics dashboard', priority: 'medium', dueOffset: 7 },\n    { name: 'Set up goal/conversion tracking', priority: 'high', dueOffset: 5 }\n  );\n}\n\n// Sort by due date and priority\nsubtasks.sort((a, b) => {\n  if (a.dueOffset !== b.dueOffset) return a.dueOffset - b.dueOffset;\n  const priorityOrder = { high: 0, medium: 1, low: 2 };\n  return priorityOrder[a.priority] - priorityOrder[b.priority];\n});\n\nreturn [{ \n  json: { \n    client,\n    subtasks,\n    totalTasks: subtasks.length\n  } \n}];"
+      },
+      "id": "generate-checklist",
+      "name": "Generate Onboarding Checklist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"{{ $json.client.companyName }} - {{ $json.client.clientId }}\",\n  \"mimeType\": \"application/vnd.google-apps.folder\",\n  \"parents\": [\"{{ $vars.CLIENTS_DRIVE_FOLDER }}\"]\n}",
+        "options": {}
+      },
+      "id": "create-drive-folder",
+      "name": "Create Drive Folder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google-drive-credential",
+          "name": "Google Drive OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.NEW_CLIENTS_SLACK_CHANNEL }}",
+        "text": "=🎉 *New Client Onboarding Started!*\n\n*Company:* {{ $json.client.companyName }}\n*Contact:* {{ $json.client.contactName }} ({{ $json.client.email }})\n*Services:* {{ $json.client.services.join(', ') || 'TBD' }}\n*Monthly Budget:* ${{ $json.client.monthlyBudget?.toLocaleString() || 'TBD' }}\n*Start Date:* {{ $json.client.startDate }}\n*Client ID:* {{ $json.client.clientId }}\n\n📋 *Onboarding Tasks:* {{ $json.totalTasks }} tasks generated\n\n_Please complete the onboarding checklist within 7 days_",
+        "otherOptions": {}
+      },
+      "id": "notify-team",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "name": "={{ $json.client.companyName }}",
+        "isPrivate": false,
+        "options": {}
+      },
+      "id": "create-slack-channel",
+      "name": "Create Slack Channel",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 700],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.client.email }}",
+        "subject": "=Welcome to {{ $vars.AGENCY_NAME }}! - Getting Started",
+        "message": "=Dear {{ $json.client.contactName }},\n\nWelcome to {{ $vars.AGENCY_NAME }}! We're thrilled to have {{ $json.client.companyName }} as our newest client.\n\nYour dedicated account manager will be reaching out within the next 24 hours to schedule our kickoff call. In the meantime, here's what you can expect:\n\n📋 **Next Steps:**\n1. Kickoff call to discuss goals and strategy\n2. Access setup for relevant platforms\n3. Brand asset collection\n4. Initial audit and recommendations\n\n📁 **Client Portal:**\nYou'll receive an invitation to your client portal where you can:\n- View project status and timelines\n- Access reports and analytics\n- Communicate with your team\n- Review and approve content\n\n🗓️ **Timeline:**\nOnboarding typically takes 5-7 business days, after which we'll begin active campaign management.\n\n**Your Client ID:** {{ $json.client.clientId }}\n\nIf you have any questions, don't hesitate to reach out to your account manager or reply to this email.\n\nWe're excited to help {{ $json.client.companyName }} achieve its marketing goals!\n\nBest regards,\nThe {{ $vars.AGENCY_NAME }} Team",
+        "options": {
+          "replyTo": "={{ $vars.AGENCY_EMAIL }}"
+        }
+      },
+      "id": "send-welcome-email",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1500, 400],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PROJECT_MGMT_URL }}/projects",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"{{ $json.client.companyName }} - Monthly Retainer\",\n  \"client_id\": \"{{ $json.client.clientId }}\",\n  \"start_date\": \"{{ $json.client.startDate }}\",\n  \"budget\": {{ $json.client.monthlyBudget }},\n  \"services\": {{ JSON.stringify($json.client.services) }},\n  \"status\": \"onboarding\"\n}",
+        "options": {}
+      },
+      "id": "create-project",
+      "name": "Create Project",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "project-mgmt-api",
+          "name": "Project Management API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.CLIENT_ONBOARDING_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "list",
+          "cachedResultName": "Clients"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Client ID": "={{ $json.client.clientId }}",
+            "Company Name": "={{ $json.client.companyName }}",
+            "Contact Name": "={{ $json.client.contactName }}",
+            "Email": "={{ $json.client.email }}",
+            "Phone": "={{ $json.client.phone }}",
+            "Services": "={{ $json.client.services.join(', ') }}",
+            "Monthly Budget": "={{ $json.client.monthlyBudget }}",
+            "Start Date": "={{ $json.client.startDate }}",
+            "Status": "=Onboarding",
+            "Created At": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-to-sheets",
+      "name": "Log to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1500, 800],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-check",
+      "name": "Weekly Monday Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 800]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CRM_API_URL }}/clients",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "onboarding"
+            },
+            {
+              "name": "created_before",
+              "value": "={{ $now.minus({ days: 7 }).toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-overdue-onboarding",
+      "name": "Check Overdue Onboarding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-overdue",
+              "leftValue": "={{ $json.clients?.length || 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-overdue",
+      "name": "Has Overdue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 800]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.OPERATIONS_SLACK_CHANNEL }}",
+        "text": "=⚠️ *Overdue Onboarding Alert*\n\n{{ $json.clients?.length || 0 }} clients have been in onboarding for more than 7 days:\n\n{{ $json.clients?.map(c => `• *${c.companyName}* (${c.clientId}) - Started ${c.startDate}`).join('\\n') || 'None' }}\n\n_Please prioritize completing these onboardings_",
+        "otherOptions": {}
+      },
+      "id": "alert-overdue",
+      "name": "Alert Overdue Onboarding",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1000, 800],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "New Client Webhook": {
+      "main": [
+        [{ "node": "Normalize Client Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "HubSpot Deal Won": {
+      "main": [
+        [{ "node": "Normalize Client Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalize Client Data": {
+      "main": [
+        [
+          { "node": "Create Client Record", "type": "main", "index": 0 },
+          { "node": "Create ClickUp Task", "type": "main", "index": 0 },
+          { "node": "Generate Onboarding Checklist", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Generate Onboarding Checklist": {
+      "main": [
+        [
+          { "node": "Create Drive Folder", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Create Slack Channel", "type": "main", "index": 0 },
+          { "node": "Send Welcome Email", "type": "main", "index": 0 },
+          { "node": "Create Project", "type": "main", "index": 0 },
+          { "node": "Log to Sheets", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Weekly Monday Check": {
+      "main": [
+        [{ "node": "Check Overdue Onboarding", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Overdue Onboarding": {
+      "main": [
+        [{ "node": "Has Overdue?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Overdue?": {
+      "main": [
+        [{ "node": "Alert Overdue Onboarding", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "agency", "name": "agency" },
+    { "id": "onboarding", "name": "onboarding" },
+    { "id": "client-management", "name": "client-management" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

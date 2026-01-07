@@ -1,0 +1,495 @@
+{
+  "name": "Grain Lead Conversion Funnel v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Leads_Raw" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-raw-leads",
+      "name": "Get Raw Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "not-processed",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "new",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-new-leads",
+      "name": "Filter New Leads",
+      "type": "n8n-nodes-base.filter",
+      "position": [650, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicate leads by email\nconst leads = $input.all();\nconst seen = new Set();\nconst unique = [];\n\nfor (const lead of leads) {\n  const email = lead.json.email?.toLowerCase().trim();\n  if (email && !seen.has(email)) {\n    seen.add(email);\n    unique.push(lead);\n  }\n}\n\nreturn unique;"
+      },
+      "id": "deduplicate",
+      "name": "Deduplicate by Email",
+      "type": "n8n-nodes-base.code",
+      "position": [850, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://emailverifier.reoon.com/api/v1/verify",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "email", "value": "={{ $json.email }}" },
+            { "name": "key", "value": "={{ $env.REOON_API_KEY }}" },
+            { "name": "mode", "value": "quick" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "verify-email",
+      "name": "Verify Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 300],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "valid-email",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "valid",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-valid-emails",
+      "name": "Filter Valid Emails",
+      "type": "n8n-nodes-base.if",
+      "position": [1250, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir B2B lead skorlama uzmansin. Verilen lead bilgilerine gore 1-100 arasi bir skor ver ve kategori belirle.\n\nSKORLAMA KRITERLERI:\n- Sirket buyuklugu (calisana sayisi)\n- Pozisyon (C-level, Director, Manager, vs)\n- Sektor uyumu\n- Lokasyon\n- Web sitesi kalitesi\n\nKATEGORILER:\n- HOT (80-100): Hemen iletisime gec\n- WARM (50-79): Nurturing kampanyasina ekle\n- COLD (20-49): Uzun vadeli takip\n- DISQUALIFIED (0-19): Liste disi\n\nJSON formatinda dondur:\n{\n  \"score\": 85,\n  \"category\": \"HOT\",\n  \"reasoning\": \"C-level pozisyon, buyuk sirket, hedef sektorde\",\n  \"recommended_approach\": \"Direkt telefon + kisisel email\",\n  \"personalization_hooks\": [\"son blog yazisi\", \"sirket haberleri\"]\n}"
+            },
+            {
+              "role": "user",
+              "content": "Lead Bilgileri:\nIsim: {{ $json.first_name }} {{ $json.last_name }}\nEmail: {{ $json.email }}\nSirket: {{ $json.company }}\nPozisyon: {{ $json.title }}\nSektor: {{ $json.industry }}\nCalisana Sayisi: {{ $json.employee_count }}\nLokasyon: {{ $json.location }}\nLinkedIn: {{ $json.linkedin_url }}\nWebsite: {{ $json.website }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.3 }
+      },
+      "id": "ai-lead-scoring",
+      "name": "AI Lead Scoring",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1450, 200],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI scoring response\nconst aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet scoring;\n\ntry {\n  scoring = JSON.parse(aiResponse);\n} catch (e) {\n  scoring = {\n    score: 50,\n    category: 'WARM',\n    reasoning: 'Default scoring - AI parse failed',\n    recommended_approach: 'Standard email sequence',\n    personalization_hooks: []\n  };\n}\n\nreturn {\n  json: {\n    ...$input.item.json,\n    lead_score: scoring.score,\n    lead_category: scoring.category,\n    scoring_reasoning: scoring.reasoning,\n    recommended_approach: scoring.recommended_approach,\n    personalization_hooks: scoring.personalization_hooks?.join(', ') || ''\n  }\n};"
+      },
+      "id": "parse-scoring",
+      "name": "Parse Lead Score",
+      "type": "n8n-nodes-base.code",
+      "position": [1650, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "outputKey": "HOT",
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lead_category }}",
+                    "rightValue": "HOT",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "WARM",
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lead_category }}",
+                    "rightValue": "WARM",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              }
+            },
+            {
+              "outputKey": "COLD",
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.lead_category }}",
+                    "rightValue": "COLD",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-by-score",
+      "name": "Route by Score",
+      "type": "n8n-nodes-base.switch",
+      "position": [1850, 200],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir B2B cold email uzmanisin. Cok kisisel ve dikkat cekici bir email yaz.\n\nKURALLAR:\n- Max 150 kelime\n- Direkt konuya gir, uzun giris yapma\n- Kisi adini ve sirketini kullan\n- Spesifik bir deger onerisi sun\n- Tek bir net CTA (call-to-action)\n- Samimi ama profesyonel ton\n- SPAM kelimelerinden kacin (free, guarantee, limited time)\n\nJSON formatinda dondur:\n{\n  \"subject\": \"Dikkat cekici konu satiri (max 50 karakter)\",\n  \"body\": \"Email icerik\",\n  \"cta_type\": \"meeting\" | \"reply\" | \"resource\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "Lead: {{ $json.first_name }} {{ $json.last_name }}\nSirket: {{ $json.company }}\nPozisyon: {{ $json.title }}\nSektor: {{ $json.industry }}\n\nKisiselestirme notlari: {{ $json.personalization_hooks }}\n\nBizim hizmet: Dijital pazarlama otomasyonu ve sosyal medya yonetimi"
+            }
+          ]
+        },
+        "options": { "temperature": 0.7 }
+      },
+      "id": "generate-hot-email",
+      "name": "Generate HOT Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [2050, 100],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir B2B nurturing email uzmanisin. Deger saglayan, egitici bir email yaz.\n\nKURALLAR:\n- Max 200 kelime\n- Deger odakli - bir sey ogren\n- Soft CTA - kaynak veya blog oneris\n- Uzun vadeli iliski kurma odakli\n\nJSON formatinda dondur:\n{\n  \"subject\": \"Deger odakli konu satiri\",\n  \"body\": \"Email icerik\",\n  \"resource_link\": \"onerilecek kaynak URL (opsiyonel)\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "Lead: {{ $json.first_name }} {{ $json.last_name }}\nSirket: {{ $json.company }}\nSektor: {{ $json.industry }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.7 }
+      },
+      "id": "generate-warm-email",
+      "name": "Generate WARM Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [2050, 300],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Uzun vadeli nurturing icin kisa, bilgilendirici bir email yaz. Satis yapma, sadece radar'da kal.\n\nJSON formatinda dondur:\n{\n  \"subject\": \"Konu\",\n  \"body\": \"Kisa email (max 100 kelime)\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "Lead: {{ $json.first_name }}\nSektor: {{ $json.industry }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.7 }
+      },
+      "id": "generate-cold-email",
+      "name": "Generate COLD Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [2050, 500],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse email content and merge with lead data\nconst aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet email;\n\ntry {\n  email = JSON.parse(aiResponse);\n} catch (e) {\n  email = {\n    subject: 'Sizinle tanismak isterim',\n    body: 'Merhaba, sizinle iletisime gecmek istedim.',\n    cta_type: 'reply'\n  };\n}\n\nreturn {\n  json: {\n    ...$input.item.json,\n    email_subject: email.subject,\n    email_body: email.body,\n    email_cta_type: email.cta_type || 'reply',\n    email_resource_link: email.resource_link || ''\n  }\n};"
+      },
+      "id": "parse-email-content",
+      "name": "Parse Email Content",
+      "type": "n8n-nodes-base.code",
+      "position": [2250, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $json.email_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [2450, 300],
+      "typeVersion": 2.1,
+      "credentials": { "gmailOAuth2": { "id": "", "name": "Gmail" } }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Email_Log" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_email": "={{ $json.email }}",
+            "lead_name": "={{ $json.first_name }} {{ $json.last_name }}",
+            "company": "={{ $json.company }}",
+            "lead_score": "={{ $json.lead_score }}",
+            "lead_category": "={{ $json.lead_category }}",
+            "email_subject": "={{ $json.email_subject }}",
+            "sent_at": "={{ $now.format('YYYY-MM-DD HH:mm:ss') }}",
+            "sequence_step": "1",
+            "status": "sent"
+          }
+        }
+      },
+      "id": "log-email",
+      "name": "Log Email Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2650, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Leads_Raw" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "contacted",
+            "lead_score": "={{ $json.lead_score }}",
+            "lead_category": "={{ $json.lead_category }}",
+            "first_contact_date": "={{ $now.format('YYYY-MM-DD') }}",
+            "last_email_sent": "={{ $now.format('YYYY-MM-DD HH:mm:ss') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-lead-status",
+      "name": "Update Lead Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2850, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "channel": "#leads",
+        "text": "=*Yeni Lead Islendi*\n\n*Isim:* {{ $json.first_name }} {{ $json.last_name }}\n*Sirket:* {{ $json.company }}\n*Skor:* {{ $json.lead_score }}/100 ({{ $json.lead_category }})\n*Email:* {{ $json.email }}\n\n*Gonderilen Email Konusu:* {{ $json.email_subject }}\n\n*AI Analizi:* {{ $json.scoring_reasoning }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [3050, 300],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 3
+            }
+          ]
+        }
+      },
+      "id": "followup-trigger",
+      "name": "Follow-up Check (3 Days)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 600],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Email_Log" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-email-log",
+      "name": "Get Email Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 600],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find leads needing follow-up (sent 3+ days ago, no response, sequence_step < 3)\nconst logs = $input.all();\nconst now = new Date();\nconst threeDaysAgo = new Date(now - 3 * 24 * 60 * 60 * 1000);\n\nconst needsFollowup = logs.filter(log => {\n  const sentDate = new Date(log.json.sent_at);\n  const step = parseInt(log.json.sequence_step) || 1;\n  const status = log.json.status;\n  \n  return sentDate <= threeDaysAgo && \n         step < 3 && \n         status !== 'replied' && \n         status !== 'unsubscribed';\n});\n\nreturn needsFollowup;"
+      },
+      "id": "filter-followup-needed",
+      "name": "Filter Needs Follow-up",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 600],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Onceki emaile cevap gelmedi. Nazik bir follow-up emaili yaz.\n\nKURALLAR:\n- Onceki emaile referans ver\n- Yeni bir deger onerisi ekle\n- Kisa tut (max 100 kelime)\n- Ispam gibi olmasin\n\nJSON formatinda dondur:\n{\n  \"subject\": \"Re: [onceki konu] - Takip\",\n  \"body\": \"Follow-up email\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "Lead: {{ $json.lead_name }}\nSirket: {{ $json.company }}\nOnceki email konusu: {{ $json.email_subject }}\nSequence step: {{ $json.sequence_step }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.7 }
+      },
+      "id": "generate-followup",
+      "name": "Generate Follow-up",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [850, 600],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [[{ "node": "Get Raw Leads", "type": "main", "index": 0 }]]
+    },
+    "Get Raw Leads": {
+      "main": [[{ "node": "Filter New Leads", "type": "main", "index": 0 }]]
+    },
+    "Filter New Leads": {
+      "main": [[{ "node": "Deduplicate by Email", "type": "main", "index": 0 }]]
+    },
+    "Deduplicate by Email": {
+      "main": [[{ "node": "Verify Email", "type": "main", "index": 0 }]]
+    },
+    "Verify Email": {
+      "main": [[{ "node": "Filter Valid Emails", "type": "main", "index": 0 }]]
+    },
+    "Filter Valid Emails": {
+      "main": [
+        [{ "node": "AI Lead Scoring", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "AI Lead Scoring": {
+      "main": [[{ "node": "Parse Lead Score", "type": "main", "index": 0 }]]
+    },
+    "Parse Lead Score": {
+      "main": [[{ "node": "Route by Score", "type": "main", "index": 0 }]]
+    },
+    "Route by Score": {
+      "main": [
+        [{ "node": "Generate HOT Email", "type": "main", "index": 0 }],
+        [{ "node": "Generate WARM Email", "type": "main", "index": 0 }],
+        [{ "node": "Generate COLD Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate HOT Email": {
+      "main": [[{ "node": "Parse Email Content", "type": "main", "index": 0 }]]
+    },
+    "Generate WARM Email": {
+      "main": [[{ "node": "Parse Email Content", "type": "main", "index": 0 }]]
+    },
+    "Generate COLD Email": {
+      "main": [[{ "node": "Parse Email Content", "type": "main", "index": 0 }]]
+    },
+    "Parse Email Content": {
+      "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]]
+    },
+    "Send Email": {
+      "main": [[{ "node": "Log Email Sent", "type": "main", "index": 0 }]]
+    },
+    "Log Email Sent": {
+      "main": [[{ "node": "Update Lead Status", "type": "main", "index": 0 }]]
+    },
+    "Update Lead Status": {
+      "main": [[{ "node": "Notify Slack", "type": "main", "index": 0 }]]
+    },
+    "Follow-up Check (3 Days)": {
+      "main": [[{ "node": "Get Email Log", "type": "main", "index": 0 }]]
+    },
+    "Get Email Log": {
+      "main": [[{ "node": "Filter Needs Follow-up", "type": "main", "index": 0 }]]
+    },
+    "Filter Needs Follow-up": {
+      "main": [[{ "node": "Generate Follow-up", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "grain-automation" }, { "name": "lead-funnel" }, { "name": "sales" }],
+  "meta": {
+    "templateId": "grain-lcf-v1",
+    "version": "1.0.0",
+    "description": "End-to-end lead conversion funnel: Lead validation, AI scoring, personalized emails, follow-up sequences",
+    "requiredCredentials": ["Google Sheets OAuth2", "OpenAI API", "Gmail OAuth2", "Reoon API", "Slack"],
+    "requiredEnvVars": ["REOON_API_KEY"]
+  }
+}

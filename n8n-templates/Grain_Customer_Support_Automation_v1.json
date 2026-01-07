@@ -1,0 +1,452 @@
+{
+  "name": "Grain Customer Support Automation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-ticket",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "New Support Ticket",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "typeVersion": 2,
+      "webhookId": "support-ticket"
+    },
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "filters": {
+          "includeSpamTrash": false,
+          "readStatus": "unread"
+        }
+      },
+      "id": "gmail-trigger",
+      "name": "New Support Email",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "position": [250, 500],
+      "typeVersion": 1.1,
+      "credentials": { "gmailOAuth2": { "id": "", "name": "Gmail Support" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize input from different sources\nconst input = $input.item.json;\n\nlet ticket = {};\n\nif (input.subject) {\n  // From Gmail\n  ticket = {\n    source: 'email',\n    customer_email: input.from?.value?.[0]?.address || input.from,\n    customer_name: input.from?.value?.[0]?.name || 'Unknown',\n    subject: input.subject,\n    message: input.text || input.snippet,\n    received_at: input.date || new Date().toISOString(),\n    message_id: input.id\n  };\n} else {\n  // From Webhook\n  ticket = {\n    source: 'webhook',\n    customer_email: input.email,\n    customer_name: input.name || 'Unknown',\n    subject: input.subject || 'Support Request',\n    message: input.message,\n    received_at: new Date().toISOString(),\n    message_id: input.ticket_id || `TKT-${Date.now()}`\n  };\n}\n\nreturn { json: ticket };"
+      },
+      "id": "normalize-input",
+      "name": "Normalize Ticket Data",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir musteri destek taleplerini siniflandiran AI'sin. Verilen talepleri analiz et.\n\nKATEGORILER:\n- BILLING: Odeme, fatura, abonelik\n- TECHNICAL: Teknik sorun, bug, hata\n- FEATURE: Ozellik istegi, oneri\n- COMPLAINT: Sikayet, memnuniyetsizlik\n- INQUIRY: Genel soru, bilgi talebi\n- URGENT: Acil durum, kritik sorun\n\nONCELIK:\n- P1: Kritik - Sistem calismiyorsanir (2 saat SLA)\n- P2: Yuksek - Onemli sorun (4 saat SLA)\n- P3: Normal - Standart talep (24 saat SLA)\n- P4: Dusuk - Bilgi talebi (48 saat SLA)\n\nJSON formatinda dondur:\n{\n  \"category\": \"KATEGORI\",\n  \"priority\": \"P1-P4\",\n  \"sentiment\": \"positive\" | \"neutral\" | \"negative\" | \"angry\",\n  \"key_issues\": [\"tespit edilen sorunlar\"],\n  \"suggested_response_type\": \"auto\" | \"template\" | \"human\",\n  \"escalate_to\": \"none\" | \"technical\" | \"billing\" | \"manager\",\n  \"summary\": \"1 cumle ozet\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "Konu: {{ $json.subject }}\nMesaj: {{ $json.message }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.2 }
+      },
+      "id": "classify-ticket",
+      "name": "AI Classify Ticket",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [650, 400],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI classification\nconst aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet classification;\n\ntry {\n  classification = JSON.parse(aiResponse);\n} catch (e) {\n  classification = {\n    category: 'INQUIRY',\n    priority: 'P3',\n    sentiment: 'neutral',\n    key_issues: [],\n    suggested_response_type: 'template',\n    escalate_to: 'none',\n    summary: 'Siniflandirma yapilamadi'\n  };\n}\n\nreturn {\n  json: {\n    ...$input.item.json,\n    category: classification.category,\n    priority: classification.priority,\n    sentiment: classification.sentiment,\n    key_issues: classification.key_issues?.join(', ') || '',\n    suggested_response_type: classification.suggested_response_type,\n    escalate_to: classification.escalate_to,\n    ai_summary: classification.summary,\n    ticket_id: `TKT-${Date.now()}`\n  }\n};"
+      },
+      "id": "parse-classification",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "position": [850, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Support_Tickets" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ticket_id": "={{ $json.ticket_id }}",
+            "source": "={{ $json.source }}",
+            "customer_email": "={{ $json.customer_email }}",
+            "customer_name": "={{ $json.customer_name }}",
+            "subject": "={{ $json.subject }}",
+            "category": "={{ $json.category }}",
+            "priority": "={{ $json.priority }}",
+            "sentiment": "={{ $json.sentiment }}",
+            "key_issues": "={{ $json.key_issues }}",
+            "ai_summary": "={{ $json.ai_summary }}",
+            "escalate_to": "={{ $json.escalate_to }}",
+            "status": "open",
+            "created_at": "={{ $json.received_at }}",
+            "assigned_to": "",
+            "resolved_at": ""
+          }
+        }
+      },
+      "id": "log-ticket",
+      "name": "Log Ticket",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1050, 400],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "outputKey": "auto_respond",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.suggested_response_type }}", "rightValue": "auto", "operator": { "type": "string", "operation": "equals" } }
+                ]
+              }
+            },
+            {
+              "outputKey": "template_respond",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.suggested_response_type }}", "rightValue": "template", "operator": { "type": "string", "operation": "equals" } }
+                ]
+              }
+            },
+            {
+              "outputKey": "human_required",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.suggested_response_type }}", "rightValue": "human", "operator": { "type": "string", "operation": "equals" } }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-response",
+      "name": "Route by Response Type",
+      "type": "n8n-nodes-base.switch",
+      "position": [1250, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir musteri destek temsilcisisin. Samimi, profesyonel ve cozum odakli bir yanit yaz.\n\nKURALLAR:\n- Kisa ve net ol (max 200 kelime)\n- Empati goster\n- Sorunu anladigini belirt\n- Somut cozum veya sonraki adim sun\n- Gerekirse ozur dile\n- Yardimci kaynaklar veya linkler ekle\n\nJSON formatinda dondur:\n{\n  \"subject\": \"Re: [orijinal konu]\",\n  \"body\": \"Email icerik\",\n  \"include_resources\": [\"yardimci linkler\"]\n}"
+            },
+            {
+              "role": "user",
+              "content": "Musteri: {{ $json.customer_name }}\nKategori: {{ $json.category }}\nOncelik: {{ $json.priority }}\nSorun: {{ $json.message }}\nAI Ozet: {{ $json.ai_summary }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.6 }
+      },
+      "id": "generate-auto-response",
+      "name": "Generate Auto Response",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1450, 200],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Select template based on category\nconst templates = {\n  BILLING: {\n    subject: 'Re: Odeme/Fatura Sorununuz Hakkinda',\n    body: `Merhaba {{ $json.customer_name }},\\n\\nOdeme/fatura konusundaki mesajiniz icin tesekkur ederiz.\\n\\nTalebiniz finans ekibimize iletilmistir. En kisa surede sizinle iletisime gececegiz.\\n\\nAcil durumlar icin: destek@sirket.com\\n\\nSaygilarimizla,\\nDestek Ekibi`\n  },\n  TECHNICAL: {\n    subject: 'Re: Teknik Destek Talebiniz',\n    body: `Merhaba {{ $json.customer_name }},\\n\\nTeknik sorununuzu aldik ve inceliyoruz.\\n\\nBu arada asagidaki adimlari deneyebilirsiniz:\\n1. Sayfayi yenileyin\\n2. Cache temizleyin\\n3. Farkli bir tarayici deneyin\\n\\nSorun devam ederse detayli bilgi verin.\\n\\nSaygilarimizla,\\nTeknik Destek`\n  },\n  FEATURE: {\n    subject: 'Re: Ozellik Oneriniz Icin Tesekkurler',\n    body: `Merhaba {{ $json.customer_name }},\\n\\nDegerli oneriniz icin tesekkur ederiz!\\n\\nOneriniz urun ekibimize iletilmistir. Kullanici geri bildirimleri bizim icin cok onemli.\\n\\nGelismeler icin bizi takip edin.\\n\\nSaygilarimizla,\\nUrun Ekibi`\n  },\n  INQUIRY: {\n    subject: 'Re: Sorunuz Hakkinda',\n    body: `Merhaba {{ $json.customer_name }},\\n\\nBize ulastiginiz icin tesekkur ederiz.\\n\\nSorunuzu inceliyoruz ve en kisa surede detayli bilgi verecegiz.\\n\\nSikca Sorulan Sorular: [link]\\n\\nSaygilarimizla,\\nDestek Ekibi`\n  }\n};\n\nconst category = $input.item.json.category;\nconst template = templates[category] || templates.INQUIRY;\n\nreturn {\n  json: {\n    ...$input.item.json,\n    response_subject: template.subject,\n    response_body: template.body.replace(/{{ \\$json\\.customer_name }}/g, $input.item.json.customer_name)\n  }\n};"
+      },
+      "id": "select-template",
+      "name": "Select Response Template",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#support-escalation",
+        "text": "=*INSAN MUDAHALESI GEREKLI*\n\n*Ticket:* {{ $json.ticket_id }}\n*Musteri:* {{ $json.customer_name }} ({{ $json.customer_email }})\n*Oncelik:* {{ $json.priority }}\n*Kategori:* {{ $json.category }}\n*Sentiment:* {{ $json.sentiment }}\n\n*Konu:* {{ $json.subject }}\n\n*Ozet:* {{ $json.ai_summary }}\n\n*Tespit Edilen Sorunlar:* {{ $json.key_issues }}\n\n*Yonlendirme:* {{ $json.escalate_to }}\n\n---\n*Orijinal Mesaj:*\n{{ $json.message }}",
+        "otherOptions": {}
+      },
+      "id": "slack-escalate",
+      "name": "Escalate to Human",
+      "type": "n8n-nodes-base.slack",
+      "position": [1450, 600],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse auto-generated response\nconst aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet response;\n\ntry {\n  response = JSON.parse(aiResponse);\n} catch (e) {\n  response = {\n    subject: 'Re: ' + $input.item.json.subject,\n    body: 'Mesajiniz icin tesekkurler. En kisa surede size donecegiz.',\n    include_resources: []\n  };\n}\n\nreturn {\n  json: {\n    ...$input.item.json,\n    response_subject: response.subject,\n    response_body: response.body,\n    response_resources: response.include_resources?.join('\\n') || ''\n  }\n};"
+      },
+      "id": "parse-auto-response",
+      "name": "Parse Auto Response",
+      "type": "n8n-nodes-base.code",
+      "position": [1650, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.customer_email }}",
+        "subject": "={{ $json.response_subject }}",
+        "emailType": "text",
+        "message": "={{ $json.response_body }}",
+        "options": {
+          "appendAttribution": false,
+          "replyTo": "destek@sirket.com"
+        }
+      },
+      "id": "send-response-email",
+      "name": "Send Response Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [1850, 300],
+      "typeVersion": 2.1,
+      "credentials": { "gmailOAuth2": { "id": "", "name": "Gmail Support" } }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Support_Tickets" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "responded",
+            "responded_at": "={{ $now.format('YYYY-MM-DD HH:mm:ss') }}",
+            "response_type": "auto"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-ticket-status",
+      "name": "Update Ticket Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2050, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "p1-check",
+              "leftValue": "={{ $json.priority }}",
+              "rightValue": "P1",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "if-urgent",
+      "name": "If Urgent (P1)",
+      "type": "n8n-nodes-base.if",
+      "position": [2250, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#urgent-support",
+        "text": "=*ACIL DESTEK TALEBI - P1*\n\n*Ticket:* {{ $json.ticket_id }}\n*Musteri:* {{ $json.customer_name }}\n*Email:* {{ $json.customer_email }}\n\n*Sorun:* {{ $json.ai_summary }}\n\n*SLA:* 2 saat icinde cozum gerekli!\n\ncc: @destek-yoneticisi",
+        "otherOptions": {}
+      },
+      "id": "slack-urgent-alert",
+      "name": "Urgent Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [2450, 200],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 4 }]
+        }
+      },
+      "id": "sla-check-trigger",
+      "name": "SLA Check (4 Hours)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 800],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Support_Tickets" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-open-tickets",
+      "name": "Get Open Tickets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 800],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for SLA breaches\nconst tickets = $input.all();\nconst now = new Date();\n\nconst slaLimits = {\n  'P1': 2 * 60 * 60 * 1000,   // 2 hours\n  'P2': 4 * 60 * 60 * 1000,   // 4 hours\n  'P3': 24 * 60 * 60 * 1000,  // 24 hours\n  'P4': 48 * 60 * 60 * 1000   // 48 hours\n};\n\nconst breached = tickets.filter(ticket => {\n  if (ticket.json.status !== 'open') return false;\n  \n  const created = new Date(ticket.json.created_at);\n  const elapsed = now - created;\n  const limit = slaLimits[ticket.json.priority] || slaLimits.P3;\n  \n  return elapsed > limit;\n});\n\nreturn breached.map(t => ({\n  json: {\n    ...t.json,\n    sla_breached: true,\n    hours_overdue: Math.round((now - new Date(t.json.created_at)) / (60 * 60 * 1000))\n  }\n}));"
+      },
+      "id": "check-sla-breach",
+      "name": "Check SLA Breaches",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 800],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#support-alerts",
+        "text": "=*SLA IHLALI*\n\n*Ticket:* {{ $json.ticket_id }}\n*Oncelik:* {{ $json.priority }}\n*Musteri:* {{ $json.customer_name }}\n*Gecikme:* {{ $json.hours_overdue }} saat\n\n*Konu:* {{ $json.subject }}\n\n*Acil aksiyon gerekli!*",
+        "otherOptions": {}
+      },
+      "id": "slack-sla-alert",
+      "name": "SLA Breach Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [850, 800],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "daysInterval": 1 }]
+        }
+      },
+      "id": "daily-report-trigger",
+      "name": "Daily Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 1000],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Support_Tickets" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-daily-tickets",
+      "name": "Get Daily Tickets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 1000],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate daily support metrics\nconst tickets = $input.all();\nconst today = new Date();\nconst yesterday = new Date(today - 24 * 60 * 60 * 1000);\n\nconst todayTickets = tickets.filter(t => new Date(t.json.created_at) >= yesterday);\n\nconst metrics = {\n  total_tickets: todayTickets.length,\n  open_tickets: todayTickets.filter(t => t.json.status === 'open').length,\n  responded: todayTickets.filter(t => t.json.status === 'responded').length,\n  resolved: todayTickets.filter(t => t.json.status === 'resolved').length,\n  \n  by_priority: {\n    P1: todayTickets.filter(t => t.json.priority === 'P1').length,\n    P2: todayTickets.filter(t => t.json.priority === 'P2').length,\n    P3: todayTickets.filter(t => t.json.priority === 'P3').length,\n    P4: todayTickets.filter(t => t.json.priority === 'P4').length\n  },\n  \n  by_category: {\n    BILLING: todayTickets.filter(t => t.json.category === 'BILLING').length,\n    TECHNICAL: todayTickets.filter(t => t.json.category === 'TECHNICAL').length,\n    FEATURE: todayTickets.filter(t => t.json.category === 'FEATURE').length,\n    COMPLAINT: todayTickets.filter(t => t.json.category === 'COMPLAINT').length,\n    INQUIRY: todayTickets.filter(t => t.json.category === 'INQUIRY').length\n  },\n  \n  sentiment: {\n    positive: todayTickets.filter(t => t.json.sentiment === 'positive').length,\n    neutral: todayTickets.filter(t => t.json.sentiment === 'neutral').length,\n    negative: todayTickets.filter(t => t.json.sentiment === 'negative').length,\n    angry: todayTickets.filter(t => t.json.sentiment === 'angry').length\n  }\n};\n\nreturn { json: metrics };"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate Daily Metrics",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 1000],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#daily-reports",
+        "text": "=*GUNLUK DESTEK RAPORU*\n\n*Genel Bakis:*\n- Toplam Ticket: {{ $json.total_tickets }}\n- Acik: {{ $json.open_tickets }}\n- Cevaplanan: {{ $json.responded }}\n- Cozulen: {{ $json.resolved }}\n\n*Oncelik Dagilimi:*\n- P1 (Kritik): {{ $json.by_priority.P1 }}\n- P2 (Yuksek): {{ $json.by_priority.P2 }}\n- P3 (Normal): {{ $json.by_priority.P3 }}\n- P4 (Dusuk): {{ $json.by_priority.P4 }}\n\n*Kategori Dagilimi:*\n- Teknik: {{ $json.by_category.TECHNICAL }}\n- Fatura: {{ $json.by_category.BILLING }}\n- Sikayet: {{ $json.by_category.COMPLAINT }}\n- Ozellik: {{ $json.by_category.FEATURE }}\n- Soru: {{ $json.by_category.INQUIRY }}\n\n*Musteri Duygu Durumu:*\n- Pozitif: {{ $json.sentiment.positive }}\n- Notr: {{ $json.sentiment.neutral }}\n- Negatif: {{ $json.sentiment.negative }}\n- Kizgin: {{ $json.sentiment.angry }}",
+        "otherOptions": {}
+      },
+      "id": "slack-daily-report",
+      "name": "Send Daily Report",
+      "type": "n8n-nodes-base.slack",
+      "position": [850, 1000],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    }
+  ],
+  "connections": {
+    "New Support Ticket": {
+      "main": [[{ "node": "Normalize Ticket Data", "type": "main", "index": 0 }]]
+    },
+    "New Support Email": {
+      "main": [[{ "node": "Normalize Ticket Data", "type": "main", "index": 0 }]]
+    },
+    "Normalize Ticket Data": {
+      "main": [[{ "node": "AI Classify Ticket", "type": "main", "index": 0 }]]
+    },
+    "AI Classify Ticket": {
+      "main": [[{ "node": "Parse Classification", "type": "main", "index": 0 }]]
+    },
+    "Parse Classification": {
+      "main": [[{ "node": "Log Ticket", "type": "main", "index": 0 }]]
+    },
+    "Log Ticket": {
+      "main": [[{ "node": "Route by Response Type", "type": "main", "index": 0 }]]
+    },
+    "Route by Response Type": {
+      "main": [
+        [{ "node": "Generate Auto Response", "type": "main", "index": 0 }],
+        [{ "node": "Select Response Template", "type": "main", "index": 0 }],
+        [{ "node": "Escalate to Human", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Auto Response": {
+      "main": [[{ "node": "Parse Auto Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Auto Response": {
+      "main": [[{ "node": "Send Response Email", "type": "main", "index": 0 }]]
+    },
+    "Select Response Template": {
+      "main": [[{ "node": "Send Response Email", "type": "main", "index": 0 }]]
+    },
+    "Send Response Email": {
+      "main": [[{ "node": "Update Ticket Status", "type": "main", "index": 0 }]]
+    },
+    "Update Ticket Status": {
+      "main": [[{ "node": "If Urgent (P1)", "type": "main", "index": 0 }]]
+    },
+    "If Urgent (P1)": {
+      "main": [
+        [{ "node": "Urgent Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "SLA Check (4 Hours)": {
+      "main": [[{ "node": "Get Open Tickets", "type": "main", "index": 0 }]]
+    },
+    "Get Open Tickets": {
+      "main": [[{ "node": "Check SLA Breaches", "type": "main", "index": 0 }]]
+    },
+    "Check SLA Breaches": {
+      "main": [[{ "node": "SLA Breach Alert", "type": "main", "index": 0 }]]
+    },
+    "Daily Report": {
+      "main": [[{ "node": "Get Daily Tickets", "type": "main", "index": 0 }]]
+    },
+    "Get Daily Tickets": {
+      "main": [[{ "node": "Calculate Daily Metrics", "type": "main", "index": 0 }]]
+    },
+    "Calculate Daily Metrics": {
+      "main": [[{ "node": "Send Daily Report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "grain-automation" }, { "name": "customer-support" }, { "name": "helpdesk" }],
+  "meta": {
+    "templateId": "grain-csa-v1",
+    "version": "1.0.0",
+    "description": "Automated customer support: AI classification, auto-responses, SLA monitoring, escalation, daily reports.",
+    "requiredCredentials": ["Google Sheets OAuth2", "OpenAI API", "Gmail OAuth2", "Slack"],
+    "requiredEnvVars": []
+  }
+}

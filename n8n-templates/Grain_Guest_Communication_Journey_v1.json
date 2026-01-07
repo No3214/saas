@@ -1,0 +1,524 @@
+{
+  "name": "Grain Guest Communication Journey v1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-booking",
+      "name": "New Booking Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "guest-booking-trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-journey-check",
+      "name": "Daily Journey Processor",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.cloudbeds.com/api/v1.1/getReservations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "confirmed,checked_in"
+            },
+            {
+              "name": "propertyID",
+              "value": "={{ $env.CLOUDBEDS_PROPERTY_ID }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-pms-reservations",
+      "name": "Fetch PMS Reservations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Guest Journey Stage Calculator\n// Determines which communication to send based on reservation timeline\n\nconst reservations = $input.all().flatMap(i => i.json.data || [i.json]);\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\nconst journeyActions = [];\n\nreservations.forEach(reservation => {\n  const checkIn = new Date(reservation.checkInDate || reservation.arrival_date);\n  const checkOut = new Date(reservation.checkOutDate || reservation.departure_date);\n  checkIn.setHours(0, 0, 0, 0);\n  checkOut.setHours(0, 0, 0, 0);\n  \n  const daysUntilCheckIn = Math.ceil((checkIn - today) / (1000 * 60 * 60 * 24));\n  const daysUntilCheckOut = Math.ceil((checkOut - today) / (1000 * 60 * 60 * 24));\n  const daysSinceCheckOut = Math.ceil((today - checkOut) / (1000 * 60 * 60 * 24));\n  const stayLength = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));\n  const currentDayOfStay = Math.ceil((today - checkIn) / (1000 * 60 * 60 * 24)) + 1;\n  \n  const guest = {\n    id: reservation.reservationID || reservation.id,\n    firstName: reservation.guestFirstName || reservation.guest?.first_name,\n    lastName: reservation.guestLastName || reservation.guest?.last_name,\n    email: reservation.guestEmail || reservation.guest?.email,\n    phone: reservation.guestPhone || reservation.guest?.phone,\n    roomType: reservation.roomTypeName || reservation.room_type,\n    roomNumber: reservation.roomNumber || reservation.room,\n    checkIn: checkIn.toISOString().split('T')[0],\n    checkOut: checkOut.toISOString().split('T')[0],\n    totalAmount: reservation.total || reservation.grandTotal,\n    specialRequests: reservation.specialRequests || reservation.notes,\n    language: reservation.language || 'en',\n    source: reservation.source || 'direct'\n  };\n  \n  // Journey Stage Logic\n  let action = null;\n  \n  // Pre-arrival: 7 days before\n  if (daysUntilCheckIn === 7) {\n    action = {\n      stage: 'pre_arrival_7days',\n      type: 'email',\n      template: 'pre_arrival_welcome',\n      subject: `Your stay at ${$env.HOTEL_NAME} is coming up!`,\n      includeUpsells: true,\n      upsellTypes: ['room_upgrade', 'airport_transfer', 'early_checkin']\n    };\n  }\n  // Pre-arrival: 3 days before\n  else if (daysUntilCheckIn === 3) {\n    action = {\n      stage: 'pre_arrival_3days',\n      type: 'email',\n      template: 'pre_arrival_details',\n      subject: `Getting ready for your arrival - Important information`,\n      includeUpsells: true,\n      upsellTypes: ['spa_package', 'dining_reservation', 'late_checkout']\n    };\n  }\n  // Day before: Online check-in invitation\n  else if (daysUntilCheckIn === 1) {\n    action = {\n      stage: 'day_before',\n      type: 'both', // email + SMS\n      template: 'online_checkin',\n      subject: `Check in online for faster arrival tomorrow!`,\n      smsText: `Hi ${guest.firstName}! Check in online for your stay tomorrow: [LINK]. Reply HELP for assistance.`\n    };\n  }\n  // Check-in day\n  else if (daysUntilCheckIn === 0 && currentDayOfStay === 1) {\n    action = {\n      stage: 'checkin_day',\n      type: 'sms',\n      template: 'welcome_arrival',\n      smsText: `Welcome to ${$env.HOTEL_NAME}, ${guest.firstName}! Your room ${guest.roomNumber} is ready. WiFi: ${$env.HOTEL_WIFI}. Need anything? Reply to this message!`\n    };\n  }\n  // Mid-stay satisfaction check (day 2 for stays 3+ nights)\n  else if (currentDayOfStay === 2 && stayLength >= 3 && daysUntilCheckOut > 0) {\n    action = {\n      stage: 'mid_stay_check',\n      type: 'sms',\n      template: 'satisfaction_check',\n      smsText: `Hi ${guest.firstName}, how is your stay so far? Rate 1-5 or reply with any feedback. We want to make sure everything is perfect!`\n    };\n  }\n  // Check-out day\n  else if (daysUntilCheckOut === 0) {\n    action = {\n      stage: 'checkout_day',\n      type: 'email',\n      template: 'checkout_thankyou',\n      subject: `Thank you for staying with us, ${guest.firstName}!`,\n      includeReviewRequest: false // Wait 1 day\n    };\n  }\n  // Post-stay: 1 day after (review request)\n  else if (daysSinceCheckOut === 1) {\n    action = {\n      stage: 'post_stay_review',\n      type: 'email',\n      template: 'review_request',\n      subject: `${guest.firstName}, how was your stay? We'd love your feedback!`,\n      reviewLinks: {\n        google: `${$env.GOOGLE_REVIEW_LINK}`,\n        tripadvisor: `${$env.TRIPADVISOR_LINK}`,\n        booking: `${$env.BOOKING_REVIEW_LINK}`\n      }\n    };\n  }\n  // Post-stay: 7 days after (loyalty offer)\n  else if (daysSinceCheckOut === 7) {\n    action = {\n      stage: 'post_stay_loyalty',\n      type: 'email',\n      template: 'loyalty_offer',\n      subject: `Come back soon! Exclusive 15% off your next stay`,\n      discountCode: `RETURN${guest.id.substring(0, 6).toUpperCase()}`\n    };\n  }\n  \n  if (action) {\n    journeyActions.push({\n      guest,\n      action,\n      processedAt: new Date().toISOString()\n    });\n  }\n});\n\nreturn journeyActions.map(item => ({ json: item }));"
+      },
+      "id": "journey-calculator",
+      "name": "Journey Stage Calculator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a luxury hotel concierge AI. Generate warm, personalized guest communications that feel genuine and helpful, not robotic.\n\nGuidelines:\n- Use the guest's first name naturally\n- Reference their specific room type and dates\n- Include relevant upsell suggestions seamlessly\n- Match tone to the journey stage (excited for pre-arrival, warm for mid-stay, grateful for post-stay)\n- Keep emails under 200 words\n- Include clear CTAs\n\nReturn JSON:\n{\n  \"subject\": \"personalized subject line\",\n  \"preheader\": \"email preview text\",\n  \"greeting\": \"personalized greeting\",\n  \"body\": \"main message with {{placeholders}} for dynamic content\",\n  \"upsellSection\": \"optional upsell content if applicable\",\n  \"cta\": {\"text\": \"button text\", \"url\": \"action URL\"},\n  \"closing\": \"warm closing\",\n  \"smsVersion\": \"condensed SMS version under 160 chars\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Generate communication for:\n\nGuest: {{ $json.guest.firstName }} {{ $json.guest.lastName }}\nRoom Type: {{ $json.guest.roomType }}\nCheck-in: {{ $json.guest.checkIn }}\nCheck-out: {{ $json.guest.checkOut }}\nSpecial Requests: {{ $json.guest.specialRequests || 'None' }}\n\nJourney Stage: {{ $json.action.stage }}\nTemplate: {{ $json.action.template }}\nInclude Upsells: {{ $json.action.includeUpsells || false }}\nUpsell Types: {{ JSON.stringify($json.action.upsellTypes || []) }}\n\nHotel Name: {{ $env.HOTEL_NAME || 'Our Hotel' }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-message-generator",
+      "name": "AI Message Generator",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [950, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-email",
+              "leftValue": "={{ $json.action.type }}",
+              "rightValue": "email",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "is-both",
+              "leftValue": "={{ $json.action.type }}",
+              "rightValue": "both",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "route-by-channel",
+      "name": "Route by Channel",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [950, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.RESEND_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"{{ $env.HOTEL_NAME }} <concierge@{{ $env.HOTEL_DOMAIN }}>\",\n  \"to\": [\"{{ $json.guest.email }}\"],\n  \"subject\": \"{{ $('AI Message Generator').first().json.subject }}\",\n  \"html\": \"<div style='font-family: Georgia, serif; max-width: 600px; margin: 0 auto; padding: 20px;'><h2 style='color: #2c3e50;'>{{ $('AI Message Generator').first().json.greeting }}</h2><div style='line-height: 1.8; color: #333;'>{{ $('AI Message Generator').first().json.body }}</div>{{ $('AI Message Generator').first().json.upsellSection ? '<div style=\\\"background: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 8px;\\\">' + $('AI Message Generator').first().json.upsellSection + '</div>' : '' }}<div style='text-align: center; margin: 30px 0;'><a href='{{ $('AI Message Generator').first().json.cta.url }}' style='background: #2c3e50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px;'>{{ $('AI Message Generator').first().json.cta.text }}</a></div><p style='color: #666;'>{{ $('AI Message Generator').first().json.closing }}</p></div>\",\n  \"tags\": [\n    {\"name\": \"journey_stage\", \"value\": \"{{ $json.action.stage }}\"},\n    {\"name\": \"reservation_id\", \"value\": \"{{ $json.guest.id }}\"}\n  ]\n}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 350]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/{{ $env.TWILIO_ACCOUNT_SID }}/Messages.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "={{ $json.guest.phone }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $env.TWILIO_PHONE_NUMBER }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $('AI Message Generator').first().json.smsVersion || $json.action.smsText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-sms",
+      "name": "Send SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $json.guest.phone.replace(/[^0-9]/g, '') }}\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"guest_{{ $json.action.stage }}\",\n    \"language\": {\"code\": \"{{ $json.guest.language || 'en' }}\"},\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\"type\": \"text\", \"text\": \"{{ $json.guest.firstName }}\"},\n          {\"type\": \"text\", \"text\": \"{{ $json.guest.checkIn }}\"},\n          {\"type\": \"text\", \"text\": \"{{ $json.guest.roomType }}\"}\n        ]\n      }\n    ]\n  }\n}",
+        "options": {}
+      },
+      "id": "send-whatsapp",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 750]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Upsell Offer Processor\n// Tracks upsell responses and updates PMS\n\nconst messageData = $input.first().json;\nconst guest = messageData.guest || $('Journey Stage Calculator').first().json.guest;\nconst action = messageData.action || $('Journey Stage Calculator').first().json.action;\n\nconst upsellTracking = {\n  reservationId: guest.id,\n  guestEmail: guest.email,\n  journeyStage: action.stage,\n  offeredUpsells: action.upsellTypes || [],\n  sentAt: new Date().toISOString(),\n  channel: action.type,\n  status: 'sent',\n  potentialRevenue: calculatePotentialRevenue(action.upsellTypes || [])\n};\n\nfunction calculatePotentialRevenue(upsellTypes) {\n  const prices = {\n    'room_upgrade': 75,\n    'airport_transfer': 45,\n    'early_checkin': 30,\n    'late_checkout': 30,\n    'spa_package': 120,\n    'dining_reservation': 80,\n    'breakfast_package': 25\n  };\n  return upsellTypes.reduce((sum, type) => sum + (prices[type] || 0), 0);\n}\n\nreturn [{ json: upsellTracking }];"
+      },
+      "id": "upsell-tracker",
+      "name": "Upsell Tracker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 450]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.GUEST_JOURNEY_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Communications Log",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.sentAt }}",
+            "reservation_id": "={{ $json.reservationId }}",
+            "guest_email": "={{ $json.guestEmail }}",
+            "journey_stage": "={{ $json.journeyStage }}",
+            "channel": "={{ $json.channel }}",
+            "upsells_offered": "={{ $json.offeredUpsells.join(', ') }}",
+            "potential_revenue": "={{ $json.potentialRevenue }}",
+            "status": "={{ $json.status }}"
+          }
+        }
+      },
+      "id": "log-communication",
+      "name": "Log Communication",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1700, 450]
+    },
+    {
+      "parameters": {},
+      "id": "webhook-guest-response",
+      "name": "Guest Response Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 800],
+      "webhookId": "guest-response-handler"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Guest Response Handler\n// Processes satisfaction scores and feedback\n\nconst response = $input.first().json;\n\nconst feedback = {\n  reservationId: response.reservation_id || response.reservationId,\n  responseType: response.type || 'feedback',\n  channel: response.channel || 'sms',\n  message: response.Body || response.message || response.text,\n  timestamp: new Date().toISOString()\n};\n\n// Parse satisfaction score if it's a rating\nconst messageText = feedback.message?.toString() || '';\nconst scoreMatch = messageText.match(/^[1-5]$/);\n\nif (scoreMatch) {\n  feedback.satisfactionScore = parseInt(scoreMatch[0]);\n  feedback.responseType = 'rating';\n  \n  if (feedback.satisfactionScore <= 2) {\n    feedback.alertLevel = 'urgent';\n    feedback.action = 'immediate_followup';\n  } else if (feedback.satisfactionScore <= 3) {\n    feedback.alertLevel = 'warning';\n    feedback.action = 'manager_review';\n  } else {\n    feedback.alertLevel = 'positive';\n    feedback.action = 'thank_guest';\n  }\n} else {\n  feedback.responseType = 'text_feedback';\n  feedback.action = 'analyze_sentiment';\n}\n\nreturn [{ json: feedback }];"
+      },
+      "id": "process-response",
+      "name": "Process Guest Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "low-score",
+              "leftValue": "={{ $json.alertLevel }}",
+              "rightValue": "urgent",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-alert-level",
+      "name": "Needs Urgent Action?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [700, 800]
+    },
+    {
+      "parameters": {
+        "channel": "#guest-alerts",
+        "text": "=🚨 *URGENT: Low Guest Satisfaction Score*\n\n*Reservation:* {{ $json.reservationId }}\n*Score:* {{ $json.satisfactionScore }}/5 ⭐\n*Message:* {{ $json.message }}\n*Channel:* {{ $json.channel }}\n*Time:* {{ $json.timestamp }}\n\n*Required Action:* Immediate manager follow-up\n\n_Guest is currently on property. Please contact them within 15 minutes._",
+        "otherOptions": {}
+      },
+      "id": "slack-urgent-alert",
+      "name": "Slack Urgent Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [950, 750]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Communications scheduled for {{ $('Journey Stage Calculator').all().length }} guests\",\n  \"stages\": {{ JSON.stringify([...new Set($('Journey Stage Calculator').all().map(i => i.json.action.stage))]) }},\n  \"processedAt\": \"{{ new Date().toISOString() }}\"\n}"
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1700, 300]
+    }
+  ],
+  "connections": {
+    "New Booking Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch PMS Reservations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Journey Processor": {
+      "main": [
+        [
+          {
+            "node": "Fetch PMS Reservations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch PMS Reservations": {
+      "main": [
+        [
+          {
+            "node": "Journey Stage Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Journey Stage Calculator": {
+      "main": [
+        [
+          {
+            "node": "AI Message Generator",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route by Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Message Generator": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Channel": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Upsell Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS": {
+      "main": [
+        [
+          {
+            "node": "Upsell Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Upsell Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsell Tracker": {
+      "main": [
+        [
+          {
+            "node": "Log Communication",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guest Response Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Guest Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Guest Response": {
+      "main": [
+        [
+          {
+            "node": "Needs Urgent Action?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Urgent Action?": {
+      "main": [
+        [
+          {
+            "node": "Slack Urgent Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-hospitality-guest-journey"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 3,
+  "tags": [
+    {
+      "name": "Hospitality",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Guest Experience",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Upselling",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}

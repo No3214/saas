@@ -1,0 +1,498 @@
+{
+  "name": "Grain Webinar & Event Automation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webinar-registration",
+        "options": {}
+      },
+      "id": "registration-webhook",
+      "name": "Registration Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "webinar-registration"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "hourly-check",
+      "name": "Hourly Event Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse registration data\nconst registration = $input.first().json.body;\n\nconst registrant = {\n  registrationId: `REG-${Date.now().toString(36).toUpperCase()}`,\n  eventId: registration.eventId || registration.webinarId,\n  eventName: registration.eventName,\n  eventDate: registration.eventDate,\n  eventTime: registration.eventTime,\n  timezone: registration.timezone || 'UTC',\n  firstName: registration.firstName,\n  lastName: registration.lastName,\n  email: registration.email,\n  company: registration.company,\n  jobTitle: registration.jobTitle,\n  phone: registration.phone,\n  source: registration.source || 'website',\n  utmParams: registration.utmParams || {},\n  customFields: registration.customFields || {},\n  registeredAt: new Date().toISOString(),\n  status: 'registered'\n};\n\nreturn [{ json: registrant }];"
+      },
+      "id": "parse-registration",
+      "name": "Parse Registration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CRM_API_URL }}/contacts/upsert",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $json.email }}\",\n  \"first_name\": \"{{ $json.firstName }}\",\n  \"last_name\": \"{{ $json.lastName }}\",\n  \"company\": \"{{ $json.company }}\",\n  \"job_title\": \"{{ $json.jobTitle }}\",\n  \"phone\": \"{{ $json.phone }}\",\n  \"source\": \"webinar_registration\",\n  \"tags\": [\"webinar_registrant\", \"{{ $json.eventId }}\"]\n}",
+        "options": {}
+      },
+      "id": "upsert-contact",
+      "name": "Upsert CRM Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.WEBINAR_API_URL }}/registrations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "create-registration",
+      "name": "Create Webinar Registration",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webinar-api-key",
+          "name": "Webinar API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=You're registered for {{ $json.eventName }}!",
+        "message": "=Hi {{ $json.firstName }},\n\nThank you for registering for {{ $json.eventName }}!\n\n📅 **Date:** {{ $json.eventDate }}\n🕐 **Time:** {{ $json.eventTime }} ({{ $json.timezone }})\n\n**Add to Calendar:**\n[Google Calendar Link] | [Outlook Link] | [iCal]\n\n**Your unique join link will be sent 1 hour before the event.**\n\nWhat to expect:\n• Expert insights and actionable strategies\n• Live Q&A session\n• Exclusive resources for attendees\n\nCan't make it live? No worries - we'll send you the recording!\n\nSee you there!\n\nBest regards,\nThe {{ $vars.COMPANY_NAME }} Team",
+        "options": {
+          "replyTo": "={{ $vars.EVENTS_EMAIL }}"
+        }
+      },
+      "id": "send-confirmation",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1000, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.EVENTS_SLACK_CHANNEL }}",
+        "text": "=🎉 *New Webinar Registration*\n\n*Event:* {{ $json.eventName }}\n*Registrant:* {{ $json.firstName }} {{ $json.lastName }}\n*Email:* {{ $json.email }}\n*Company:* {{ $json.company || 'N/A' }}\n*Title:* {{ $json.jobTitle || 'N/A' }}\n*Source:* {{ $json.source }}",
+        "otherOptions": {}
+      },
+      "id": "notify-registration",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1000, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.WEBINAR_API_URL }}/events/upcoming",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-upcoming",
+      "name": "Fetch Upcoming Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "webinar-api-key",
+          "name": "Webinar API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Identify events needing reminders\nconst events = $input.first().json.events || [];\nconst now = new Date();\n\nconst reminders = [];\n\nevents.forEach(event => {\n  const eventDate = new Date(event.start_time);\n  const hoursUntil = (eventDate - now) / (1000 * 60 * 60);\n  \n  // 24-hour reminder\n  if (hoursUntil > 23 && hoursUntil <= 24) {\n    reminders.push({\n      type: '24h',\n      event,\n      registrants: event.registrants,\n      hoursUntil: Math.round(hoursUntil)\n    });\n  }\n  \n  // 1-hour reminder with join link\n  if (hoursUntil > 0.5 && hoursUntil <= 1) {\n    reminders.push({\n      type: '1h',\n      event,\n      registrants: event.registrants,\n      hoursUntil: Math.round(hoursUntil * 60) / 60,\n      includeJoinLink: true\n    });\n  }\n  \n  // Post-event follow-up (1 hour after)\n  if (hoursUntil < 0 && hoursUntil >= -1) {\n    reminders.push({\n      type: 'follow_up',\n      event,\n      registrants: event.registrants,\n      attendees: event.attendees || []\n    });\n  }\n});\n\nreturn reminders.map(r => ({ json: r }));"
+      },
+      "id": "check-reminders",
+      "name": "Check Reminder Triggers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "24h-reminder",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "24h",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-24h",
+      "name": "24h Reminder?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EMAIL_API_URL }}/campaigns/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"template_id\": \"{{ $vars.REMINDER_24H_TEMPLATE }}\",\n  \"recipients\": {{ JSON.stringify($json.registrants.map(r => ({ email: r.email, name: r.firstName }))) }},\n  \"variables\": {\n    \"event_name\": \"{{ $json.event.name }}\",\n    \"event_date\": \"{{ $json.event.start_time }}\",\n    \"event_description\": \"{{ $json.event.description }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-24h-reminder",
+      "name": "Send 24h Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "email-api-key",
+          "name": "Email API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1h-reminder",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "1h",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-1h",
+      "name": "1h Reminder?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EMAIL_API_URL }}/campaigns/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"template_id\": \"{{ $vars.REMINDER_1H_TEMPLATE }}\",\n  \"recipients\": {{ JSON.stringify($json.registrants.map(r => ({ email: r.email, name: r.firstName, join_link: r.unique_join_link }))) }},\n  \"variables\": {\n    \"event_name\": \"{{ $json.event.name }}\",\n    \"join_url\": \"{{ $json.event.join_url }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-1h-reminder",
+      "name": "Send 1h Reminder + Link",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "email-api-key",
+          "name": "Email API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "follow-up",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "follow_up",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-followup",
+      "name": "Follow-up?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 1000]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Segment attendees vs no-shows\nconst data = $input.first().json;\nconst registrants = data.registrants || [];\nconst attendees = data.attendees || [];\nconst attendeeEmails = new Set(attendees.map(a => a.email?.toLowerCase()));\n\nconst attended = registrants.filter(r => attendeeEmails.has(r.email?.toLowerCase()));\nconst noShows = registrants.filter(r => !attendeeEmails.has(r.email?.toLowerCase()));\n\nreturn [{\n  json: {\n    event: data.event,\n    attended,\n    noShows,\n    attendanceRate: registrants.length > 0 \n      ? Math.round((attended.length / registrants.length) * 100) \n      : 0\n  }\n}];"
+      },
+      "id": "segment-attendees",
+      "name": "Segment Attendees",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 1000]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EMAIL_API_URL }}/campaigns/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"template_id\": \"{{ $vars.FOLLOWUP_ATTENDED_TEMPLATE }}\",\n  \"recipients\": {{ JSON.stringify($json.attended.map(r => ({ email: r.email, name: r.firstName }))) }},\n  \"variables\": {\n    \"event_name\": \"{{ $json.event.name }}\",\n    \"recording_url\": \"{{ $json.event.recording_url }}\",\n    \"resources_url\": \"{{ $json.event.resources_url }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-attended-followup",
+      "name": "Send Attendee Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "email-api-key",
+          "name": "Email API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EMAIL_API_URL }}/campaigns/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"template_id\": \"{{ $vars.FOLLOWUP_NOSHOW_TEMPLATE }}\",\n  \"recipients\": {{ JSON.stringify($json.noShows.map(r => ({ email: r.email, name: r.firstName }))) }},\n  \"variables\": {\n    \"event_name\": \"{{ $json.event.name }}\",\n    \"recording_url\": \"{{ $json.event.recording_url }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-noshow-followup",
+      "name": "Send No-Show Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 1100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "email-api-key",
+          "name": "Email API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.EVENTS_SLACK_CHANNEL }}",
+        "text": "=📊 *Webinar Completed - {{ $json.event.name }}*\n\n*Attendance:*\n• Registered: {{ $json.attended.length + $json.noShows.length }}\n• Attended: {{ $json.attended.length }}\n• No-shows: {{ $json.noShows.length }}\n• Attendance Rate: {{ $json.attendanceRate }}%\n\n_Follow-up emails sent to both attendees and no-shows_",
+        "otherOptions": {}
+      },
+      "id": "notify-complete",
+      "name": "Notify Event Complete",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 1000],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.EVENTS_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Registrations",
+          "mode": "list",
+          "cachedResultName": "Registrations"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Registration ID": "={{ $('Parse Registration').first().json.registrationId }}",
+            "Event": "={{ $('Parse Registration').first().json.eventName }}",
+            "Name": "={{ $('Parse Registration').first().json.firstName }} {{ $('Parse Registration').first().json.lastName }}",
+            "Email": "={{ $('Parse Registration').first().json.email }}",
+            "Company": "={{ $('Parse Registration').first().json.company }}",
+            "Source": "={{ $('Parse Registration').first().json.source }}",
+            "Registered At": "={{ $('Parse Registration').first().json.registeredAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-registration",
+      "name": "Log Registration",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1250, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Registration Webhook": {
+      "main": [
+        [{ "node": "Parse Registration", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Registration": {
+      "main": [
+        [
+          { "node": "Upsert CRM Contact", "type": "main", "index": 0 },
+          { "node": "Create Webinar Registration", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Create Webinar Registration": {
+      "main": [
+        [
+          { "node": "Send Confirmation Email", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Log Registration", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Hourly Event Check": {
+      "main": [
+        [{ "node": "Fetch Upcoming Events", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Upcoming Events": {
+      "main": [
+        [{ "node": "Check Reminder Triggers", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Reminder Triggers": {
+      "main": [
+        [
+          { "node": "24h Reminder?", "type": "main", "index": 0 },
+          { "node": "1h Reminder?", "type": "main", "index": 0 },
+          { "node": "Follow-up?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "24h Reminder?": {
+      "main": [
+        [{ "node": "Send 24h Reminder", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "1h Reminder?": {
+      "main": [
+        [{ "node": "Send 1h Reminder + Link", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Follow-up?": {
+      "main": [
+        [{ "node": "Segment Attendees", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Segment Attendees": {
+      "main": [
+        [
+          { "node": "Send Attendee Follow-up", "type": "main", "index": 0 },
+          { "node": "Send No-Show Follow-up", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Attendee Follow-up": {
+      "main": [
+        [{ "node": "Notify Event Complete", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send No-Show Follow-up": {
+      "main": [
+        [{ "node": "Notify Event Complete", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "events", "name": "events" },
+    { "id": "webinar", "name": "webinar" },
+    { "id": "marketing", "name": "marketing" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

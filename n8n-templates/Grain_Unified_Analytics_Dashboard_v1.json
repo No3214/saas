@@ -1,0 +1,555 @@
+{
+  "name": "Grain Unified Analytics Dashboard v1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-dashboard",
+      "name": "Dashboard API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 400],
+      "webhookId": "unified-analytics-api"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-report",
+      "name": "Daily Report Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 600]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-report",
+      "name": "Weekly Report Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 800]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.posthog.com/api/projects/{{ $env.POSTHOG_PROJECT_ID }}/insights",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date_from",
+              "value": "={{ $json.dateFrom || '-7d' }}"
+            },
+            {
+              "name": "date_to",
+              "value": "={{ $json.dateTo || 'now' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-posthog",
+      "name": "Fetch PostHog Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://mixpanel.com/api/2.0/engage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "project_id",
+              "value": "={{ $env.MIXPANEL_PROJECT_ID }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-mixpanel",
+      "name": "Fetch Mixpanel Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.amplitude.com/2/events/segmentation",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "start",
+              "value": "={{ $json.dateFrom || '20260101' }}"
+            },
+            {
+              "name": "end",
+              "value": "={{ $json.dateTo || '20260107' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-amplitude",
+      "name": "Fetch Amplitude Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 700]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.hubspot.com/analytics/v2/reports/{{ $env.HUBSPOT_PORTAL_ID }}/campaigns",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubSpotApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "start",
+              "value": "={{ $json.startTimestamp || Date.now() - 7*24*60*60*1000 }}"
+            },
+            {
+              "name": "end",
+              "value": "={{ $json.endTimestamp || Date.now() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-hubspot-analytics",
+      "name": "Fetch HubSpot Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cross-Workflow Data Aggregator\n// Consolidates data from all analytics sources\n\nconst posthogData = $('Fetch PostHog Data').first()?.json || {};\nconst mixpanelData = $('Fetch Mixpanel Data').first()?.json || {};\nconst amplitudeData = $('Fetch Amplitude Data').first()?.json || {};\nconst hubspotData = $('Fetch HubSpot Analytics').first()?.json || {};\n\n// Unified KPI structure\nconst unifiedMetrics = {\n  period: {\n    start: new Date(Date.now() - 7*24*60*60*1000).toISOString(),\n    end: new Date().toISOString(),\n    days: 7\n  },\n  \n  // Acquisition metrics\n  acquisition: {\n    visitors: posthogData.results?.[0]?.count || 0,\n    newUsers: mixpanelData.results?.filter(r => r.is_new)?.length || 0,\n    sessions: posthogData.results?.[0]?.sessions || 0,\n    bounceRate: posthogData.results?.[0]?.bounce_rate || 0,\n    avgSessionDuration: posthogData.results?.[0]?.avg_session_duration || 0,\n    sources: {\n      organic: 0,\n      paid: 0,\n      social: 0,\n      email: 0,\n      referral: 0,\n      direct: 0\n    }\n  },\n  \n  // Activation metrics\n  activation: {\n    signups: hubspotData.contacts?.new || 0,\n    activationRate: 0,\n    trialStarts: 0,\n    onboardingCompletion: 0\n  },\n  \n  // Engagement metrics  \n  engagement: {\n    dau: amplitudeData.data?.dau || 0,\n    wau: amplitudeData.data?.wau || 0,\n    mau: amplitudeData.data?.mau || 0,\n    stickinessRatio: 0, // DAU/MAU\n    featureAdoption: {},\n    avgActions: 0\n  },\n  \n  // Revenue metrics\n  revenue: {\n    mrr: hubspotData.deals?.mrr || 0,\n    arr: 0,\n    newMrr: 0,\n    churnMrr: 0,\n    expansionMrr: 0,\n    netNewMrr: 0,\n    arpu: 0,\n    ltv: 0\n  },\n  \n  // Retention metrics\n  retention: {\n    day1: 0,\n    day7: 0,\n    day30: 0,\n    churnRate: 0,\n    nps: 0\n  },\n  \n  // Funnel metrics\n  funnel: {\n    steps: [\n      { name: 'Visitors', count: 1000, rate: 100 },\n      { name: 'Signups', count: 150, rate: 15 },\n      { name: 'Activated', count: 90, rate: 60 },\n      { name: 'Paid', count: 27, rate: 30 }\n    ],\n    overallConversion: 2.7\n  },\n  \n  // Attribution data\n  attribution: {\n    firstTouch: {},\n    lastTouch: {},\n    multiTouch: {},\n    topChannels: []\n  }\n};\n\n// Calculate derived metrics\nif (unifiedMetrics.engagement.mau > 0) {\n  unifiedMetrics.engagement.stickinessRatio = \n    (unifiedMetrics.engagement.dau / unifiedMetrics.engagement.mau * 100).toFixed(2);\n}\n\nif (unifiedMetrics.revenue.mrr > 0) {\n  unifiedMetrics.revenue.arr = unifiedMetrics.revenue.mrr * 12;\n}\n\n// Week-over-week changes (placeholder - would use historical data)\nunifiedMetrics.changes = {\n  visitors: '+12%',\n  signups: '+8%',\n  mrr: '+5%',\n  churnRate: '-2%'\n};\n\nreturn [{ json: unifiedMetrics }];"
+      },
+      "id": "data-aggregator",
+      "name": "Cross-Workflow Aggregator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Multi-Touch Attribution Calculator\n// Implements various attribution models\n\nconst touchpoints = $input.first().json.touchpointData || [];\n\nfunction calculateAttribution(touchpoints, model) {\n  const attribution = {};\n  \n  touchpoints.forEach(journey => {\n    const touches = journey.touches || [];\n    const conversionValue = journey.value || 1;\n    \n    if (touches.length === 0) return;\n    \n    switch (model) {\n      case 'first_touch':\n        const first = touches[0];\n        attribution[first.channel] = (attribution[first.channel] || 0) + conversionValue;\n        break;\n        \n      case 'last_touch':\n        const last = touches[touches.length - 1];\n        attribution[last.channel] = (attribution[last.channel] || 0) + conversionValue;\n        break;\n        \n      case 'linear':\n        const perTouch = conversionValue / touches.length;\n        touches.forEach(touch => {\n          attribution[touch.channel] = (attribution[touch.channel] || 0) + perTouch;\n        });\n        break;\n        \n      case 'time_decay':\n        // More credit to recent touches\n        let totalWeight = 0;\n        touches.forEach((_, i) => totalWeight += Math.pow(2, i));\n        \n        touches.forEach((touch, i) => {\n          const weight = Math.pow(2, i) / totalWeight;\n          attribution[touch.channel] = (attribution[touch.channel] || 0) + (conversionValue * weight);\n        });\n        break;\n        \n      case 'u_shaped':\n        // 40% first, 40% last, 20% middle\n        if (touches.length === 1) {\n          attribution[touches[0].channel] = (attribution[touches[0].channel] || 0) + conversionValue;\n        } else if (touches.length === 2) {\n          attribution[touches[0].channel] = (attribution[touches[0].channel] || 0) + (conversionValue * 0.5);\n          attribution[touches[1].channel] = (attribution[touches[1].channel] || 0) + (conversionValue * 0.5);\n        } else {\n          attribution[touches[0].channel] = (attribution[touches[0].channel] || 0) + (conversionValue * 0.4);\n          attribution[touches[touches.length-1].channel] = (attribution[touches[touches.length-1].channel] || 0) + (conversionValue * 0.4);\n          \n          const middleShare = (conversionValue * 0.2) / (touches.length - 2);\n          for (let i = 1; i < touches.length - 1; i++) {\n            attribution[touches[i].channel] = (attribution[touches[i].channel] || 0) + middleShare;\n          }\n        }\n        break;\n    }\n  });\n  \n  return attribution;\n}\n\n// Sample touchpoint data (would come from real tracking)\nconst sampleJourneys = [\n  { touches: [{channel: 'organic'}, {channel: 'email'}, {channel: 'direct'}], value: 100 },\n  { touches: [{channel: 'paid'}, {channel: 'organic'}], value: 150 },\n  { touches: [{channel: 'social'}, {channel: 'email'}, {channel: 'paid'}, {channel: 'direct'}], value: 200 }\n];\n\nconst attributionResults = {\n  firstTouch: calculateAttribution(sampleJourneys, 'first_touch'),\n  lastTouch: calculateAttribution(sampleJourneys, 'last_touch'),\n  linear: calculateAttribution(sampleJourneys, 'linear'),\n  timeDecay: calculateAttribution(sampleJourneys, 'time_decay'),\n  uShaped: calculateAttribution(sampleJourneys, 'u_shaped'),\n  \n  journeyCount: sampleJourneys.length,\n  avgTouchpoints: sampleJourneys.reduce((sum, j) => sum + j.touches.length, 0) / sampleJourneys.length,\n  totalValue: sampleJourneys.reduce((sum, j) => sum + j.value, 0),\n  calculatedAt: new Date().toISOString()\n};\n\nreturn [{ json: attributionResults }];"
+      },
+      "id": "attribution-calculator",
+      "name": "Attribution Calculator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 700]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an Analytics AI that generates executive-ready insights from business metrics. Analyze the data and provide:\n\n1. Key performance summary (2-3 sentences)\n2. Significant trends or patterns\n3. Areas of concern requiring attention\n4. Opportunities identified\n5. Recommended actions\n\nReturn JSON:\n{\n  \"executiveSummary\": \"\",\n  \"keyHighlights\": [\n    {\"metric\": \"\", \"value\": \"\", \"trend\": \"up|down|stable\", \"significance\": \"\"}\n  ],\n  \"alerts\": [\n    {\"severity\": \"critical|warning|info\", \"area\": \"\", \"message\": \"\", \"recommendation\": \"\"}\n  ],\n  \"opportunities\": [\n    {\"area\": \"\", \"potential\": \"\", \"action\": \"\"}\n  ],\n  \"weeklyGoals\": [\n    {\"goal\": \"\", \"currentProgress\": \"\", \"target\": \"\"}\n  ],\n  \"predictiveInsights\": [\n    {\"prediction\": \"\", \"confidence\": \"\", \"timeframe\": \"\"}\n  ]\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Generate insights from this analytics data:\n\nUnified Metrics:\n{{ JSON.stringify($('Cross-Workflow Aggregator').first().json, null, 2) }}\n\nAttribution Data:\n{{ JSON.stringify($('Attribution Calculator').first().json, null, 2) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "ai-insights-generator",
+      "name": "AI Insights Generator",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1000, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dashboard Report Builder\n// Generates formatted reports for different channels\n\nconst metrics = $('Cross-Workflow Aggregator').first().json;\nconst attribution = $('Attribution Calculator').first().json;\nconst insights = $('AI Insights Generator').first().json;\n\nconst report = {\n  generatedAt: new Date().toISOString(),\n  period: metrics.period,\n  \n  // Summary section\n  summary: {\n    executiveSummary: insights.executiveSummary,\n    keyHighlights: insights.keyHighlights\n  },\n  \n  // Metrics dashboard\n  dashboard: {\n    acquisition: {\n      visitors: { value: metrics.acquisition.visitors, change: metrics.changes.visitors },\n      newUsers: { value: metrics.acquisition.newUsers },\n      bounceRate: { value: metrics.acquisition.bounceRate + '%' }\n    },\n    activation: {\n      signups: { value: metrics.activation.signups, change: metrics.changes.signups },\n      activationRate: { value: metrics.activation.activationRate + '%' }\n    },\n    revenue: {\n      mrr: { value: '$' + metrics.revenue.mrr.toLocaleString(), change: metrics.changes.mrr },\n      arr: { value: '$' + metrics.revenue.arr.toLocaleString() }\n    },\n    retention: {\n      churnRate: { value: metrics.retention.churnRate + '%', change: metrics.changes.churnRate }\n    }\n  },\n  \n  // Funnel analysis\n  funnel: metrics.funnel,\n  \n  // Attribution breakdown\n  attribution: {\n    recommended: 'linear', // AI could recommend best model\n    models: attribution\n  },\n  \n  // Alerts and recommendations\n  alerts: insights.alerts,\n  opportunities: insights.opportunities,\n  recommendations: insights.weeklyGoals,\n  \n  // Predictions\n  predictions: insights.predictiveInsights\n};\n\nreturn [{ json: report }];"
+      },
+      "id": "report-builder",
+      "name": "Dashboard Report Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#analytics",
+        "text": "=📊 *Daily Analytics Dashboard*\n_{{ new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) }}_\n\n*Executive Summary:*\n{{ $json.summary.executiveSummary }}\n\n*Key Metrics:*\n• Visitors: {{ $json.dashboard.acquisition.visitors.value }} ({{ $json.dashboard.acquisition.visitors.change }})\n• Signups: {{ $json.dashboard.activation.signups.value }} ({{ $json.dashboard.activation.signups.change }})\n• MRR: {{ $json.dashboard.revenue.mrr.value }} ({{ $json.dashboard.revenue.mrr.change }})\n• Churn Rate: {{ $json.dashboard.retention.churnRate.value }} ({{ $json.dashboard.retention.churnRate.change }})\n\n*Funnel Performance:*\n{{ $json.funnel.steps.map(s => `• ${s.name}: ${s.count} (${s.rate}%)`).join('\\n') }}\n\n*🚨 Alerts:*\n{{ $json.alerts?.slice(0, 3).map(a => `[${a.severity.toUpperCase()}] ${a.message}`).join('\\n') || 'No critical alerts' }}\n\n*💡 Opportunities:*\n{{ $json.opportunities?.slice(0, 2).map((o, i) => `${i+1}. ${o.area}: ${o.action}`).join('\\n') || 'See full report' }}",
+        "otherOptions": {}
+      },
+      "id": "slack-daily-report",
+      "name": "Slack Daily Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "to": "={{ $env.EXEC_EMAIL_LIST }}",
+        "subject": "=Weekly Analytics Report - {{ new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}",
+        "emailType": "html",
+        "html": "=<html>\n<body style=\"font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;\">\n  <h1 style=\"color: #333;\">📊 Weekly Analytics Report</h1>\n  <p style=\"color: #666;\">{{ $json.period.start }} - {{ $json.period.end }}</p>\n  \n  <h2>Executive Summary</h2>\n  <p>{{ $json.summary.executiveSummary }}</p>\n  \n  <h2>Key Metrics</h2>\n  <table style=\"width: 100%; border-collapse: collapse;\">\n    <tr style=\"background: #f5f5f5;\">\n      <th style=\"padding: 10px; text-align: left;\">Metric</th>\n      <th style=\"padding: 10px; text-align: right;\">Value</th>\n      <th style=\"padding: 10px; text-align: right;\">Change</th>\n    </tr>\n    <tr>\n      <td style=\"padding: 10px;\">Visitors</td>\n      <td style=\"padding: 10px; text-align: right;\">{{ $json.dashboard.acquisition.visitors.value }}</td>\n      <td style=\"padding: 10px; text-align: right; color: green;\">{{ $json.dashboard.acquisition.visitors.change }}</td>\n    </tr>\n    <tr style=\"background: #fafafa;\">\n      <td style=\"padding: 10px;\">Signups</td>\n      <td style=\"padding: 10px; text-align: right;\">{{ $json.dashboard.activation.signups.value }}</td>\n      <td style=\"padding: 10px; text-align: right; color: green;\">{{ $json.dashboard.activation.signups.change }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding: 10px;\">MRR</td>\n      <td style=\"padding: 10px; text-align: right;\">{{ $json.dashboard.revenue.mrr.value }}</td>\n      <td style=\"padding: 10px; text-align: right; color: green;\">{{ $json.dashboard.revenue.mrr.change }}</td>\n    </tr>\n  </table>\n  \n  <h2>Alerts</h2>\n  <ul>\n  {{ $json.alerts?.map(a => `<li><strong>[${a.severity}]</strong> ${a.message}</li>`).join('') || '<li>No alerts this week</li>' }}\n  </ul>\n  \n  <h2>Recommendations</h2>\n  <ol>\n  {{ $json.recommendations?.map(r => `<li>${r.goal}</li>`).join('') || '<li>Continue current trajectory</li>' }}\n  </ol>\n  \n  <hr>\n  <p style=\"color: #999; font-size: 12px;\">Generated by Grain Unified Analytics Dashboard</p>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "email-weekly-report",
+      "name": "Email Weekly Report",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2.1,
+      "position": [1500, 600]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.ANALYTICS_DASHBOARD_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Daily Metrics",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $json.generatedAt }}",
+            "visitors": "={{ $json.dashboard.acquisition.visitors.value }}",
+            "signups": "={{ $json.dashboard.activation.signups.value }}",
+            "mrr": "={{ $('Cross-Workflow Aggregator').first().json.revenue.mrr }}",
+            "arr": "={{ $('Cross-Workflow Aggregator').first().json.revenue.arr }}",
+            "churn_rate": "={{ $('Cross-Workflow Aggregator').first().json.retention.churnRate }}",
+            "dau": "={{ $('Cross-Workflow Aggregator').first().json.engagement.dau }}",
+            "funnel_conversion": "={{ $json.funnel.overallConversion }}"
+          }
+        }
+      },
+      "id": "log-to-sheets",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1500, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-critical-alerts",
+              "leftValue": "={{ $json.alerts?.filter(a => a.severity === 'critical').length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-alerts",
+      "name": "Has Critical Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [1500, 1000]
+    },
+    {
+      "parameters": {
+        "channel": "#alerts",
+        "text": "=🚨 *CRITICAL ANALYTICS ALERT*\n\n{{ $json.alerts.filter(a => a.severity === 'critical').map(a => {\n  return `*${a.area}*\\n${a.message}\\n_Recommendation: ${a.recommendation}_`;\n}).join('\\n\\n---\\n\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-critical-alert",
+      "name": "Slack Critical Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 950]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "webhook-response",
+      "name": "API Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1750, 500]
+    }
+  ],
+  "connections": {
+    "Dashboard API": {
+      "main": [
+        [
+          {
+            "node": "Fetch PostHog Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Mixpanel Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Amplitude Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch HubSpot Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Report Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch PostHog Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Mixpanel Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Amplitude Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch HubSpot Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Report Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch PostHog Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Mixpanel Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Amplitude Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch HubSpot Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch PostHog Data": {
+      "main": [
+        [
+          {
+            "node": "Cross-Workflow Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Mixpanel Data": {
+      "main": [
+        [
+          {
+            "node": "Cross-Workflow Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Amplitude Data": {
+      "main": [
+        [
+          {
+            "node": "Cross-Workflow Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HubSpot Analytics": {
+      "main": [
+        [
+          {
+            "node": "Cross-Workflow Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cross-Workflow Aggregator": {
+      "main": [
+        [
+          {
+            "node": "Attribution Calculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attribution Calculator": {
+      "main": [
+        [
+          {
+            "node": "AI Insights Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Insights Generator": {
+      "main": [
+        [
+          {
+            "node": "Dashboard Report Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dashboard Report Builder": {
+      "main": [
+        [
+          {
+            "node": "Slack Daily Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Weekly Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Critical Alerts?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "API Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Critical Alerts?": {
+      "main": [
+        [
+          {
+            "node": "Slack Critical Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-saas-unified-analytics"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 3,
+  "tags": [
+    {
+      "name": "Analytics",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Dashboard",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Attribution",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}

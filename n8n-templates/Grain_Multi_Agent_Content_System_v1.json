@@ -1,0 +1,448 @@
+{
+  "name": "Grain Multi-Agent AI Content System v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "content-request",
+        "options": {}
+      },
+      "id": "content-request-webhook",
+      "name": "Content Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "multi-agent-content"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse content request and determine agent workflow\nconst request = $input.first().json.body;\n\nconst contentBrief = {\n  requestId: `REQ-${Date.now().toString(36).toUpperCase()}`,\n  type: request.contentType || 'blog_post',\n  topic: request.topic,\n  keywords: request.keywords || [],\n  targetAudience: request.targetAudience || 'general',\n  tone: request.tone || 'professional',\n  length: request.length || 'medium',\n  platform: request.platform || 'website',\n  brand: request.brand || {},\n  additionalContext: request.context || '',\n  dueDate: request.dueDate || null,\n  priority: request.priority || 'normal',\n  requester: request.requester || 'system',\n  createdAt: new Date().toISOString()\n};\n\n// Determine required agents based on content type\nconst requiredAgents = ['researcher', 'writer'];\n\nif (['blog_post', 'article', 'whitepaper'].includes(contentBrief.type)) {\n  requiredAgents.push('seo_optimizer');\n}\n\nif (['social_media', 'ad_copy', 'email'].includes(contentBrief.type)) {\n  requiredAgents.push('copywriter');\n}\n\nif (['video_script', 'podcast_script'].includes(contentBrief.type)) {\n  requiredAgents.push('scriptwriter');\n}\n\nrequiredAgents.push('editor', 'quality_checker');\n\nreturn [{ json: { brief: contentBrief, requiredAgents, totalAgents: requiredAgents.length } }];"
+      },
+      "id": "parse-request",
+      "name": "Parse Content Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Research Agent specializing in comprehensive topic research. Your role is to:\n\n1. Analyze the content brief thoroughly\n2. Research key facts, statistics, and trends related to the topic\n3. Identify authoritative sources and references\n4. Gather relevant data points that will strengthen the content\n5. Find competitor content gaps and opportunities\n6. Compile a comprehensive research brief for the writing team\n\nProvide structured research output in JSON format with:\n- key_findings: Array of main research points\n- statistics: Relevant numbers and data\n- sources: List of authoritative sources\n- competitor_analysis: What competitors are covering\n- unique_angles: Unexplored angles for differentiation\n- recommended_structure: Suggested content outline",
+              "role": "system"
+            },
+            {
+              "content": "=Research this content request:\n\n**Topic:** {{ $json.brief.topic }}\n**Content Type:** {{ $json.brief.type }}\n**Target Audience:** {{ $json.brief.targetAudience }}\n**Keywords:** {{ $json.brief.keywords.join(', ') }}\n**Additional Context:** {{ $json.brief.additionalContext }}\n\nProvide comprehensive research to inform the content creation.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 3000
+        }
+      },
+      "id": "research-agent",
+      "name": "Research Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [750, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an SEO Optimization Agent. Your role is to:\n\n1. Analyze keywords for search intent and volume potential\n2. Suggest optimal keyword placement strategy\n3. Recommend internal and external linking opportunities\n4. Create meta title and description suggestions\n5. Identify semantic keywords and LSI terms\n6. Structure content for featured snippet opportunities\n\nProvide SEO recommendations in JSON format with:\n- primary_keyword: Main target keyword\n- secondary_keywords: Supporting keywords\n- lsi_keywords: Latent semantic indexing terms\n- meta_title: Optimized title (50-60 chars)\n- meta_description: Optimized description (150-160 chars)\n- heading_structure: Recommended H1, H2, H3 structure\n- featured_snippet_opportunity: Type and content suggestion\n- internal_links: Suggested internal link anchors\n- content_length_recommendation: Ideal word count",
+              "role": "system"
+            },
+            {
+              "content": "=Optimize for SEO:\n\n**Topic:** {{ $('Parse Content Request').first().json.brief.topic }}\n**Target Keywords:** {{ $('Parse Content Request').first().json.brief.keywords.join(', ') }}\n**Content Type:** {{ $('Parse Content Request').first().json.brief.type }}\n\n**Research Findings:**\n{{ JSON.stringify($('Research Agent').first().json, null, 2) }}\n\nProvide comprehensive SEO optimization recommendations.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2000
+        }
+      },
+      "id": "seo-agent",
+      "name": "SEO Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a Professional Content Writer Agent. Your role is to create high-quality, engaging content.\n\nBrand Voice Guidelines:\n- Tone: {{ $('Parse Content Request').first().json.brief.tone }}\n- Target Audience: {{ $('Parse Content Request').first().json.brief.targetAudience }}\n- Platform: {{ $('Parse Content Request').first().json.brief.platform }}\n\nWriting Guidelines:\n1. Follow the recommended structure from research\n2. Incorporate key findings naturally\n3. Use statistics and data to support points\n4. Maintain consistent brand voice\n5. Include compelling introduction and conclusion\n6. Use active voice and clear language\n7. Add relevant examples and analogies\n\nOutput Format:\n- title: Compelling headline\n- introduction: Hook and thesis (150-200 words)\n- body: Main content sections with headers\n- conclusion: Summary and call-to-action\n- word_count: Total words",
+              "role": "system"
+            },
+            {
+              "content": "=Write the content based on this brief:\n\n**Topic:** {{ $('Parse Content Request').first().json.brief.topic }}\n**Content Type:** {{ $('Parse Content Request').first().json.brief.type }}\n**Target Length:** {{ $('Parse Content Request').first().json.brief.length }}\n\n**Research:**\n{{ JSON.stringify($('Research Agent').first().json, null, 2) }}\n\n**SEO Guidance:**\n{{ JSON.stringify($('SEO Agent').first().json, null, 2) }}\n\nCreate engaging, well-structured content that incorporates the research findings and SEO recommendations.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 4000
+        }
+      },
+      "id": "writer-agent",
+      "name": "Writer Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1250, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Professional Editor Agent. Your role is to:\n\n1. Review content for grammar, spelling, and punctuation\n2. Improve clarity and readability\n3. Ensure consistent tone and voice\n4. Verify logical flow and structure\n5. Tighten prose and remove redundancy\n6. Check for factual consistency\n7. Enhance engagement and impact\n\nProvide edited content with:\n- edited_content: The improved version\n- changes_made: List of significant edits\n- readability_score: Estimated Flesch-Kincaid score\n- suggestions: Additional improvement recommendations",
+              "role": "system"
+            },
+            {
+              "content": "=Edit and improve this content:\n\n**Original Brief:**\n- Tone: {{ $('Parse Content Request').first().json.brief.tone }}\n- Audience: {{ $('Parse Content Request').first().json.brief.targetAudience }}\n\n**Draft Content:**\n{{ JSON.stringify($('Writer Agent').first().json, null, 2) }}\n\nEdit for quality, clarity, and brand voice consistency.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 4000
+        }
+      },
+      "id": "editor-agent",
+      "name": "Editor Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1500, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Quality Assurance Agent. Your role is to:\n\n1. Verify content meets the original brief requirements\n2. Check SEO elements are properly implemented\n3. Ensure brand guidelines are followed\n4. Verify all facts and statistics are accurately cited\n5. Check for plagiarism indicators\n6. Assess overall content quality\n7. Provide final approval or rejection with reasons\n\nProvide QA assessment with:\n- approved: boolean\n- overall_score: 1-100\n- brief_compliance: Score for meeting original requirements\n- seo_compliance: Score for SEO implementation\n- quality_score: Score for writing quality\n- brand_compliance: Score for brand voice\n- issues: Array of any problems found\n- final_recommendations: Last improvements before publishing",
+              "role": "system"
+            },
+            {
+              "content": "=Perform quality check:\n\n**Original Brief:**\n{{ JSON.stringify($('Parse Content Request').first().json.brief, null, 2) }}\n\n**SEO Requirements:**\n{{ JSON.stringify($('SEO Agent').first().json, null, 2) }}\n\n**Final Content:**\n{{ JSON.stringify($('Editor Agent').first().json, null, 2) }}\n\nProvide comprehensive quality assessment.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 2000
+        }
+      },
+      "id": "qa-agent",
+      "name": "QA Agent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1750, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "qa-approved",
+              "leftValue": "={{ $json.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "quality-threshold",
+              "leftValue": "={{ $json.overall_score }}",
+              "rightValue": 70,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-qa-pass",
+      "name": "QA Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final content package\nconst brief = $('Parse Content Request').first().json.brief;\nconst research = $('Research Agent').first().json;\nconst seo = $('SEO Agent').first().json;\nconst editedContent = $('Editor Agent').first().json;\nconst qa = $('QA Agent').first().json;\n\nconst finalPackage = {\n  requestId: brief.requestId,\n  status: 'approved',\n  content: {\n    title: editedContent.edited_content?.title || editedContent.title,\n    metaTitle: seo.meta_title,\n    metaDescription: seo.meta_description,\n    body: editedContent.edited_content?.body || editedContent.body,\n    introduction: editedContent.edited_content?.introduction || editedContent.introduction,\n    conclusion: editedContent.edited_content?.conclusion || editedContent.conclusion,\n    wordCount: editedContent.word_count\n  },\n  seo: {\n    primaryKeyword: seo.primary_keyword,\n    secondaryKeywords: seo.secondary_keywords,\n    headingStructure: seo.heading_structure,\n    internalLinks: seo.internal_links\n  },\n  quality: {\n    overallScore: qa.overall_score,\n    briefCompliance: qa.brief_compliance,\n    seoCompliance: qa.seo_compliance,\n    qualityScore: qa.quality_score,\n    readabilityScore: editedContent.readability_score\n  },\n  metadata: {\n    contentType: brief.type,\n    topic: brief.topic,\n    targetAudience: brief.targetAudience,\n    platform: brief.platform,\n    createdAt: brief.createdAt,\n    completedAt: new Date().toISOString(),\n    agentsUsed: ['researcher', 'seo_optimizer', 'writer', 'editor', 'qa']\n  }\n};\n\nreturn [{ json: finalPackage }];"
+      },
+      "id": "compile-final",
+      "name": "Compile Final Package",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2250, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CMS_API_URL }}/content/drafts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-to-cms",
+      "name": "Save to CMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2500, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cms-api-key",
+          "name": "CMS API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.CONTENT_SLACK_CHANNEL }}",
+        "text": "=✅ *Content Created Successfully!*\n\n*Request ID:* {{ $json.requestId }}\n*Topic:* {{ $json.metadata.topic }}\n*Type:* {{ $json.metadata.contentType }}\n\n📊 *Quality Scores:*\n• Overall: {{ $json.quality.overallScore }}/100\n• SEO: {{ $json.quality.seoCompliance }}/100\n• Quality: {{ $json.quality.qualityScore }}/100\n• Readability: {{ $json.quality.readabilityScore }}\n\n📝 *Content Preview:*\n*{{ $json.content.title }}*\n\n_{{ $json.content.introduction?.substring(0, 200) }}..._\n\n🔗 Word Count: {{ $json.content.wordCount }}\n🏷️ Primary Keyword: {{ $json.seo.primaryKeyword }}\n\n_Content saved to CMS as draft. Ready for review._",
+        "otherOptions": {}
+      },
+      "id": "notify-success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2500, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle QA failure - prepare for revision\nconst brief = $('Parse Content Request').first().json.brief;\nconst qa = $('QA Agent').first().json;\n\nreturn [{\n  json: {\n    requestId: brief.requestId,\n    status: 'revision_needed',\n    overallScore: qa.overall_score,\n    issues: qa.issues,\n    recommendations: qa.final_recommendations,\n    failedChecks: {\n      briefCompliance: qa.brief_compliance < 70,\n      seoCompliance: qa.seo_compliance < 70,\n      qualityScore: qa.quality_score < 70\n    }\n  }\n}];"
+      },
+      "id": "handle-revision",
+      "name": "Handle Revision Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2250, 400]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.CONTENT_SLACK_CHANNEL }}",
+        "text": "=⚠️ *Content Needs Revision*\n\n*Request ID:* {{ $json.requestId }}\n*Overall Score:* {{ $json.overallScore }}/100\n\n❌ *Issues Found:*\n{{ $json.issues?.map(i => `• ${i}`).join('\\n') || 'See recommendations' }}\n\n💡 *Recommendations:*\n{{ $json.recommendations?.map ? $json.recommendations.map(r => `• ${r}`).join('\\n') : $json.recommendations || 'Review content manually' }}\n\n_Content requires manual review and revision_",
+        "otherOptions": {}
+      },
+      "id": "notify-revision",
+      "name": "Notify Revision Needed",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2500, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.CONTENT_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Content Production",
+          "mode": "list",
+          "cachedResultName": "Content Production"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Request ID": "={{ $('Parse Content Request').first().json.brief.requestId }}",
+            "Topic": "={{ $('Parse Content Request').first().json.brief.topic }}",
+            "Type": "={{ $('Parse Content Request').first().json.brief.type }}",
+            "Status": "={{ $json.status }}",
+            "Overall Score": "={{ $('QA Agent').first().json.overall_score }}",
+            "Agents Used": "=5",
+            "Created At": "={{ $('Parse Content Request').first().json.brief.createdAt }}",
+            "Completed At": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-production",
+      "name": "Log Production",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2750, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Content Request": {
+      "main": [
+        [{ "node": "Parse Content Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Content Request": {
+      "main": [
+        [{ "node": "Research Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "Research Agent": {
+      "main": [
+        [{ "node": "SEO Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "SEO Agent": {
+      "main": [
+        [{ "node": "Writer Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "Writer Agent": {
+      "main": [
+        [{ "node": "Editor Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "Editor Agent": {
+      "main": [
+        [{ "node": "QA Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "QA Agent": {
+      "main": [
+        [{ "node": "QA Passed?", "type": "main", "index": 0 }]
+      ]
+    },
+    "QA Passed?": {
+      "main": [
+        [{ "node": "Compile Final Package", "type": "main", "index": 0 }],
+        [{ "node": "Handle Revision Needed", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Final Package": {
+      "main": [
+        [
+          { "node": "Save to CMS", "type": "main", "index": 0 },
+          { "node": "Notify Success", "type": "main", "index": 0 },
+          { "node": "Log Production", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Handle Revision Needed": {
+      "main": [
+        [
+          { "node": "Notify Revision Needed", "type": "main", "index": 0 },
+          { "node": "Log Production", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "content", "name": "content" },
+    { "id": "ai-agents", "name": "ai-agents" },
+    { "id": "multi-agent", "name": "multi-agent" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

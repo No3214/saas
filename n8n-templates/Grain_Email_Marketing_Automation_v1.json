@@ -1,0 +1,622 @@
+{
+  "name": "Grain Email Marketing Automation v1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-new-lead",
+      "name": "New Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "email-marketing-trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "behavioral-check",
+      "name": "Behavioral Trigger Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 500]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "={{ $env.AIRTABLE_EMAIL_BASE_ID }}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Contacts",
+          "mode": "list"
+        },
+        "filterByFormula": "AND({email_status} = 'active', {last_email_sent} < DATEADD(NOW(), -3, 'days'))",
+        "options": {
+          "fields": [
+            "email",
+            "first_name",
+            "last_name",
+            "company",
+            "lead_score",
+            "last_activity",
+            "journey_stage",
+            "interests",
+            "engagement_score"
+          ]
+        }
+      },
+      "id": "get-active-contacts",
+      "name": "Get Active Contacts",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lead Segmentation & Journey Mapping\nconst lead = $input.first().json;\n\n// Define journey stages and their email sequences\nconst journeyMap = {\n  'new_lead': {\n    stage: 1,\n    sequences: ['welcome', 'value_prop', 'case_study'],\n    delayDays: [0, 2, 5]\n  },\n  'engaged': {\n    stage: 2,\n    sequences: ['deep_dive', 'comparison', 'demo_invite'],\n    delayDays: [0, 3, 7]\n  },\n  'considering': {\n    stage: 3,\n    sequences: ['social_proof', 'roi_calculator', 'consultation'],\n    delayDays: [0, 2, 4]\n  },\n  'trial': {\n    stage: 4,\n    sequences: ['onboarding', 'feature_tips', 'upgrade_offer'],\n    delayDays: [0, 3, 7]\n  },\n  'customer': {\n    stage: 5,\n    sequences: ['success_check', 'referral_ask', 'upsell'],\n    delayDays: [30, 60, 90]\n  },\n  'churned': {\n    stage: 0,\n    sequences: ['win_back_1', 'win_back_2', 'final_offer'],\n    delayDays: [0, 7, 14]\n  }\n};\n\n// Calculate engagement tier\nfunction getEngagementTier(score) {\n  if (score >= 80) return 'highly_engaged';\n  if (score >= 50) return 'moderately_engaged';\n  if (score >= 20) return 'low_engagement';\n  return 'cold';\n}\n\n// Determine optimal send time based on past behavior\nfunction getOptimalSendTime(timezone, pastOpens) {\n  // Default optimal times by engagement\n  const defaultTimes = {\n    'highly_engaged': '09:00',\n    'moderately_engaged': '10:30',\n    'low_engagement': '14:00',\n    'cold': '11:00'\n  };\n  \n  // Would analyze pastOpens to find best time\n  return defaultTimes[getEngagementTier(pastOpens?.engagementScore || 50)];\n}\n\nconst journeyStage = lead.journey_stage || 'new_lead';\nconst journey = journeyMap[journeyStage];\nconst engagementTier = getEngagementTier(lead.engagement_score || 0);\n\nreturn [{\n  json: {\n    ...lead,\n    segmentation: {\n      journeyStage,\n      journeyInfo: journey,\n      engagementTier,\n      nextEmailSequence: journey.sequences[0],\n      optimalSendTime: getOptimalSendTime(lead.timezone, lead),\n      personalizationLevel: engagementTier === 'highly_engaged' ? 'high' : 'standard'\n    }\n  }\n}];"
+      },
+      "id": "segment-leads",
+      "name": "Segment Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert email copywriter specializing in SaaS B2B marketing. Generate personalized email content that:\n1. Uses the recipient's name and company naturally\n2. References their specific interests or pain points\n3. Includes a clear, compelling CTA\n4. Has an attention-grabbing subject line\n5. Is concise (under 200 words for body)\n\nReturn JSON format:\n{\n  \"subject\": \"subject line (under 60 chars, personalized)\",\n  \"preheader\": \"preview text (under 100 chars)\",\n  \"greeting\": \"personalized greeting\",\n  \"body\": \"main email content with {{first_name}} placeholders\",\n  \"cta_text\": \"button text\",\n  \"cta_url\": \"relevant URL\",\n  \"ps_line\": \"optional PS line for extra engagement\",\n  \"tone\": \"professional|friendly|urgent\",\n  \"abVariant\": \"A\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Generate email for:\n\nRecipient: {{ $json.first_name }} {{ $json.last_name }}\nCompany: {{ $json.company }}\nJourney Stage: {{ $json.segmentation.journeyStage }}\nEmail Sequence: {{ $json.segmentation.nextEmailSequence }}\nEngagement Tier: {{ $json.segmentation.engagementTier }}\nInterests: {{ $json.interests || 'not specified' }}\n\nPersonalization Level: {{ $json.segmentation.personalizationLevel }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-email-generator",
+      "name": "AI Email Generator",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Generate an A/B variant of the given email. Create a meaningfully different version that tests a different:\n- Subject line approach (curiosity vs benefit vs urgency)\n- CTA style (action-oriented vs benefit-oriented)\n- Tone (more casual vs more professional)\n\nReturn the same JSON structure but with variant 'B'."
+            },
+            {
+              "role": "user",
+              "content": "=Create B variant for this email:\n{{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.8
+        }
+      },
+      "id": "generate-ab-variant",
+      "name": "Generate A/B Variant",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// A/B Test Assignment & Email Preparation\nconst leadData = $('Segment Leads').first().json;\nconst emailA = $('AI Email Generator').first().json;\nconst emailB = $('Generate A/B Variant').first().json;\n\n// Assign A/B variant (50/50 split)\nconst variant = Math.random() < 0.5 ? 'A' : 'B';\nconst selectedEmail = variant === 'A' ? emailA : emailB;\n\n// Replace placeholders\nconst personalizedBody = selectedEmail.body\n  .replace(/\\{\\{first_name\\}\\}/g, leadData.first_name)\n  .replace(/\\{\\{company\\}\\}/g, leadData.company);\n\n// Generate tracking pixels and links\nconst trackingId = `${leadData.email}-${Date.now()}`;\nconst baseTrackingUrl = `https://track.yourdomain.com`;\n\nreturn [{\n  json: {\n    to: leadData.email,\n    from: {\n      email: 'hello@yourdomain.com',\n      name: 'Your Company'\n    },\n    subject: selectedEmail.subject,\n    preheader: selectedEmail.preheader,\n    html: `\n      <div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n        <p>${selectedEmail.greeting}</p>\n        <div>${personalizedBody.replace(/\\n/g, '<br>')}</div>\n        <div style=\"text-align: center; margin: 30px 0;\">\n          <a href=\"${selectedEmail.cta_url}?utm_campaign=email&utm_content=${variant}&track_id=${trackingId}\" \n             style=\"background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;\">\n            ${selectedEmail.cta_text}\n          </a>\n        </div>\n        ${selectedEmail.ps_line ? `<p style=\"font-style: italic;\">P.S. ${selectedEmail.ps_line}</p>` : ''}\n        <img src=\"${baseTrackingUrl}/open/${trackingId}\" width=\"1\" height=\"1\" />\n      </div>\n    `,\n    tracking: {\n      id: trackingId,\n      variant,\n      journeyStage: leadData.segmentation.journeyStage,\n      sequence: leadData.segmentation.nextEmailSequence,\n      sentAt: new Date().toISOString()\n    },\n    metadata: {\n      leadEmail: leadData.email,\n      leadScore: leadData.lead_score,\n      engagementTier: leadData.segmentation.engagementTier\n    }\n  }\n}];"
+      },
+      "id": "prepare-email",
+      "name": "Prepare Email for Send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.RESEND_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"{{ $json.from.name }} <{{ $json.from.email }}>\",\n  \"to\": [\"{{ $json.to }}\"],\n  \"subject\": \"{{ $json.subject }}\",\n  \"html\": {{ JSON.stringify($json.html) }},\n  \"headers\": {\n    \"X-Entity-Ref-ID\": \"{{ $json.tracking.id }}\"\n  },\n  \"tags\": [\n    { \"name\": \"variant\", \"value\": \"{{ $json.tracking.variant }}\" },\n    { \"name\": \"journey_stage\", \"value\": \"{{ $json.tracking.journeyStage }}\" },\n    { \"name\": \"sequence\", \"value\": \"{{ $json.tracking.sequence }}\" }\n  ]\n}",
+        "options": {}
+      },
+      "id": "send-via-resend",
+      "name": "Send via Resend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.customer.io/v1/send/email",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"transactional_message_id\": \"{{ $json.tracking.sequence }}\",\n  \"to\": \"{{ $json.to }}\",\n  \"identifiers\": {\n    \"email\": \"{{ $json.to }}\"\n  },\n  \"message_data\": {\n    \"subject\": \"{{ $json.subject }}\",\n    \"preheader\": \"{{ $json.preheader }}\",\n    \"body\": {{ JSON.stringify($json.html) }},\n    \"variant\": \"{{ $json.tracking.variant }}\",\n    \"cta_url\": \"{{ $json.cta_url }}\"\n  },\n  \"disable_message_retention\": false,\n  \"send_to_unsubscribed\": false\n}",
+        "options": {}
+      },
+      "id": "send-via-customerio",
+      "name": "Send via Customer.io",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 500]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "={{ $env.AIRTABLE_EMAIL_BASE_ID }}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Contacts",
+          "mode": "list"
+        },
+        "id": "={{ $json.metadata.recordId }}",
+        "fields": {
+          "last_email_sent": "={{ $json.tracking.sentAt }}",
+          "last_email_sequence": "={{ $json.tracking.sequence }}",
+          "last_ab_variant": "={{ $json.tracking.variant }}",
+          "total_emails_sent": "={{ ($json.metadata.totalEmailsSent || 0) + 1 }}"
+        }
+      },
+      "id": "update-contact-record",
+      "name": "Update Contact Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.EMAIL_ANALYTICS_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Email Log",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.tracking.sentAt }}",
+            "recipient": "={{ $json.to }}",
+            "subject": "={{ $json.subject }}",
+            "variant": "={{ $json.tracking.variant }}",
+            "journey_stage": "={{ $json.tracking.journeyStage }}",
+            "sequence": "={{ $json.tracking.sequence }}",
+            "tracking_id": "={{ $json.tracking.id }}",
+            "lead_score": "={{ $json.metadata.leadScore }}",
+            "engagement_tier": "={{ $json.metadata.engagementTier }}"
+          }
+        }
+      },
+      "id": "log-email-analytics",
+      "name": "Log Email Analytics",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1450, 600]
+    },
+    {
+      "parameters": {},
+      "id": "webhook-email-events",
+      "name": "Email Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 800],
+      "webhookId": "email-events-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process email events (opens, clicks, bounces, unsubscribes)\nconst event = $input.first().json;\n\nconst eventType = event.type || event.event;\nconst trackingId = event.data?.tags?.find(t => t.name === 'tracking_id')?.value || event.tracking_id;\n\nconst eventData = {\n  eventType,\n  trackingId,\n  email: event.data?.email || event.email,\n  timestamp: event.created_at || new Date().toISOString(),\n  metadata: {}\n};\n\nswitch (eventType) {\n  case 'email.opened':\n  case 'opened':\n    eventData.metadata.openCount = (event.data?.open_count || 1);\n    eventData.metadata.device = event.data?.device_type || 'unknown';\n    eventData.engagementDelta = 5;\n    break;\n    \n  case 'email.clicked':\n  case 'clicked':\n    eventData.metadata.link = event.data?.link || event.link;\n    eventData.engagementDelta = 10;\n    break;\n    \n  case 'email.bounced':\n  case 'bounced':\n    eventData.metadata.bounceType = event.data?.bounce_type || 'unknown';\n    eventData.shouldUpdateStatus = true;\n    eventData.newStatus = 'bounced';\n    break;\n    \n  case 'email.complained':\n  case 'unsubscribed':\n    eventData.shouldUpdateStatus = true;\n    eventData.newStatus = 'unsubscribed';\n    break;\n}\n\nreturn [{ json: eventData }];"
+      },
+      "id": "process-email-events",
+      "name": "Process Email Events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "engagement-event",
+              "leftValue": "={{ $json.engagementDelta }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      },
+      "id": "check-engagement-event",
+      "name": "Is Engagement Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [700, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubspot.com/crm/v3/objects/contacts/{{ $json.email }}/timeline",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubSpotApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"eventTemplateId\": \"email_engagement\",\n  \"tokens\": {\n    \"eventType\": \"{{ $json.eventType }}\",\n    \"trackingId\": \"{{ $json.trackingId }}\",\n    \"timestamp\": \"{{ $json.timestamp }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "update-hubspot-engagement",
+      "name": "Update HubSpot Engagement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [950, 750]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "={{ $env.AIRTABLE_EMAIL_BASE_ID }}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Contacts",
+          "mode": "list"
+        },
+        "filterByFormula": "{email} = '{{ $json.email }}'",
+        "fields": {
+          "engagement_score": "={{ ($json.currentEngagement || 0) + $json.engagementDelta }}",
+          "last_engagement": "={{ $json.timestamp }}"
+        }
+      },
+      "id": "update-engagement-score",
+      "name": "Update Engagement Score",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [950, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Optimal Send Time Calculator\n// Analyzes past email engagement to find best send times\n\nconst contacts = $input.all();\nconst sendTimeRecommendations = [];\n\ncontacts.forEach(contact => {\n  const data = contact.json;\n  \n  // Default time slots\n  const timeSlots = [\n    { slot: '08:00-10:00', score: 0 },\n    { slot: '10:00-12:00', score: 0 },\n    { slot: '12:00-14:00', score: 0 },\n    { slot: '14:00-16:00', score: 0 },\n    { slot: '16:00-18:00', score: 0 }\n  ];\n  \n  // Analyze past engagement times (would use real data)\n  const engagementHistory = data.engagement_history || [];\n  engagementHistory.forEach(engagement => {\n    const hour = new Date(engagement.timestamp).getHours();\n    if (hour >= 8 && hour < 10) timeSlots[0].score += engagement.weight || 1;\n    else if (hour >= 10 && hour < 12) timeSlots[1].score += engagement.weight || 1;\n    else if (hour >= 12 && hour < 14) timeSlots[2].score += engagement.weight || 1;\n    else if (hour >= 14 && hour < 16) timeSlots[3].score += engagement.weight || 1;\n    else if (hour >= 16 && hour < 18) timeSlots[4].score += engagement.weight || 1;\n  });\n  \n  // Find optimal slot\n  const optimalSlot = timeSlots.reduce((best, current) => \n    current.score > best.score ? current : best, timeSlots[1]);\n  \n  sendTimeRecommendations.push({\n    email: data.email,\n    optimalSendTime: optimalSlot.slot,\n    confidence: optimalSlot.score > 5 ? 'high' : optimalSlot.score > 2 ? 'medium' : 'low',\n    timezone: data.timezone || 'UTC'\n  });\n});\n\nreturn sendTimeRecommendations.map(rec => ({ json: rec }));"
+      },
+      "id": "calculate-send-times",
+      "name": "Calculate Optimal Send Times",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 800]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "weekly-ab-analysis",
+      "name": "Weekly A/B Analysis",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 1100]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.EMAIL_ANALYTICS_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Email Log",
+          "mode": "list"
+        },
+        "options": {
+          "range": "A:Z"
+        }
+      },
+      "id": "get-ab-data",
+      "name": "Get A/B Test Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [450, 1100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// A/B Test Statistical Analysis\nconst emailData = $input.all();\n\n// Group by variant\nconst variantA = { sent: 0, opened: 0, clicked: 0 };\nconst variantB = { sent: 0, opened: 0, clicked: 0 };\n\nemailData.forEach(row => {\n  const data = row.json;\n  const variant = data.variant;\n  \n  if (variant === 'A') {\n    variantA.sent++;\n    if (data.opened) variantA.opened++;\n    if (data.clicked) variantA.clicked++;\n  } else if (variant === 'B') {\n    variantB.sent++;\n    if (data.opened) variantB.opened++;\n    if (data.clicked) variantB.clicked++;\n  }\n});\n\n// Calculate rates\nvariantA.openRate = variantA.sent > 0 ? (variantA.opened / variantA.sent * 100).toFixed(2) : 0;\nvariantA.clickRate = variantA.sent > 0 ? (variantA.clicked / variantA.sent * 100).toFixed(2) : 0;\nvariantB.openRate = variantB.sent > 0 ? (variantB.opened / variantB.sent * 100).toFixed(2) : 0;\nvariantB.clickRate = variantB.sent > 0 ? (variantB.clicked / variantB.sent * 100).toFixed(2) : 0;\n\n// Statistical significance calculation (simplified chi-square)\nfunction calculateSignificance(a, b) {\n  const total = a.sent + b.sent;\n  if (total < 100) return { significant: false, confidence: 'insufficient_data' };\n  \n  const pooledRate = (a.opened + b.opened) / total;\n  const se = Math.sqrt(pooledRate * (1 - pooledRate) * (1/a.sent + 1/b.sent));\n  const z = Math.abs((a.openRate/100 - b.openRate/100) / se);\n  \n  if (z > 2.576) return { significant: true, confidence: '99%' };\n  if (z > 1.96) return { significant: true, confidence: '95%' };\n  if (z > 1.645) return { significant: true, confidence: '90%' };\n  return { significant: false, confidence: 'not_significant' };\n}\n\nconst significance = calculateSignificance(variantA, variantB);\nconst winner = parseFloat(variantA.openRate) > parseFloat(variantB.openRate) ? 'A' : 'B';\n\nreturn [{\n  json: {\n    variantA,\n    variantB,\n    analysis: {\n      winner: significance.significant ? winner : 'no_winner',\n      significance: significance.confidence,\n      openRateDiff: Math.abs(variantA.openRate - variantB.openRate).toFixed(2) + '%',\n      clickRateDiff: Math.abs(variantA.clickRate - variantB.clickRate).toFixed(2) + '%',\n      recommendation: significance.significant \n        ? `Use variant ${winner} - ${significance.confidence} confident`\n        : 'Continue testing - not enough data for significance'\n    },\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "analyze-ab-results",
+      "name": "Analyze A/B Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 1100]
+    },
+    {
+      "parameters": {
+        "channel": "#email-marketing",
+        "text": "=📧 *Weekly Email A/B Test Report*\n\n*Variant A:*\n• Sent: {{ $json.variantA.sent }}\n• Open Rate: {{ $json.variantA.openRate }}%\n• Click Rate: {{ $json.variantA.clickRate }}%\n\n*Variant B:*\n• Sent: {{ $json.variantB.sent }}\n• Open Rate: {{ $json.variantB.openRate }}%\n• Click Rate: {{ $json.variantB.clickRate }}%\n\n*Analysis:*\n• Winner: {{ $json.analysis.winner }}\n• Significance: {{ $json.analysis.significance }}\n• Open Rate Difference: {{ $json.analysis.openRateDiff }}\n\n*Recommendation:*\n{{ $json.analysis.recommendation }}",
+        "otherOptions": {}
+      },
+      "id": "slack-ab-report",
+      "name": "Slack A/B Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [950, 1100]
+    }
+  ],
+  "connections": {
+    "New Lead Webhook": {
+      "main": [
+        [
+          {
+            "node": "Segment Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Behavioral Trigger Check": {
+      "main": [
+        [
+          {
+            "node": "Get Active Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Contacts": {
+      "main": [
+        [
+          {
+            "node": "Segment Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segment Leads": {
+      "main": [
+        [
+          {
+            "node": "AI Email Generator",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate A/B Variant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Email Generator": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email for Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate A/B Variant": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email for Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email for Send": {
+      "main": [
+        [
+          {
+            "node": "Send via Resend",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send via Customer.io",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send via Resend": {
+      "main": [
+        [
+          {
+            "node": "Update Contact Record",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Email Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Email Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Email Events": {
+      "main": [
+        [
+          {
+            "node": "Is Engagement Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Engagement Event?": {
+      "main": [
+        [
+          {
+            "node": "Update HubSpot Engagement",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Engagement Score",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Calculate Optimal Send Times",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly A/B Analysis": {
+      "main": [
+        [
+          {
+            "node": "Get A/B Test Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get A/B Test Data": {
+      "main": [
+        [
+          {
+            "node": "Analyze A/B Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze A/B Results": {
+      "main": [
+        [
+          {
+            "node": "Slack A/B Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-saas-email-marketing"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 4,
+  "tags": [
+    {
+      "name": "Email",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Marketing",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "A/B Testing",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}

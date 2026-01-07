@@ -1,0 +1,397 @@
+{
+  "name": "Grain Backlink Monitor v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-monitor",
+      "name": "Daily Backlink Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "backlink-check",
+        "options": {}
+      },
+      "id": "manual-check",
+      "name": "Manual Check Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "backlink-check"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.BACKLINK_DB_URL }}/domains/monitored",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-domains",
+      "name": "Fetch Monitored Domains",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "backlink-db-api",
+          "name": "Backlink DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare monitoring jobs\nconst domains = $input.first().json.domains || [];\n\nconst monitoringJobs = domains.map(domain => ({\n  monitorId: `BL-${Date.now().toString(36).toUpperCase()}-${domain.id}`,\n  domainId: domain.id,\n  domain: domain.domain,\n  competitors: domain.competitors || [],\n  checkDate: new Date().toISOString().split('T')[0],\n  timestamp: new Date().toISOString(),\n  previousMetrics: domain.lastMetrics || null\n}));\n\nreturn monitoringJobs.map(job => ({ json: job }));"
+      },
+      "id": "prepare-jobs",
+      "name": "Prepare Monitor Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.BACKLINK_API_URL }}/backlinks",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{ $json.domain }}"
+            },
+            {
+              "name": "limit",
+              "value": "1000"
+            },
+            {
+              "name": "includeMetrics",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "fetch-backlinks",
+      "name": "Fetch Backlinks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "backlink-api-key",
+          "name": "Backlink API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.BACKLINK_API_URL }}/new-lost",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{ $json.domain }}"
+            },
+            {
+              "name": "days",
+              "value": "7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-changes",
+      "name": "Fetch New/Lost Links",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "backlink-api-key",
+          "name": "Backlink API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze backlink profile\nconst job = $('Prepare Monitor Jobs').first().json;\nconst backlinks = $('Fetch Backlinks').first().json;\nconst changes = $('Fetch New/Lost Links').first().json;\n\nconst links = backlinks.backlinks || [];\nconst newLinks = changes.new || [];\nconst lostLinks = changes.lost || [];\n\n// Calculate metrics\nconst metrics = {\n  totalBacklinks: links.length,\n  referringDomains: [...new Set(links.map(l => l.sourceDomain))].length,\n  dofollow: links.filter(l => !l.nofollow).length,\n  nofollow: links.filter(l => l.nofollow).length,\n  dofollowRatio: links.length > 0 \n    ? Math.round(links.filter(l => !l.nofollow).length / links.length * 100) \n    : 0,\n  avgDomainRating: links.length > 0\n    ? Math.round(links.reduce((a, b) => a + (b.domainRating || 0), 0) / links.length)\n    : 0,\n  newLinks7d: newLinks.length,\n  lostLinks7d: lostLinks.length,\n  netGrowth7d: newLinks.length - lostLinks.length\n};\n\n// Anchor text distribution\nconst anchorCounts = {};\nlinks.forEach(link => {\n  const anchor = link.anchorText?.toLowerCase() || '[no anchor]';\n  anchorCounts[anchor] = (anchorCounts[anchor] || 0) + 1;\n});\n\nconst topAnchors = Object.entries(anchorCounts)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 10)\n  .map(([anchor, count]) => ({\n    anchor,\n    count,\n    percentage: Math.round(count / links.length * 100)\n  }));\n\n// Domain rating distribution\nconst drDistribution = {\n  high: links.filter(l => l.domainRating >= 70).length,\n  medium: links.filter(l => l.domainRating >= 40 && l.domainRating < 70).length,\n  low: links.filter(l => l.domainRating < 40).length\n};\n\n// Link type distribution\nconst linkTypes = {\n  text: links.filter(l => l.linkType === 'text').length,\n  image: links.filter(l => l.linkType === 'image').length,\n  redirect: links.filter(l => l.linkType === 'redirect').length,\n  other: links.filter(l => !['text', 'image', 'redirect'].includes(l.linkType)).length\n};\n\n// High-value new links\nconst highValueNew = newLinks\n  .filter(l => l.domainRating >= 50)\n  .slice(0, 10);\n\n// Lost links to recover\nconst toRecover = lostLinks\n  .filter(l => l.domainRating >= 40)\n  .slice(0, 10);\n\n// Toxic/spam detection\nconst potentiallyToxic = links.filter(l => {\n  const toxicIndicators = [\n    l.domainRating < 10,\n    /porn|casino|pills|viagra|pharma/i.test(l.sourceDomain),\n    l.outboundLinks > 1000,\n    /\\d{5,}/.test(l.sourceDomain)\n  ];\n  return toxicIndicators.filter(Boolean).length >= 2;\n});\n\n// Compare with previous\nconst previous = job.previousMetrics;\nlet metricsChange = null;\nif (previous) {\n  metricsChange = {\n    totalBacklinks: metrics.totalBacklinks - (previous.totalBacklinks || 0),\n    referringDomains: metrics.referringDomains - (previous.referringDomains || 0),\n    avgDomainRating: metrics.avgDomainRating - (previous.avgDomainRating || 0)\n  };\n}\n\nreturn [{ json: {\n  monitorId: job.monitorId,\n  domain: job.domain,\n  checkDate: job.checkDate,\n  metrics,\n  metricsChange,\n  drDistribution,\n  linkTypes,\n  topAnchors,\n  newLinks: newLinks.slice(0, 50),\n  lostLinks: lostLinks.slice(0, 50),\n  highValueNew,\n  toRecover,\n  potentiallyToxic: potentiallyToxic.slice(0, 20),\n  alerts: []\n}}];"
+      },
+      "id": "analyze-profile",
+      "name": "Analyze Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Link Building Strategist. Analyze the backlink profile and provide actionable recommendations.\n\nFocus on:\n1. Profile health assessment\n2. Opportunities from new high-value links\n3. Recovery priorities for lost links\n4. Toxic link cleanup recommendations\n5. Link building opportunities based on anchor distribution\n6. Competitive gap analysis suggestions",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze backlink profile for {{ $json.domain }}:\n\n**Current Metrics:**\n• Total Backlinks: {{ $json.metrics.totalBacklinks }}\n• Referring Domains: {{ $json.metrics.referringDomains }}\n• Dofollow Ratio: {{ $json.metrics.dofollowRatio }}%\n• Avg Domain Rating: {{ $json.metrics.avgDomainRating }}\n• New Links (7d): {{ $json.metrics.newLinks7d }}\n• Lost Links (7d): {{ $json.metrics.lostLinks7d }}\n\n**DR Distribution:**\n• High (70+): {{ $json.drDistribution.high }}\n• Medium (40-69): {{ $json.drDistribution.medium }}\n• Low (<40): {{ $json.drDistribution.low }}\n\n**Top Anchors:**\n{{ $json.topAnchors.map(a => `• \"${a.anchor}\": ${a.count} (${a.percentage}%)`).join('\\n') }}\n\n**High-Value New Links:**\n{{ $json.highValueNew.map(l => `• ${l.sourceDomain} (DR: ${l.domainRating})`).join('\\n') || 'None' }}\n\n**Lost Links to Recover:**\n{{ $json.toRecover.map(l => `• ${l.sourceDomain} (DR: ${l.domainRating})`).join('\\n') || 'None' }}\n\n**Potentially Toxic:** {{ $json.potentiallyToxic.length }} links detected\n\nProvide strategic recommendations.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 2000
+        }
+      },
+      "id": "ai-analysis",
+      "name": "AI Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1500, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate outreach list for lost links recovery\nconst profileData = $('Analyze Profile').first().json;\nconst toRecover = profileData.toRecover || [];\n\n// Create outreach tasks\nconst outreachTasks = toRecover.map(link => ({\n  id: `OUT-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`,\n  type: 'link_recovery',\n  domain: link.sourceDomain,\n  originalUrl: link.sourceUrl,\n  targetUrl: link.targetUrl,\n  anchorText: link.anchorText,\n  domainRating: link.domainRating,\n  lostDate: link.lostDate,\n  priority: link.domainRating >= 60 ? 'high' : link.domainRating >= 40 ? 'medium' : 'low',\n  status: 'pending',\n  suggestedSubject: `Quick question about your link to ${profileData.domain}`,\n  suggestedTemplate: 'link_recovery'\n}));\n\nreturn [{ json: {\n  ...profileData,\n  outreachTasks\n}}];"
+      },
+      "id": "generate-outreach",
+      "name": "Generate Outreach Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final report\nconst profileData = $('Generate Outreach Tasks').first().json;\nconst aiAnalysis = $('AI Analysis').first().json;\n\nconst report = {\n  ...profileData,\n  analysis: aiAnalysis,\n  generatedAt: new Date().toISOString(),\n  exportUrls: {\n    csv: `{{ $vars.EXPORT_BASE_URL }}/backlinks/${profileData.monitorId}/csv`,\n    disavow: `{{ $vars.EXPORT_BASE_URL }}/backlinks/${profileData.monitorId}/disavow`\n  }\n};\n\n// Generate alerts\nif (profileData.metrics.lostLinks7d > 10) {\n  report.alerts.push({\n    type: 'high_link_loss',\n    severity: 'warning',\n    message: `Lost ${profileData.metrics.lostLinks7d} backlinks in the last 7 days`\n  });\n}\n\nif (profileData.potentiallyToxic.length > 20) {\n  report.alerts.push({\n    type: 'toxic_links',\n    severity: 'warning',\n    message: `${profileData.potentiallyToxic.length} potentially toxic links detected`\n  });\n}\n\nif (profileData.metrics.netGrowth7d < -5) {\n  report.alerts.push({\n    type: 'negative_growth',\n    severity: 'critical',\n    message: `Negative link growth: ${profileData.metrics.netGrowth7d} net change`\n  });\n}\n\nreturn [{ json: report }];"
+      },
+      "id": "compile-report",
+      "name": "Compile Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.BACKLINK_DB_URL }}/reports",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-report",
+      "name": "Save Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "backlink-db-api",
+          "name": "Backlink DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-alerts",
+              "leftValue": "={{ $json.alerts.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-alerts",
+      "name": "Has Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 600]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.SEO_SLACK_CHANNEL }}",
+        "text": "=🔗 *Backlink Monitor Alert - {{ $json.domain }}*\n\n{{ $json.alerts.map(a => `${a.severity === 'critical' ? '🔴' : '🟡'} ${a.message}`).join('\\n') }}\n\n📊 *Current Metrics:*\n• Total Backlinks: {{ $json.metrics.totalBacklinks }}\n• Referring Domains: {{ $json.metrics.referringDomains }}\n• Avg DR: {{ $json.metrics.avgDomainRating }}\n• New (7d): +{{ $json.metrics.newLinks7d }} | Lost: -{{ $json.metrics.lostLinks7d }}\n\n🎯 *Actions Needed:*\n• {{ $json.toRecover.length }} links to recover\n• {{ $json.potentiallyToxic.length }} toxic links to review\n\n<{{ $json.exportUrls.csv }}|Download Report>",
+        "otherOptions": {}
+      },
+      "id": "alert-slack",
+      "name": "Send Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2250, 550],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.BACKLINK_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Daily Metrics",
+          "mode": "list",
+          "cachedResultName": "Daily Metrics"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.checkDate }}",
+            "Domain": "={{ $json.domain }}",
+            "Total Backlinks": "={{ $json.metrics.totalBacklinks }}",
+            "Referring Domains": "={{ $json.metrics.referringDomains }}",
+            "Avg DR": "={{ $json.metrics.avgDomainRating }}",
+            "Dofollow %": "={{ $json.metrics.dofollowRatio }}",
+            "New (7d)": "={{ $json.metrics.newLinks7d }}",
+            "Lost (7d)": "={{ $json.metrics.lostLinks7d }}",
+            "Net Growth": "={{ $json.metrics.netGrowth7d }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-sheets",
+      "name": "Log to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2250, 750],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Backlink Check": {
+      "main": [
+        [{ "node": "Fetch Monitored Domains", "type": "main", "index": 0 }]
+      ]
+    },
+    "Manual Check Trigger": {
+      "main": [
+        [{ "node": "Fetch Monitored Domains", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Monitored Domains": {
+      "main": [
+        [{ "node": "Prepare Monitor Jobs", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Monitor Jobs": {
+      "main": [
+        [
+          { "node": "Fetch Backlinks", "type": "main", "index": 0 },
+          { "node": "Fetch New/Lost Links", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Backlinks": {
+      "main": [
+        [{ "node": "Analyze Profile", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch New/Lost Links": {
+      "main": [
+        [{ "node": "Analyze Profile", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze Profile": {
+      "main": [
+        [
+          { "node": "AI Analysis", "type": "main", "index": 0 },
+          { "node": "Generate Outreach Tasks", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "AI Analysis": {
+      "main": [
+        [{ "node": "Compile Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Outreach Tasks": {
+      "main": [
+        [{ "node": "Compile Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Report": {
+      "main": [
+        [
+          { "node": "Save Report", "type": "main", "index": 0 },
+          { "node": "Has Alerts?", "type": "main", "index": 0 },
+          { "node": "Log to Sheets", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Has Alerts?": {
+      "main": [
+        [{ "node": "Send Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "seo", "name": "seo" },
+    { "id": "backlinks", "name": "backlinks" },
+    { "id": "monitoring", "name": "monitoring" },
+    { "id": "outreach", "name": "outreach" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

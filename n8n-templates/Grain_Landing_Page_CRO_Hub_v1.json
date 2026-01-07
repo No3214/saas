@@ -1,0 +1,542 @@
+{
+  "name": "Grain Landing Page CRO Hub v1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-page-request",
+      "name": "Page Builder Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "landing-page-builder"
+    },
+    {
+      "parameters": {},
+      "id": "webhook-form-submit",
+      "name": "Form Submission Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 500],
+      "webhookId": "form-submission"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-analytics",
+      "name": "Daily Analytics Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 700]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert Landing Page Designer and Conversion Rate Optimization specialist. Generate high-converting landing page content and structure based on the requirements.\n\nCreate pages that follow CRO best practices:\n- Clear value proposition above the fold\n- Compelling headlines that address pain points\n- Social proof and trust signals\n- Single, focused CTA\n- Minimal distractions\n- Mobile-optimized layout\n\nReturn JSON:\n{\n  \"pageStructure\": {\n    \"hero\": {\n      \"headline\": \"\",\n      \"subheadline\": \"\",\n      \"cta\": {\"text\": \"\", \"color\": \"\"},\n      \"heroImage\": \"description for AI image generation\",\n      \"trustBadges\": []\n    },\n    \"problemSection\": {\n      \"title\": \"\",\n      \"painPoints\": []\n    },\n    \"solutionSection\": {\n      \"title\": \"\",\n      \"features\": [{\"icon\": \"\", \"title\": \"\", \"description\": \"\"}]\n    },\n    \"socialProof\": {\n      \"testimonials\": [{\"quote\": \"\", \"author\": \"\", \"role\": \"\", \"company\": \"\"}],\n      \"logos\": [],\n      \"stats\": [{\"number\": \"\", \"label\": \"\"}]\n    },\n    \"pricing\": {\n      \"showPricing\": true,\n      \"plans\": []\n    },\n    \"faq\": [{\"question\": \"\", \"answer\": \"\"}],\n    \"finalCta\": {\n      \"headline\": \"\",\n      \"subheadline\": \"\",\n      \"buttonText\": \"\"\n    }\n  },\n  \"seoMeta\": {\n    \"title\": \"\",\n    \"description\": \"\",\n    \"keywords\": []\n  },\n  \"conversionGoals\": [],\n  \"abTestSuggestions\": []\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Create a landing page for:\n\nProduct/Service: {{ $json.product || 'SaaS Product' }}\nTarget Audience: {{ $json.audience || 'Small business owners' }}\nMain Goal: {{ $json.goal || 'Lead generation' }}\nValue Proposition: {{ $json.valueProp || 'Save time and increase productivity' }}\nTone: {{ $json.tone || 'Professional yet friendly' }}\n\nAdditional Context:\n{{ $json.context || 'None provided' }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-page-generator",
+      "name": "AI Page Generator",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a Form Optimization Expert. Design high-converting forms with optimal field structure, conditional logic, and progressive profiling.\n\nBest practices:\n- Minimize required fields (each field reduces conversion by ~7%)\n- Use smart defaults and auto-fill\n- Group related fields\n- Show progress for multi-step forms\n- Include microcopy to reduce friction\n\nReturn JSON:\n{\n  \"formStructure\": {\n    \"type\": \"single|multi-step\",\n    \"steps\": [\n      {\n        \"stepName\": \"\",\n        \"fields\": [\n          {\n            \"name\": \"\",\n            \"type\": \"text|email|phone|select|radio|checkbox|textarea\",\n            \"label\": \"\",\n            \"placeholder\": \"\",\n            \"required\": true,\n            \"validation\": \"\",\n            \"helpText\": \"\",\n            \"conditionalLogic\": null\n          }\n        ]\n      }\n    ],\n    \"submitButton\": {\n      \"text\": \"\",\n      \"loadingText\": \"\"\n    }\n  },\n  \"progressiveFields\": [],\n  \"exitIntentPopup\": {\n    \"enabled\": true,\n    \"headline\": \"\",\n    \"offer\": \"\",\n    \"formFields\": []\n  },\n  \"thankYouPage\": {\n    \"headline\": \"\",\n    \"message\": \"\",\n    \"nextSteps\": []\n  }\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Design a form for:\n\nPurpose: {{ $json.formPurpose || 'Lead capture' }}\nAudience: {{ $json.audience || 'B2B professionals' }}\nRequired Data: {{ $json.requiredData || 'Name, email, company' }}\nConversion Goal: {{ $json.goal || 'Newsletter signup' }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.5
+        }
+      },
+      "id": "ai-form-builder",
+      "name": "AI Form Builder",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Form Submission Processor\n// Validates, enriches, and routes form submissions\n\nconst submission = $input.first().json;\n\n// Validate submission\nconst errors = [];\nif (!submission.email || !submission.email.includes('@')) {\n  errors.push('Invalid email address');\n}\n\nif (errors.length > 0) {\n  return [{\n    json: {\n      success: false,\n      errors,\n      submission\n    }\n  }];\n}\n\n// Process submission\nconst processedSubmission = {\n  id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,\n  timestamp: new Date().toISOString(),\n  \n  // Form data\n  data: {\n    email: submission.email?.toLowerCase(),\n    firstName: submission.firstName || submission.first_name || '',\n    lastName: submission.lastName || submission.last_name || '',\n    company: submission.company || '',\n    phone: submission.phone || '',\n    ...submission\n  },\n  \n  // Source tracking\n  source: {\n    page: submission._page || submission.page,\n    utm_source: submission.utm_source || '',\n    utm_medium: submission.utm_medium || '',\n    utm_campaign: submission.utm_campaign || '',\n    referrer: submission._referrer || '',\n    landingPage: submission._landingPage || ''\n  },\n  \n  // Device info\n  device: {\n    userAgent: submission._userAgent || '',\n    screenSize: submission._screenSize || '',\n    isMobile: submission._isMobile || false\n  },\n  \n  // Scoring\n  leadScore: calculateLeadScore(submission),\n  \n  // Routing\n  assignedTo: null,\n  workflow: determineWorkflow(submission)\n};\n\nfunction calculateLeadScore(data) {\n  let score = 0;\n  \n  // Company provided\n  if (data.company) score += 20;\n  \n  // Phone provided\n  if (data.phone) score += 15;\n  \n  // Business email (not gmail, yahoo, etc)\n  const personalDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'];\n  const emailDomain = data.email?.split('@')[1]?.toLowerCase();\n  if (emailDomain && !personalDomains.includes(emailDomain)) score += 25;\n  \n  // UTM campaign present (targeted traffic)\n  if (data.utm_campaign) score += 10;\n  \n  // Time spent (if tracked)\n  if (data._timeOnPage > 60) score += 10;\n  if (data._timeOnPage > 180) score += 10;\n  \n  return Math.min(100, score);\n}\n\nfunction determineWorkflow(data) {\n  // High-intent indicators\n  if (data.demo_request || data.pricing_interest) {\n    return 'sales_qualified';\n  }\n  \n  // Lead score based routing\n  const score = calculateLeadScore(data);\n  if (score >= 60) return 'marketing_qualified';\n  if (score >= 30) return 'nurture_sequence';\n  return 'general_newsletter';\n}\n\nreturn [{ json: processedSubmission }];"
+      },
+      "id": "form-processor",
+      "name": "Form Submission Processor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.clearbit.com/v2/people/find",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $json.data.email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "clearbit-enrich",
+      "name": "Clearbit Enrichment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubspot.com/crm/v3/objects/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubSpotApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"email\": \"{{ $json.data.email }}\",\n    \"firstname\": \"{{ $json.data.firstName }}\",\n    \"lastname\": \"{{ $json.data.lastName }}\",\n    \"company\": \"{{ $json.data.company }}\",\n    \"phone\": \"{{ $json.data.phone }}\",\n    \"hs_lead_status\": \"NEW\",\n    \"lead_source\": \"{{ $json.source.page }}\",\n    \"lead_score\": \"{{ $json.leadScore }}\",\n    \"utm_source\": \"{{ $json.source.utm_source }}\",\n    \"utm_campaign\": \"{{ $json.source.utm_campaign }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "hubspot-create-contact",
+      "name": "Create HubSpot Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "high-intent",
+              "leftValue": "={{ $json.workflow }}",
+              "rightValue": "sales_qualified",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-by-intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [950, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#sales-leads",
+        "text": "=🔥 *High-Intent Lead!*\n\n*Name:* {{ $json.data.firstName }} {{ $json.data.lastName }}\n*Email:* {{ $json.data.email }}\n*Company:* {{ $json.data.company || 'Not provided' }}\n*Phone:* {{ $json.data.phone || 'Not provided' }}\n\n*Lead Score:* {{ $json.leadScore }}/100\n*Source:* {{ $json.source.page }}\n*Campaign:* {{ $json.source.utm_campaign || 'Direct' }}\n\n_Submitted at {{ $json.timestamp }}_\n\n<{{ $env.CRM_LINK }}/contact/{{ $json.id }}|View in CRM>",
+        "otherOptions": {}
+      },
+      "id": "slack-sales-alert",
+      "name": "Slack Sales Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.RESEND_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"from\": \"Your Company <hello@yourdomain.com>\",\n  \"to\": [\"{{ $json.data.email }}\"],\n  \"subject\": \"Thanks for reaching out, {{ $json.data.firstName }}!\",\n  \"html\": \"<h2>Hi {{ $json.data.firstName }},</h2><p>Thanks for your interest! Our team will be in touch within 24 hours.</p><p>In the meantime, check out our <a href='https://yourdomain.com/resources'>resources page</a>.</p><p>Best,<br>The Team</p>\"\n}",
+        "options": {}
+      },
+      "id": "send-confirmation-email",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 600]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.posthog.com/api/projects/{{ $env.POSTHOG_PROJECT_ID }}/insights",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "insight",
+              "value": "FUNNELS"
+            },
+            {
+              "name": "date_from",
+              "value": "-7d"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-analytics",
+      "name": "Fetch PostHog Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// CRO Analytics Processor\n// Analyzes landing page performance and identifies optimization opportunities\n\nconst analyticsData = $input.first().json;\n\n// Process funnel data\nconst funnelAnalysis = {\n  steps: [],\n  dropoffs: [],\n  overallConversion: 0\n};\n\nif (analyticsData.results) {\n  const steps = analyticsData.results[0]?.result || [];\n  let previousCount = null;\n  \n  steps.forEach((step, index) => {\n    const count = step.count || 0;\n    const dropoff = previousCount ? ((previousCount - count) / previousCount * 100) : 0;\n    \n    funnelAnalysis.steps.push({\n      name: step.name || `Step ${index + 1}`,\n      count,\n      conversionRate: previousCount ? ((count / previousCount) * 100).toFixed(2) : 100,\n      dropoff: dropoff.toFixed(2)\n    });\n    \n    if (dropoff > 20) {\n      funnelAnalysis.dropoffs.push({\n        step: step.name || `Step ${index + 1}`,\n        dropoffRate: dropoff.toFixed(2),\n        severity: dropoff > 50 ? 'critical' : dropoff > 35 ? 'high' : 'medium'\n      });\n    }\n    \n    previousCount = count;\n  });\n  \n  // Overall conversion\n  if (steps.length > 0) {\n    const first = steps[0]?.count || 0;\n    const last = steps[steps.length - 1]?.count || 0;\n    funnelAnalysis.overallConversion = first > 0 ? ((last / first) * 100).toFixed(2) : 0;\n  }\n}\n\n// Generate recommendations\nconst recommendations = [];\n\nfunnelAnalysis.dropoffs.forEach(dropoff => {\n  if (dropoff.severity === 'critical') {\n    recommendations.push({\n      priority: 'high',\n      step: dropoff.step,\n      issue: `Critical dropoff of ${dropoff.dropoffRate}%`,\n      suggestions: [\n        'Simplify this step',\n        'Add progress indicator',\n        'Reduce form fields',\n        'Add trust signals'\n      ]\n    });\n  }\n});\n\nreturn [{\n  json: {\n    funnelAnalysis,\n    recommendations,\n    period: '7 days',\n    analyzedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "cro-analyzer",
+      "name": "CRO Analyzer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a CRO Expert AI. Analyze landing page performance data and provide actionable optimization recommendations.\n\nFocus on:\n1. Identifying conversion bottlenecks\n2. Prioritizing high-impact changes\n3. Suggesting specific copy/design improvements\n4. Recommending A/B tests\n\nReturn JSON:\n{\n  \"performanceSummary\": \"\",\n  \"criticalIssues\": [],\n  \"optimizationPlan\": [\n    {\n      \"priority\": \"high|medium|low\",\n      \"area\": \"hero|form|cta|social-proof|etc\",\n      \"issue\": \"\",\n      \"recommendation\": \"\",\n      \"expectedImpact\": \"\",\n      \"effort\": \"low|medium|high\"\n    }\n  ],\n  \"abTestIdeas\": [\n    {\n      \"hypothesis\": \"\",\n      \"control\": \"\",\n      \"variant\": \"\",\n      \"expectedLift\": \"\"\n    }\n  ],\n  \"quickWins\": [],\n  \"overallScore\": 0\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Analyze this landing page performance data:\n\n{{ JSON.stringify($json, null, 2) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "ai-cro-recommendations",
+      "name": "AI CRO Recommendations",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [950, 700]
+    },
+    {
+      "parameters": {
+        "channel": "#marketing",
+        "text": "=📊 *Daily Landing Page CRO Report*\n\n*Funnel Performance (Last 7 Days):*\n{{ $('CRO Analyzer').first().json.funnelAnalysis.steps.map((s, i) => `${i+1}. ${s.name}: ${s.count} (${s.conversionRate}%)`).join('\\n') }}\n\n*Overall Conversion:* {{ $('CRO Analyzer').first().json.funnelAnalysis.overallConversion }}%\n\n*Critical Issues:*\n{{ $json.criticalIssues?.map(i => '🚨 ' + i).join('\\n') || 'None identified' }}\n\n*Quick Wins:*\n{{ $json.quickWins?.slice(0, 3).map((w, i) => `${i+1}. ${w}`).join('\\n') || 'None identified' }}\n\n*Performance Score:* {{ $json.overallScore }}/100\n\n*Top A/B Test Suggestion:*\n{{ $json.abTestIdeas?.[0]?.hypothesis || 'No suggestions' }}",
+        "otherOptions": {}
+      },
+      "id": "slack-cro-report",
+      "name": "Slack CRO Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1200, 700]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.LANDING_PAGE_ANALYTICS_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Submissions",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.timestamp }}",
+            "email": "={{ $json.data.email }}",
+            "name": "={{ $json.data.firstName }} {{ $json.data.lastName }}",
+            "company": "={{ $json.data.company }}",
+            "lead_score": "={{ $json.leadScore }}",
+            "source": "={{ $json.source.page }}",
+            "campaign": "={{ $json.source.utm_campaign }}",
+            "workflow": "={{ $json.workflow }}"
+          }
+        }
+      },
+      "id": "log-submission",
+      "name": "Log Submission",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [950, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"pageContent\": {{ JSON.stringify($('AI Page Generator').first().json) }},\n  \"formStructure\": {{ JSON.stringify($('AI Form Builder').first().json) }},\n  \"generatedAt\": \"{{ new Date().toISOString() }}\"\n}"
+      },
+      "id": "webhook-response-builder",
+      "name": "Page Builder Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [950, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"submissionId\": \"{{ $json.id }}\",\n  \"leadScore\": {{ $json.leadScore }},\n  \"message\": \"Thank you for your submission!\"\n}"
+      },
+      "id": "webhook-response-form",
+      "name": "Form Submission Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1450, 500]
+    }
+  ],
+  "connections": {
+    "Page Builder Request": {
+      "main": [
+        [
+          {
+            "node": "AI Page Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Form Submission Webhook": {
+      "main": [
+        [
+          {
+            "node": "Form Submission Processor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Analytics Check": {
+      "main": [
+        [
+          {
+            "node": "Fetch PostHog Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Page Generator": {
+      "main": [
+        [
+          {
+            "node": "AI Form Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Form Builder": {
+      "main": [
+        [
+          {
+            "node": "Page Builder Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Form Submission Processor": {
+      "main": [
+        [
+          {
+            "node": "Clearbit Enrichment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create HubSpot Contact",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clearbit Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create HubSpot Contact": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Slack Sales Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation Email": {
+      "main": [
+        [
+          {
+            "node": "Form Submission Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch PostHog Analytics": {
+      "main": [
+        [
+          {
+            "node": "CRO Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRO Analyzer": {
+      "main": [
+        [
+          {
+            "node": "AI CRO Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI CRO Recommendations": {
+      "main": [
+        [
+          {
+            "node": "Slack CRO Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-saas-landing-page-cro"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 3,
+  "tags": [
+    {
+      "name": "Landing Page",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "CRO",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Conversion",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}

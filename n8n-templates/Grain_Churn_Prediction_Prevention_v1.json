@@ -1,0 +1,399 @@
+{
+  "name": "Grain Churn Prediction & Prevention v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily Analysis",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.CRM_API_URL }}/customers",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "active"
+            },
+            {
+              "name": "include",
+              "value": "usage,billing,support_tickets,login_history"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "fetch-customers",
+      "name": "Fetch Active Customers",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate churn risk scores for all customers\nconst customers = $input.first().json.customers || [];\nconst today = new Date();\n\nconst riskAssessments = customers.map(customer => {\n  let riskScore = 0;\n  const riskFactors = [];\n  \n  // 1. Login frequency (max 25 points)\n  const lastLogin = customer.last_login ? new Date(customer.last_login) : null;\n  const daysSinceLogin = lastLogin ? Math.floor((today - lastLogin) / (1000 * 60 * 60 * 24)) : 999;\n  \n  if (daysSinceLogin > 30) {\n    riskScore += 25;\n    riskFactors.push({ factor: 'No login in 30+ days', impact: 'high', days: daysSinceLogin });\n  } else if (daysSinceLogin > 14) {\n    riskScore += 15;\n    riskFactors.push({ factor: 'No login in 14+ days', impact: 'medium', days: daysSinceLogin });\n  } else if (daysSinceLogin > 7) {\n    riskScore += 5;\n    riskFactors.push({ factor: 'No login in 7+ days', impact: 'low', days: daysSinceLogin });\n  }\n  \n  // 2. Usage decline (max 25 points)\n  const usage = customer.usage || {};\n  const currentUsage = usage.current_month || 0;\n  const previousUsage = usage.previous_month || currentUsage;\n  const usageChange = previousUsage > 0 ? ((currentUsage - previousUsage) / previousUsage) * 100 : 0;\n  \n  if (usageChange < -50) {\n    riskScore += 25;\n    riskFactors.push({ factor: 'Usage dropped 50%+', impact: 'high', change: `${usageChange.toFixed(1)}%` });\n  } else if (usageChange < -25) {\n    riskScore += 15;\n    riskFactors.push({ factor: 'Usage dropped 25%+', impact: 'medium', change: `${usageChange.toFixed(1)}%` });\n  } else if (usageChange < -10) {\n    riskScore += 5;\n    riskFactors.push({ factor: 'Usage declining', impact: 'low', change: `${usageChange.toFixed(1)}%` });\n  }\n  \n  // 3. Support tickets (max 15 points)\n  const recentTickets = customer.support_tickets?.filter(t => {\n    const created = new Date(t.created_at);\n    return (today - created) < (30 * 24 * 60 * 60 * 1000);\n  }) || [];\n  const unresolvedTickets = recentTickets.filter(t => t.status !== 'resolved');\n  \n  if (unresolvedTickets.length > 3) {\n    riskScore += 15;\n    riskFactors.push({ factor: 'Multiple unresolved tickets', impact: 'high', count: unresolvedTickets.length });\n  } else if (unresolvedTickets.length > 0) {\n    riskScore += 8;\n    riskFactors.push({ factor: 'Has unresolved tickets', impact: 'medium', count: unresolvedTickets.length });\n  }\n  \n  // 4. Payment issues (max 20 points)\n  const billing = customer.billing || {};\n  if (billing.failed_payments > 0) {\n    riskScore += 20;\n    riskFactors.push({ factor: 'Payment failures', impact: 'high', count: billing.failed_payments });\n  }\n  if (billing.past_due) {\n    riskScore += 15;\n    riskFactors.push({ factor: 'Account past due', impact: 'high', amount: billing.amount_due });\n  }\n  \n  // 5. Contract/subscription signals (max 15 points)\n  const subscription = customer.subscription || {};\n  const renewalDate = subscription.renewal_date ? new Date(subscription.renewal_date) : null;\n  const daysUntilRenewal = renewalDate ? Math.floor((renewalDate - today) / (1000 * 60 * 60 * 24)) : 999;\n  \n  if (daysUntilRenewal <= 30 && daysUntilRenewal > 0) {\n    riskScore += 10;\n    riskFactors.push({ factor: 'Renewal approaching', impact: 'medium', days: daysUntilRenewal });\n  }\n  if (subscription.plan_downgraded) {\n    riskScore += 15;\n    riskFactors.push({ factor: 'Recently downgraded', impact: 'high' });\n  }\n  \n  // Determine risk level\n  let riskLevel = 'low';\n  if (riskScore >= 60) riskLevel = 'critical';\n  else if (riskScore >= 40) riskLevel = 'high';\n  else if (riskScore >= 20) riskLevel = 'medium';\n  \n  return {\n    customerId: customer.id,\n    customerName: customer.name,\n    email: customer.email,\n    accountManager: customer.account_manager,\n    mrr: customer.mrr || 0,\n    plan: subscription.plan_name,\n    customerSince: customer.created_at,\n    riskScore,\n    riskLevel,\n    riskFactors,\n    daysSinceLogin,\n    usageChange: usageChange.toFixed(1),\n    unresolvedTickets: unresolvedTickets.length,\n    daysUntilRenewal,\n    lifetimeValue: customer.ltv || 0\n  };\n});\n\n// Sort by risk score descending\nriskAssessments.sort((a, b) => b.riskScore - a.riskScore);\n\n// Summary statistics\nconst summary = {\n  totalCustomers: customers.length,\n  criticalRisk: riskAssessments.filter(r => r.riskLevel === 'critical').length,\n  highRisk: riskAssessments.filter(r => r.riskLevel === 'high').length,\n  mediumRisk: riskAssessments.filter(r => r.riskLevel === 'medium').length,\n  lowRisk: riskAssessments.filter(r => r.riskLevel === 'low').length,\n  mrrAtRisk: riskAssessments.filter(r => r.riskLevel === 'critical' || r.riskLevel === 'high')\n    .reduce((sum, r) => sum + r.mrr, 0),\n  avgRiskScore: Math.round(riskAssessments.reduce((a, b) => a + b.riskScore, 0) / riskAssessments.length)\n};\n\nreturn [{ json: { assessments: riskAssessments, summary, analyzedAt: new Date().toISOString() } }];"
+      },
+      "id": "calculate-risk",
+      "name": "Calculate Churn Risk",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Customer Success AI specializing in churn prevention. Analyze at-risk customers and recommend personalized retention strategies.\n\nFor each customer, consider:\n1. Primary churn indicators\n2. Customer value (MRR, LTV)\n3. Historical behavior patterns\n4. Industry-specific factors\n\nProvide actionable retention strategies including:\n- Immediate actions (within 24 hours)\n- Short-term interventions (1 week)\n- Long-term engagement plans\n- Personalized outreach messaging\n- Potential offers or incentives",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze these at-risk customers and recommend retention strategies:\n\n**Summary:**\n{{ JSON.stringify($json.summary, null, 2) }}\n\n**Critical & High Risk Customers:**\n{{ JSON.stringify($json.assessments.filter(a => a.riskLevel === 'critical' || a.riskLevel === 'high').slice(0, 10), null, 2) }}\n\nProvide specific, personalized retention recommendations for each customer.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 3000
+        }
+      },
+      "id": "ai-retention-strategy",
+      "name": "AI Retention Strategy",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter critical risk customers for immediate intervention\nconst assessments = $('Calculate Churn Risk').first().json.assessments;\nconst aiStrategies = $('AI Retention Strategy').first().json;\n\nconst criticalCustomers = assessments.filter(a => a.riskLevel === 'critical');\n\n// Merge AI recommendations with customer data\nconst interventions = criticalCustomers.map(customer => {\n  const strategy = aiStrategies.strategies?.find(s => s.customerId === customer.customerId) ||\n    aiStrategies.recommendations?.find(r => r.customerId === customer.customerId) ||\n    {};\n  \n  return {\n    ...customer,\n    interventionType: 'critical',\n    recommendedActions: strategy.immediateActions || [\n      'Personal call from account manager',\n      'Offer extended trial/discount',\n      'Schedule product training'\n    ],\n    outreachMessage: strategy.personalizedMessage || null,\n    offerSuggested: strategy.offer || null,\n    assignedTo: customer.accountManager || 'unassigned'\n  };\n});\n\nreturn interventions.map(i => ({ json: i }));"
+      },
+      "id": "prepare-interventions",
+      "name": "Prepare Interventions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.CRM_API_URL }}/tasks",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"URGENT: Churn Risk - {{ $json.customerName }}\",\n  \"description\": \"Customer at critical risk of churning.\\n\\nRisk Score: {{ $json.riskScore }}/100\\nMRR at Risk: ${{ $json.mrr }}\\n\\nRisk Factors:\\n{{ $json.riskFactors.map(f => '- ' + f.factor).join('\\n') }}\\n\\nRecommended Actions:\\n{{ $json.recommendedActions.map(a => '- ' + a).join('\\n') }}\",\n  \"customer_id\": \"{{ $json.customerId }}\",\n  \"assigned_to\": \"{{ $json.assignedTo }}\",\n  \"due_date\": \"{{ $now.plus({ days: 1 }).format('yyyy-MM-dd') }}\",\n  \"priority\": \"urgent\",\n  \"type\": \"churn_intervention\"\n}",
+        "options": {}
+      },
+      "id": "create-crm-task",
+      "name": "Create CRM Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crm-api-key",
+          "name": "CRM API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.assignedTo ? `@${$json.assignedTo}` : $vars.CS_SLACK_CHANNEL }}",
+        "text": "=🚨 *Critical Churn Alert*\n\n*Customer:* {{ $json.customerName }}\n*Risk Score:* {{ $json.riskScore }}/100\n*MRR at Risk:* ${{ $json.mrr.toLocaleString() }}\n\n⚠️ *Risk Factors:*\n{{ $json.riskFactors.map(f => `• ${f.factor} (${f.impact})`).join('\\n') }}\n\n💡 *Recommended Actions:*\n{{ $json.recommendedActions.map(a => `• ${a}`).join('\\n') }}\n\n_Please take action within 24 hours_",
+        "otherOptions": {}
+      },
+      "id": "alert-critical",
+      "name": "Alert Account Manager",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1500, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-critical",
+              "leftValue": "={{ $json.summary.criticalRisk }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-critical",
+      "name": "Has Critical?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.CS_SLACK_CHANNEL }}",
+        "text": "=📊 *Daily Churn Risk Report - {{ $now.format('MMMM d, yyyy') }}*\n\n*Risk Distribution:*\n🔴 Critical: {{ $json.summary.criticalRisk }} customers\n🟠 High: {{ $json.summary.highRisk }} customers\n🟡 Medium: {{ $json.summary.mediumRisk }} customers\n🟢 Low: {{ $json.summary.lowRisk }} customers\n\n💰 *MRR at Risk (Critical + High):* ${{ $json.summary.mrrAtRisk.toLocaleString() }}\n\n📈 *Metrics:*\n• Total Active Customers: {{ $json.summary.totalCustomers }}\n• Average Risk Score: {{ $json.summary.avgRiskScore }}/100\n\n{{ $json.summary.criticalRisk > 0 ? `\\n⚠️ *${$json.summary.criticalRisk} critical accounts require immediate attention*` : '\\n✅ No critical risks detected' }}",
+        "otherOptions": {}
+      },
+      "id": "daily-summary",
+      "name": "Daily Summary",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $vars.CHURN_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Daily Risk Log",
+          "mode": "list",
+          "cachedResultName": "Daily Risk Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.format('yyyy-MM-dd') }}",
+            "Total Customers": "={{ $json.summary.totalCustomers }}",
+            "Critical Risk": "={{ $json.summary.criticalRisk }}",
+            "High Risk": "={{ $json.summary.highRisk }}",
+            "Medium Risk": "={{ $json.summary.mediumRisk }}",
+            "Low Risk": "={{ $json.summary.lowRisk }}",
+            "MRR at Risk": "={{ $json.summary.mrrAtRisk }}",
+            "Avg Risk Score": "={{ $json.summary.avgRiskScore }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-daily",
+      "name": "Log Daily Risk",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1500, 600],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credential",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "churn-win-back",
+        "options": {}
+      },
+      "id": "winback-webhook",
+      "name": "Win-Back Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 700],
+      "webhookId": "churn-winback"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process churned customer for win-back campaign\nconst customer = $input.first().json.body;\n\nconst winBackCandidate = {\n  customerId: customer.id,\n  customerName: customer.name,\n  email: customer.email,\n  churned_date: customer.churned_date || new Date().toISOString(),\n  reason: customer.churn_reason || 'unknown',\n  previousPlan: customer.previous_plan,\n  previousMrr: customer.previous_mrr,\n  lifetimeValue: customer.ltv,\n  tenure: customer.tenure_months,\n  lastInteraction: customer.last_interaction\n};\n\nreturn [{ json: winBackCandidate }];"
+      },
+      "id": "process-churned",
+      "name": "Process Churned Customer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 700]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a Win-Back Campaign Specialist AI. Create personalized win-back strategies for churned customers.\n\nConsider:\n1. Churn reason\n2. Customer value (LTV, previous MRR)\n3. Tenure with company\n4. Time since churn\n\nCreate:\n1. Personalized win-back email (subject + body)\n2. Special offer recommendation\n3. Best timing for outreach\n4. Follow-up sequence plan",
+              "role": "system"
+            },
+            {
+              "content": "=Create a win-back strategy for this churned customer:\n\n{{ JSON.stringify($json, null, 2) }}\n\nProvide a comprehensive, personalized win-back approach.",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.6,
+          "maxTokens": 1500
+        }
+      },
+      "id": "ai-winback",
+      "name": "AI Win-Back Strategy",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [750, 700],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EMAIL_API_URL }}/sequences/enroll",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"email\": \"{{ $('Process Churned Customer').first().json.email }}\",\n  \"sequence_id\": \"{{ $vars.WINBACK_SEQUENCE_ID }}\",\n  \"custom_data\": {\n    \"customer_name\": \"{{ $('Process Churned Customer').first().json.customerName }}\",\n    \"offer\": {{ JSON.stringify($json.offer || $json.recommendedOffer) }},\n    \"personalized_message\": {{ JSON.stringify($json.email?.body || $json.personalizedMessage) }}\n  }\n}",
+        "options": {}
+      },
+      "id": "enroll-winback",
+      "name": "Enroll in Win-Back",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "email-api-key",
+          "name": "Email API Key"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily Analysis": {
+      "main": [
+        [{ "node": "Fetch Active Customers", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Active Customers": {
+      "main": [
+        [{ "node": "Calculate Churn Risk", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calculate Churn Risk": {
+      "main": [
+        [
+          { "node": "AI Retention Strategy", "type": "main", "index": 0 },
+          { "node": "Has Critical?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "AI Retention Strategy": {
+      "main": [
+        [{ "node": "Prepare Interventions", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Interventions": {
+      "main": [
+        [
+          { "node": "Create CRM Task", "type": "main", "index": 0 },
+          { "node": "Alert Account Manager", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Has Critical?": {
+      "main": [
+        [{ "node": "Daily Summary", "type": "main", "index": 0 }],
+        [{ "node": "Daily Summary", "type": "main", "index": 0 }]
+      ]
+    },
+    "Daily Summary": {
+      "main": [
+        [{ "node": "Log Daily Risk", "type": "main", "index": 0 }]
+      ]
+    },
+    "Win-Back Webhook": {
+      "main": [
+        [{ "node": "Process Churned Customer", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Churned Customer": {
+      "main": [
+        [{ "node": "AI Win-Back Strategy", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Win-Back Strategy": {
+      "main": [
+        [{ "node": "Enroll in Win-Back", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "customer-success", "name": "customer-success" },
+    { "id": "churn", "name": "churn" },
+    { "id": "retention", "name": "retention" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-07T00:00:00.000Z",
+  "versionId": "1"
+}

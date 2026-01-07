@@ -1,0 +1,510 @@
+{
+  "name": "Grain RevOps Hub v1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-webhook",
+      "name": "RevOps Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "revops-trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-daily",
+      "name": "Daily Pipeline Sync",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.apollo.io/v1/opportunities",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "apolloApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "stage",
+              "value": "={{ $json.stage || 'all' }}"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "apollo-pipeline",
+      "name": "Apollo Pipeline Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.hubspot.com/crm/v3/objects/deals",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubSpotApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "100"
+            },
+            {
+              "name": "properties",
+              "value": "dealname,amount,dealstage,closedate,pipeline,hubspot_owner_id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "hubspot-deals",
+      "name": "HubSpot Deals",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.salesforce.com/services/data/v58.0/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "salesforceOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "SELECT Id, Name, Amount, StageName, CloseDate, Probability, OwnerId FROM Opportunity WHERE IsClosed = false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "salesforce-opps",
+      "name": "Salesforce Opportunities",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Revenue Operations Data Aggregator\n// Combines data from Apollo, HubSpot, and Salesforce\n\nconst apolloData = $('Apollo Pipeline Data').all();\nconst hubspotData = $('HubSpot Deals').all();\nconst salesforceData = $('Salesforce Opportunities').all();\n\n// Normalize and merge pipeline data\nconst unifiedPipeline = [];\n\n// Process Apollo opportunities\napolloData.forEach(item => {\n  if (item.json.opportunities) {\n    item.json.opportunities.forEach(opp => {\n      unifiedPipeline.push({\n        source: 'apollo',\n        id: opp.id,\n        name: opp.name || opp.organization_name,\n        amount: parseFloat(opp.value) || 0,\n        stage: opp.stage_name || 'Unknown',\n        probability: opp.probability || 50,\n        closeDate: opp.expected_close_date,\n        owner: opp.owner_id,\n        createdAt: opp.created_at,\n        lastActivity: opp.last_activity_at\n      });\n    });\n  }\n});\n\n// Process HubSpot deals\nhubspotData.forEach(item => {\n  if (item.json.results) {\n    item.json.results.forEach(deal => {\n      unifiedPipeline.push({\n        source: 'hubspot',\n        id: deal.id,\n        name: deal.properties.dealname,\n        amount: parseFloat(deal.properties.amount) || 0,\n        stage: deal.properties.dealstage,\n        probability: getStageProbability(deal.properties.dealstage),\n        closeDate: deal.properties.closedate,\n        owner: deal.properties.hubspot_owner_id,\n        createdAt: deal.createdAt,\n        lastActivity: deal.updatedAt\n      });\n    });\n  }\n});\n\n// Process Salesforce opportunities\nsalesforceData.forEach(item => {\n  if (item.json.records) {\n    item.json.records.forEach(opp => {\n      unifiedPipeline.push({\n        source: 'salesforce',\n        id: opp.Id,\n        name: opp.Name,\n        amount: parseFloat(opp.Amount) || 0,\n        stage: opp.StageName,\n        probability: opp.Probability || 50,\n        closeDate: opp.CloseDate,\n        owner: opp.OwnerId,\n        createdAt: opp.CreatedDate,\n        lastActivity: opp.LastModifiedDate\n      });\n    });\n  }\n});\n\nfunction getStageProbability(stage) {\n  const probabilities = {\n    'appointmentscheduled': 20,\n    'qualifiedtobuy': 40,\n    'presentationscheduled': 60,\n    'decisionmakerboughtin': 80,\n    'contractsent': 90,\n    'closedwon': 100,\n    'closedlost': 0\n  };\n  return probabilities[stage?.toLowerCase()] || 50;\n}\n\n// Calculate pipeline metrics\nconst totalPipeline = unifiedPipeline.reduce((sum, opp) => sum + opp.amount, 0);\nconst weightedPipeline = unifiedPipeline.reduce((sum, opp) => sum + (opp.amount * opp.probability / 100), 0);\nconst avgDealSize = unifiedPipeline.length > 0 ? totalPipeline / unifiedPipeline.length : 0;\n\n// Stage distribution\nconst stageDistribution = {};\nunifiedPipeline.forEach(opp => {\n  if (!stageDistribution[opp.stage]) {\n    stageDistribution[opp.stage] = { count: 0, value: 0 };\n  }\n  stageDistribution[opp.stage].count++;\n  stageDistribution[opp.stage].value += opp.amount;\n});\n\nreturn [{\n  json: {\n    summary: {\n      totalOpportunities: unifiedPipeline.length,\n      totalPipelineValue: totalPipeline,\n      weightedPipelineValue: weightedPipeline,\n      averageDealSize: avgDealSize,\n      forecastAccuracy: (weightedPipeline / totalPipeline * 100).toFixed(2) + '%'\n    },\n    stageDistribution,\n    opportunities: unifiedPipeline,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "aggregate-pipeline",
+      "name": "Aggregate Pipeline Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a Revenue Operations AI analyst. Analyze pipeline data and provide actionable insights for improving win rates, identifying at-risk deals, and optimizing the sales process.\n\nProvide your analysis in this JSON format:\n{\n  \"pipelineHealth\": \"healthy|warning|critical\",\n  \"keyInsights\": [\"insight1\", \"insight2\", \"insight3\"],\n  \"atRiskDeals\": [{\"name\": \"deal\", \"reason\": \"why at risk\", \"recommendation\": \"action\"}],\n  \"winRatePrediction\": \"percentage\",\n  \"recommendedActions\": [\"action1\", \"action2\"],\n  \"forecastAdjustment\": \"percentage adjustment needed\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Analyze this pipeline data and provide strategic insights:\n\nTotal Pipeline: ${{ $json.summary.totalPipelineValue.toLocaleString() }}\nWeighted Pipeline: ${{ $json.summary.weightedPipelineValue.toLocaleString() }}\nTotal Opportunities: {{ $json.summary.totalOpportunities }}\nAverage Deal Size: ${{ $json.summary.averageDealSize.toLocaleString() }}\n\nStage Distribution:\n{{ JSON.stringify($json.stageDistribution, null, 2) }}\n\nRecent Opportunities:\n{{ JSON.stringify($json.opportunities.slice(0, 20), null, 2) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "ai-pipeline-analysis",
+      "name": "AI Pipeline Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [950, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an AI Lead Scoring & Routing specialist. Based on lead data, assign a score (0-100) and determine the optimal sales rep/team for routing.\n\nConsider factors:\n- Company size and revenue potential\n- Engagement level (website visits, email opens, content downloads)\n- Industry fit with ICP (Ideal Customer Profile)\n- Budget indicators\n- Decision timeline\n- Previous interactions\n\nReturn JSON:\n{\n  \"leadScore\": 0-100,\n  \"scoreBreakdown\": {\"firmographic\": 25, \"behavioral\": 25, \"engagement\": 25, \"intent\": 25},\n  \"priority\": \"hot|warm|cold\",\n  \"recommendedOwner\": \"rep name or team\",\n  \"routingReason\": \"explanation\",\n  \"nextBestAction\": \"recommended action\",\n  \"estimatedDealSize\": \"$amount\",\n  \"conversionProbability\": \"percentage\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Score and route this lead:\n\n{{ JSON.stringify($json, null, 2) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "ai-lead-scoring",
+      "name": "AI Lead Scoring",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [950, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Revenue Forecasting Engine\n// Uses historical data and AI insights to generate forecasts\n\nconst pipelineData = $('Aggregate Pipeline Data').first().json;\nconst aiAnalysis = $('AI Pipeline Analysis').first().json;\n\n// Historical conversion rates (would come from actual historical data)\nconst historicalRates = {\n  'Prospecting': 0.15,\n  'Qualification': 0.25,\n  'Proposal': 0.45,\n  'Negotiation': 0.70,\n  'Closed Won': 1.0\n};\n\n// Calculate monthly forecast\nconst opportunities = pipelineData.opportunities || [];\nconst monthlyForecast = {};\n\nopportunities.forEach(opp => {\n  if (opp.closeDate) {\n    const month = opp.closeDate.substring(0, 7); // YYYY-MM\n    if (!monthlyForecast[month]) {\n      monthlyForecast[month] = {\n        committed: 0,\n        bestCase: 0,\n        pipeline: 0,\n        count: 0\n      };\n    }\n    \n    const prob = opp.probability / 100;\n    monthlyForecast[month].pipeline += opp.amount;\n    monthlyForecast[month].count++;\n    \n    if (prob >= 0.9) {\n      monthlyForecast[month].committed += opp.amount;\n    } else if (prob >= 0.5) {\n      monthlyForecast[month].bestCase += opp.amount * prob;\n    }\n  }\n});\n\n// Calculate velocity metrics\nconst avgCycleLength = 45; // days - would be calculated from historical\nconst currentVelocity = pipelineData.summary.totalPipelineValue / avgCycleLength;\nconst requiredVelocity = 1000000 / 30; // $1M/month target\n\nreturn [{\n  json: {\n    forecast: {\n      monthly: monthlyForecast,\n      quarterly: {\n        committed: Object.values(monthlyForecast).reduce((sum, m) => sum + m.committed, 0),\n        bestCase: Object.values(monthlyForecast).reduce((sum, m) => sum + m.bestCase, 0),\n        pipeline: Object.values(monthlyForecast).reduce((sum, m) => sum + m.pipeline, 0)\n      }\n    },\n    velocity: {\n      current: currentVelocity,\n      required: requiredVelocity,\n      gap: requiredVelocity - currentVelocity,\n      status: currentVelocity >= requiredVelocity ? 'on-track' : 'behind'\n    },\n    aiInsights: aiAnalysis,\n    pipelineSummary: pipelineData.summary,\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "forecast-engine",
+      "name": "Revenue Forecast Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubspot.com/crm/v3/objects/deals/{{ $json.dealId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubSpotApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"lead_score\": \"{{ $('AI Lead Scoring').first().json.leadScore }}\",\n    \"lead_priority\": \"{{ $('AI Lead Scoring').first().json.priority }}\",\n    \"ai_next_action\": \"{{ $('AI Lead Scoring').first().json.nextBestAction }}\",\n    \"hubspot_owner_id\": \"{{ $('AI Lead Scoring').first().json.recommendedOwner }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "update-crm-scores",
+      "name": "Update CRM with Scores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "at-risk-check",
+              "leftValue": "={{ $json.aiInsights.pipelineHealth }}",
+              "rightValue": "critical",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "check-at-risk",
+      "name": "At-Risk Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.1,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#revenue-ops-alerts",
+        "text": "=🚨 *CRITICAL: Pipeline Health Alert*\n\n*Pipeline Status:* {{ $json.aiInsights.pipelineHealth }}\n*Win Rate Prediction:* {{ $json.aiInsights.winRatePrediction }}\n\n*Key Issues:*\n{{ $json.aiInsights.keyInsights.map(i => '• ' + i).join('\\n') }}\n\n*At-Risk Deals:*\n{{ $json.aiInsights.atRiskDeals.map(d => '• ' + d.name + ': ' + d.reason).join('\\n') }}\n\n*Recommended Actions:*\n{{ $json.aiInsights.recommendedActions.map((a, i) => (i+1) + '. ' + a).join('\\n') }}\n\n*Velocity Status:* {{ $json.velocity.status }}\n*Current Velocity:* ${{ Math.round($json.velocity.current).toLocaleString() }}/day\n*Required:* ${{ Math.round($json.velocity.required).toLocaleString() }}/day",
+        "otherOptions": {}
+      },
+      "id": "slack-critical-alert",
+      "name": "Slack Critical Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1700, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#revenue-ops",
+        "text": "=📊 *Daily RevOps Pipeline Summary*\n\n*Total Pipeline:* ${{ $json.pipelineSummary.totalPipelineValue.toLocaleString() }}\n*Weighted Pipeline:* ${{ $json.pipelineSummary.weightedPipelineValue.toLocaleString() }}\n*Opportunities:* {{ $json.pipelineSummary.totalOpportunities }}\n*Avg Deal Size:* ${{ Math.round($json.pipelineSummary.averageDealSize).toLocaleString() }}\n\n*Pipeline Health:* {{ $json.aiInsights.pipelineHealth }}\n*Win Rate Prediction:* {{ $json.aiInsights.winRatePrediction }}\n\n*Quarterly Forecast:*\n• Committed: ${{ $json.forecast.quarterly.committed.toLocaleString() }}\n• Best Case: ${{ $json.forecast.quarterly.bestCase.toLocaleString() }}\n• Pipeline: ${{ $json.forecast.quarterly.pipeline.toLocaleString() }}\n\n*Today's Focus:*\n{{ $json.aiInsights.recommendedActions.slice(0, 3).map((a, i) => (i+1) + '. ' + a).join('\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-daily-summary",
+      "name": "Slack Daily Summary",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1700, 500]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.REVOPS_SPREADSHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Pipeline History",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "date": "={{ $json.generatedAt }}",
+            "totalPipeline": "={{ $json.pipelineSummary.totalPipelineValue }}",
+            "weightedPipeline": "={{ $json.pipelineSummary.weightedPipelineValue }}",
+            "opportunities": "={{ $json.pipelineSummary.totalOpportunities }}",
+            "avgDealSize": "={{ $json.pipelineSummary.averageDealSize }}",
+            "pipelineHealth": "={{ $json.aiInsights.pipelineHealth }}",
+            "winRatePrediction": "={{ $json.aiInsights.winRatePrediction }}",
+            "committed": "={{ $json.forecast.quarterly.committed }}",
+            "bestCase": "={{ $json.forecast.quarterly.bestCase }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-to-sheets",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1700, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.clari.com/v4/forecast/submit",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"forecast_period\": \"{{ new Date().toISOString().substring(0, 7) }}\",\n  \"forecast_data\": {\n    \"committed\": {{ $json.forecast.quarterly.committed }},\n    \"best_case\": {{ $json.forecast.quarterly.bestCase }},\n    \"pipeline\": {{ $json.forecast.quarterly.pipeline }},\n    \"ai_predicted_close\": {{ $json.pipelineSummary.weightedPipelineValue }}\n  },\n  \"confidence_score\": {{ parseFloat($json.aiInsights.winRatePrediction) || 75 }},\n  \"metadata\": {\n    \"source\": \"n8n_revops_hub\",\n    \"pipeline_health\": \"{{ $json.aiInsights.pipelineHealth }}\",\n    \"generated_at\": \"{{ $json.generatedAt }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "sync-to-clari",
+      "name": "Sync to Clari",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1950, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"pipeline\": {\n    \"total\": {{ $json.pipelineSummary.totalPipelineValue }},\n    \"weighted\": {{ $json.pipelineSummary.weightedPipelineValue }},\n    \"opportunities\": {{ $json.pipelineSummary.totalOpportunities }}\n  },\n  \"forecast\": {{ JSON.stringify($json.forecast) }},\n  \"health\": \"{{ $json.aiInsights.pipelineHealth }}\",\n  \"insights\": {{ JSON.stringify($json.aiInsights.keyInsights) }},\n  \"timestamp\": \"{{ $json.generatedAt }}\"\n}"
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1950, 300]
+    }
+  ],
+  "connections": {
+    "RevOps Trigger": {
+      "main": [
+        [
+          {
+            "node": "Apollo Pipeline Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Deals",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Salesforce Opportunities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Pipeline Sync": {
+      "main": [
+        [
+          {
+            "node": "Apollo Pipeline Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HubSpot Deals",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Salesforce Opportunities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo Pipeline Data": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Pipeline Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Deals": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Pipeline Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salesforce Opportunities": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Pipeline Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Pipeline Data": {
+      "main": [
+        [
+          {
+            "node": "AI Pipeline Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Lead Scoring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Pipeline Analysis": {
+      "main": [
+        [
+          {
+            "node": "Revenue Forecast Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Lead Scoring": {
+      "main": [
+        [
+          {
+            "node": "Update CRM with Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revenue Forecast Engine": {
+      "main": [
+        [
+          {
+            "node": "Check-At-Risk",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack Daily Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "At-Risk Check": {
+      "main": [
+        [
+          {
+            "node": "Slack Critical Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Slack Daily Summary": {
+      "main": [
+        [
+          {
+            "node": "Sync to Clari",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-saas-revops"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 2,
+  "tags": [
+    {
+      "name": "RevOps",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Revenue",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Pipeline",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}

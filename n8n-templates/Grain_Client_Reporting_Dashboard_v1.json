@@ -1,0 +1,522 @@
+{
+  "name": "Grain Client Reporting Dashboard v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-report-trigger",
+      "name": "Weekly Report Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "monthly-report-trigger",
+      "name": "Monthly Report Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 500]
+    },
+    {
+      "parameters": {},
+      "id": "webhook-report-request",
+      "name": "On-Demand Report Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 700],
+      "webhookId": "client-report-request"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.CLIENT_DATABASE_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "id": "get-client-list",
+      "name": "Get Client List",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://analyticsdata.googleapis.com/v1beta/properties/{{ $json.ga4_property_id }}:runReport",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleAnalyticsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"dateRanges\": [\n    {\"startDate\": \"{{ $json.reportPeriod?.start || '30daysAgo' }}\", \"endDate\": \"{{ $json.reportPeriod?.end || 'yesterday' }}\"},\n    {\"startDate\": \"{{ $json.comparePeriod?.start || '60daysAgo' }}\", \"endDate\": \"{{ $json.comparePeriod?.end || '31daysAgo' }}\"}\n  ],\n  \"dimensions\": [\n    {\"name\": \"date\"},\n    {\"name\": \"sessionSource\"},\n    {\"name\": \"sessionMedium\"},\n    {\"name\": \"deviceCategory\"}\n  ],\n  \"metrics\": [\n    {\"name\": \"sessions\"},\n    {\"name\": \"totalUsers\"},\n    {\"name\": \"newUsers\"},\n    {\"name\": \"bounceRate\"},\n    {\"name\": \"averageSessionDuration\"},\n    {\"name\": \"screenPageViews\"},\n    {\"name\": \"conversions\"},\n    {\"name\": \"totalRevenue\"}\n  ]\n}",
+        "options": {}
+      },
+      "id": "fetch-ga4-data",
+      "name": "Fetch GA4 Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://googleads.googleapis.com/v15/customers/{{ $json.google_ads_id }}/googleAds:searchStream",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleAdsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"SELECT campaign.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, metrics.ctr, metrics.average_cpc FROM campaign WHERE segments.date DURING LAST_30_DAYS\"\n}",
+        "options": {}
+      },
+      "id": "fetch-google-ads",
+      "name": "Fetch Google Ads Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v18.0/act_{{ $json.meta_ad_account_id }}/insights",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "campaign_name,impressions,clicks,spend,reach,cpc,cpm,ctr,conversions,cost_per_conversion,purchase_roas"
+            },
+            {
+              "name": "date_preset",
+              "value": "last_30d"
+            },
+            {
+              "name": "level",
+              "value": "campaign"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-meta-ads",
+      "name": "Fetch Meta Ads Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/rest/adAnalytics",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linkedInOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "analytics"
+            },
+            {
+              "name": "pivot",
+              "value": "CAMPAIGN"
+            },
+            {
+              "name": "dateRange.start.day",
+              "value": "1"
+            },
+            {
+              "name": "dateRange.start.month",
+              "value": "={{ new Date().getMonth() }}"
+            },
+            {
+              "name": "dateRange.start.year",
+              "value": "={{ new Date().getFullYear() }}"
+            },
+            {
+              "name": "accounts",
+              "value": "urn:li:sponsoredAccount:{{ $json.linkedin_ad_account_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-linkedin-ads",
+      "name": "Fetch LinkedIn Ads Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Client Report Data Aggregator\n// Combines all marketing data into unified dashboard metrics\n\nconst clientData = $('Get Client List').first().json;\nconst ga4Data = $('Fetch GA4 Data').first()?.json || {};\nconst googleAdsData = $('Fetch Google Ads Data').first()?.json || {};\nconst metaAdsData = $('Fetch Meta Ads Data').first()?.json || {};\nconst linkedInAdsData = $('Fetch LinkedIn Ads Data').first()?.json || {};\n\n// Parse GA4 metrics\nconst ga4Metrics = {\n  sessions: 0,\n  users: 0,\n  newUsers: 0,\n  bounceRate: 0,\n  avgSessionDuration: 0,\n  pageviews: 0,\n  conversions: 0,\n  revenue: 0\n};\n\nif (ga4Data.rows) {\n  ga4Data.rows.forEach(row => {\n    ga4Metrics.sessions += parseInt(row.metricValues?.[0]?.value || 0);\n    ga4Metrics.users += parseInt(row.metricValues?.[1]?.value || 0);\n    ga4Metrics.newUsers += parseInt(row.metricValues?.[2]?.value || 0);\n    ga4Metrics.pageviews += parseInt(row.metricValues?.[5]?.value || 0);\n    ga4Metrics.conversions += parseInt(row.metricValues?.[6]?.value || 0);\n    ga4Metrics.revenue += parseFloat(row.metricValues?.[7]?.value || 0);\n  });\n  ga4Metrics.bounceRate = (parseFloat(ga4Data.rows[0]?.metricValues?.[3]?.value || 0) * 100).toFixed(2);\n  ga4Metrics.avgSessionDuration = parseFloat(ga4Data.rows[0]?.metricValues?.[4]?.value || 0).toFixed(0);\n}\n\n// Parse Google Ads metrics\nconst googleAdsMetrics = {\n  impressions: 0,\n  clicks: 0,\n  spend: 0,\n  conversions: 0,\n  conversionValue: 0,\n  ctr: 0,\n  cpc: 0,\n  roas: 0,\n  campaigns: []\n};\n\nif (googleAdsData.results) {\n  googleAdsData.results.forEach(result => {\n    const metrics = result.metrics || {};\n    googleAdsMetrics.impressions += parseInt(metrics.impressions || 0);\n    googleAdsMetrics.clicks += parseInt(metrics.clicks || 0);\n    googleAdsMetrics.spend += (parseInt(metrics.costMicros || 0) / 1000000);\n    googleAdsMetrics.conversions += parseFloat(metrics.conversions || 0);\n    googleAdsMetrics.conversionValue += parseFloat(metrics.conversionsValue || 0);\n    \n    googleAdsMetrics.campaigns.push({\n      name: result.campaign?.name,\n      spend: (parseInt(metrics.costMicros || 0) / 1000000).toFixed(2),\n      conversions: parseFloat(metrics.conversions || 0).toFixed(1),\n      ctr: (parseFloat(metrics.ctr || 0) * 100).toFixed(2)\n    });\n  });\n  googleAdsMetrics.ctr = googleAdsMetrics.impressions > 0 \n    ? (googleAdsMetrics.clicks / googleAdsMetrics.impressions * 100).toFixed(2) : 0;\n  googleAdsMetrics.cpc = googleAdsMetrics.clicks > 0 \n    ? (googleAdsMetrics.spend / googleAdsMetrics.clicks).toFixed(2) : 0;\n  googleAdsMetrics.roas = googleAdsMetrics.spend > 0 \n    ? (googleAdsMetrics.conversionValue / googleAdsMetrics.spend).toFixed(2) : 0;\n}\n\n// Parse Meta Ads metrics\nconst metaAdsMetrics = {\n  impressions: 0,\n  clicks: 0,\n  spend: 0,\n  reach: 0,\n  conversions: 0,\n  cpc: 0,\n  cpm: 0,\n  ctr: 0,\n  roas: 0,\n  campaigns: []\n};\n\nif (metaAdsData.data) {\n  metaAdsData.data.forEach(campaign => {\n    metaAdsMetrics.impressions += parseInt(campaign.impressions || 0);\n    metaAdsMetrics.clicks += parseInt(campaign.clicks || 0);\n    metaAdsMetrics.spend += parseFloat(campaign.spend || 0);\n    metaAdsMetrics.reach += parseInt(campaign.reach || 0);\n    metaAdsMetrics.conversions += parseInt(campaign.conversions || 0);\n    \n    metaAdsMetrics.campaigns.push({\n      name: campaign.campaign_name,\n      spend: parseFloat(campaign.spend || 0).toFixed(2),\n      roas: campaign.purchase_roas?.[0]?.value || 'N/A'\n    });\n  });\n  metaAdsMetrics.cpc = metaAdsMetrics.clicks > 0 \n    ? (metaAdsMetrics.spend / metaAdsMetrics.clicks).toFixed(2) : 0;\n  metaAdsMetrics.ctr = metaAdsMetrics.impressions > 0 \n    ? (metaAdsMetrics.clicks / metaAdsMetrics.impressions * 100).toFixed(2) : 0;\n}\n\n// Unified report structure\nconst report = {\n  client: {\n    name: clientData.client_name,\n    id: clientData.client_id,\n    industry: clientData.industry,\n    reportPeriod: {\n      start: clientData.reportPeriod?.start || new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0],\n      end: clientData.reportPeriod?.end || new Date().toISOString().split('T')[0]\n    }\n  },\n  \n  summary: {\n    totalSpend: (googleAdsMetrics.spend + metaAdsMetrics.spend).toFixed(2),\n    totalConversions: googleAdsMetrics.conversions + metaAdsMetrics.conversions + ga4Metrics.conversions,\n    totalRevenue: (googleAdsMetrics.conversionValue + ga4Metrics.revenue).toFixed(2),\n    blendedROAS: googleAdsMetrics.spend + metaAdsMetrics.spend > 0 \n      ? ((googleAdsMetrics.conversionValue + ga4Metrics.revenue) / (googleAdsMetrics.spend + metaAdsMetrics.spend)).toFixed(2) \n      : 'N/A',\n    blendedCPA: googleAdsMetrics.conversions + metaAdsMetrics.conversions > 0\n      ? ((googleAdsMetrics.spend + metaAdsMetrics.spend) / (googleAdsMetrics.conversions + metaAdsMetrics.conversions)).toFixed(2)\n      : 'N/A'\n  },\n  \n  website: ga4Metrics,\n  \n  advertising: {\n    google: googleAdsMetrics,\n    meta: metaAdsMetrics,\n    linkedin: linkedInAdsData\n  },\n  \n  channelBreakdown: [\n    { channel: 'Google Ads', spend: googleAdsMetrics.spend, conversions: googleAdsMetrics.conversions, roas: googleAdsMetrics.roas },\n    { channel: 'Meta Ads', spend: metaAdsMetrics.spend, conversions: metaAdsMetrics.conversions, roas: metaAdsMetrics.roas }\n  ],\n  \n  generatedAt: new Date().toISOString()\n};\n\nreturn [{ json: report }];"
+      },
+      "id": "aggregate-report-data",
+      "name": "Aggregate Report Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 500]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a digital marketing analyst preparing executive reports for agency clients. Generate clear, actionable insights from the marketing data.\n\nProvide:\n1. Executive summary (3-4 sentences highlighting key wins and areas of focus)\n2. Top 3 achievements this period\n3. Top 3 areas for improvement\n4. Strategic recommendations for next period\n5. Key metrics interpretation for non-technical stakeholders\n\nTone: Professional, confident, solution-oriented. Avoid jargon.\n\nReturn JSON:\n{\n  \"executiveSummary\": \"narrative summary\",\n  \"achievements\": [\"achievement 1\", \"achievement 2\", \"achievement 3\"],\n  \"improvements\": [\"improvement area 1\", \"improvement area 2\", \"improvement area 3\"],\n  \"recommendations\": [{\"action\": \"\", \"expectedImpact\": \"\", \"priority\": \"high|medium|low\"}],\n  \"metricsNarrative\": {\n    \"traffic\": \"interpretation\",\n    \"conversions\": \"interpretation\",\n    \"advertising\": \"interpretation\",\n    \"roi\": \"interpretation\"\n  },\n  \"nextPeriodFocus\": [\"focus 1\", \"focus 2\"]\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Generate insights for {{ $json.client.name }}:\n\nReport Period: {{ $json.client.reportPeriod.start }} to {{ $json.client.reportPeriod.end }}\n\nSummary:\n- Total Spend: ${{ $json.summary.totalSpend }}\n- Total Conversions: {{ $json.summary.totalConversions }}\n- Total Revenue: ${{ $json.summary.totalRevenue }}\n- Blended ROAS: {{ $json.summary.blendedROAS }}x\n- Blended CPA: ${{ $json.summary.blendedCPA }}\n\nWebsite:\n- Sessions: {{ $json.website.sessions }}\n- Users: {{ $json.website.users }}\n- Bounce Rate: {{ $json.website.bounceRate }}%\n- Conversions: {{ $json.website.conversions }}\n\nGoogle Ads:\n- Spend: ${{ $json.advertising.google.spend.toFixed(2) }}\n- Conversions: {{ $json.advertising.google.conversions }}\n- ROAS: {{ $json.advertising.google.roas }}x\n- CPC: ${{ $json.advertising.google.cpc }}\n\nMeta Ads:\n- Spend: ${{ $json.advertising.meta.spend.toFixed(2) }}\n- Conversions: {{ $json.advertising.meta.conversions }}\n- Reach: {{ $json.advertising.meta.reach }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.5
+        }
+      },
+      "id": "ai-insights-generator",
+      "name": "AI Insights Generator",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate White-Label PDF Report HTML\n// Creates professional report format for client delivery\n\nconst reportData = $('Aggregate Report Data').first().json;\nconst insights = $('AI Insights Generator').first().json;\n\nconst reportHTML = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 40px; color: #333; }\n    .header { border-bottom: 3px solid #2c3e50; padding-bottom: 20px; margin-bottom: 30px; }\n    .logo { max-height: 60px; }\n    .client-name { font-size: 28px; color: #2c3e50; margin: 10px 0; }\n    .period { color: #7f8c8d; font-size: 14px; }\n    .section { margin: 30px 0; }\n    .section-title { font-size: 20px; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; }\n    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0; }\n    .metric-card { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }\n    .metric-value { font-size: 32px; font-weight: bold; color: #2c3e50; }\n    .metric-label { font-size: 12px; color: #7f8c8d; text-transform: uppercase; margin-top: 5px; }\n    .metric-change { font-size: 14px; margin-top: 5px; }\n    .positive { color: #27ae60; }\n    .negative { color: #e74c3c; }\n    .executive-summary { background: #2c3e50; color: white; padding: 25px; border-radius: 8px; margin: 20px 0; }\n    .achievements { background: #e8f5e9; padding: 20px; border-radius: 8px; }\n    .improvements { background: #fff3e0; padding: 20px; border-radius: 8px; }\n    .table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n    .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }\n    .table th { background: #f8f9fa; font-weight: 600; }\n    .recommendations { background: #e3f2fd; padding: 20px; border-radius: 8px; }\n    .footer { margin-top: 50px; text-align: center; color: #7f8c8d; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    <img src=\"{{AGENCY_LOGO_URL}}\" alt=\"Agency Logo\" class=\"logo\">\n    <h1 class=\"client-name\">Marketing Performance Report</h1>\n    <p class=\"period\">${reportData.client.name} | ${reportData.client.reportPeriod.start} to ${reportData.client.reportPeriod.end}</p>\n  </div>\n  \n  <div class=\"executive-summary\">\n    <h2 style=\"margin-top: 0;\">Executive Summary</h2>\n    <p>${insights.executiveSummary}</p>\n  </div>\n  \n  <div class=\"section\">\n    <h2 class=\"section-title\">Key Performance Metrics</h2>\n    <div class=\"metric-grid\">\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">$${reportData.summary.totalSpend}</div>\n        <div class=\"metric-label\">Total Ad Spend</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${reportData.summary.totalConversions}</div>\n        <div class=\"metric-label\">Conversions</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">$${reportData.summary.totalRevenue}</div>\n        <div class=\"metric-label\">Revenue</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${reportData.summary.blendedROAS}x</div>\n        <div class=\"metric-label\">ROAS</div>\n      </div>\n    </div>\n  </div>\n  \n  <div class=\"section\">\n    <h2 class=\"section-title\">Website Performance</h2>\n    <div class=\"metric-grid\">\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${reportData.website.sessions.toLocaleString()}</div>\n        <div class=\"metric-label\">Sessions</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${reportData.website.users.toLocaleString()}</div>\n        <div class=\"metric-label\">Users</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${reportData.website.bounceRate}%</div>\n        <div class=\"metric-label\">Bounce Rate</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"metric-value\">${reportData.website.conversions}</div>\n        <div class=\"metric-label\">Conversions</div>\n      </div>\n    </div>\n    <p>${insights.metricsNarrative?.traffic || ''}</p>\n  </div>\n  \n  <div class=\"section\">\n    <h2 class=\"section-title\">Advertising Performance by Channel</h2>\n    <table class=\"table\">\n      <tr>\n        <th>Channel</th>\n        <th>Spend</th>\n        <th>Conversions</th>\n        <th>ROAS</th>\n        <th>CPC</th>\n      </tr>\n      <tr>\n        <td>Google Ads</td>\n        <td>$${reportData.advertising.google.spend.toFixed(2)}</td>\n        <td>${reportData.advertising.google.conversions}</td>\n        <td>${reportData.advertising.google.roas}x</td>\n        <td>$${reportData.advertising.google.cpc}</td>\n      </tr>\n      <tr>\n        <td>Meta Ads</td>\n        <td>$${reportData.advertising.meta.spend.toFixed(2)}</td>\n        <td>${reportData.advertising.meta.conversions}</td>\n        <td>${reportData.advertising.meta.roas || 'N/A'}</td>\n        <td>$${reportData.advertising.meta.cpc}</td>\n      </tr>\n    </table>\n    <p>${insights.metricsNarrative?.advertising || ''}</p>\n  </div>\n  \n  <div class=\"section\">\n    <div class=\"achievements\">\n      <h3 style=\"margin-top: 0; color: #27ae60;\">✓ Key Achievements</h3>\n      <ul>\n        ${insights.achievements?.map(a => `<li>${a}</li>`).join('') || ''}\n      </ul>\n    </div>\n  </div>\n  \n  <div class=\"section\">\n    <div class=\"improvements\">\n      <h3 style=\"margin-top: 0; color: #f39c12;\">↑ Areas for Improvement</h3>\n      <ul>\n        ${insights.improvements?.map(i => `<li>${i}</li>`).join('') || ''}\n      </ul>\n    </div>\n  </div>\n  \n  <div class=\"section\">\n    <div class=\"recommendations\">\n      <h3 style=\"margin-top: 0; color: #2196f3;\">→ Strategic Recommendations</h3>\n      ${insights.recommendations?.map(r => `<p><strong>${r.action}</strong><br><em>Expected Impact: ${r.expectedImpact}</em></p>`).join('') || ''}\n    </div>\n  </div>\n  \n  <div class=\"footer\">\n    <p>Report generated on ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>\n    <p>© ${new Date().getFullYear()} {{AGENCY_NAME}} - All Rights Reserved</p>\n  </div>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    reportData,\n    insights,\n    reportHTML,\n    reportType: 'weekly',\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "generate-report-html",
+      "name": "Generate Report HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdfshift.io/v3/convert/pdf",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source\": {{ JSON.stringify($json.reportHTML) }},\n  \"landscape\": false,\n  \"use_print\": true,\n  \"format\": \"A4\",\n  \"margin\": \"20mm\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "generate-pdf",
+      "name": "Generate PDF Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 400]
+    },
+    {
+      "parameters": {
+        "to": "={{ $json.reportData.client.email || $env.CLIENT_EMAIL }}",
+        "subject": "=Your {{ $json.reportType === 'monthly' ? 'Monthly' : 'Weekly' }} Marketing Report - {{ $json.reportData.client.name }}",
+        "emailType": "html",
+        "html": "=<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;\">\n  <h2>Hi {{ $json.reportData.client.name.split(' ')[0] }},</h2>\n  <p>Your {{ $json.reportType }} marketing performance report is ready!</p>\n  \n  <div style=\"background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;\">\n    <h3 style=\"margin-top: 0;\">Quick Highlights</h3>\n    <ul>\n      <li><strong>Total Spend:</strong> ${{ $json.reportData.summary.totalSpend }}</li>\n      <li><strong>Conversions:</strong> {{ $json.reportData.summary.totalConversions }}</li>\n      <li><strong>Revenue:</strong> ${{ $json.reportData.summary.totalRevenue }}</li>\n      <li><strong>ROAS:</strong> {{ $json.reportData.summary.blendedROAS }}x</li>\n    </ul>\n  </div>\n  \n  <p><strong>Executive Summary:</strong></p>\n  <p>{{ $json.insights.executiveSummary }}</p>\n  \n  <p>The full detailed report is attached as a PDF.</p>\n  \n  <p>Questions? Reply to this email or schedule a call to discuss.</p>\n  \n  <p>Best regards,<br>Your Marketing Team</p>\n</div>",
+        "options": {
+          "attachments": "={{ $('Generate PDF Report').first().binary }}"
+        }
+      },
+      "id": "send-report-email",
+      "name": "Send Report Email",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2.1,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.reportData.client.slack_channel || '#client-reports' }}",
+        "text": "=📊 *{{ $json.reportType === 'monthly' ? 'Monthly' : 'Weekly' }} Report Sent: {{ $json.reportData.client.name }}*\n\n*Period:* {{ $json.reportData.client.reportPeriod.start }} to {{ $json.reportData.client.reportPeriod.end }}\n\n*Key Metrics:*\n• Spend: ${{ $json.reportData.summary.totalSpend }}\n• Conversions: {{ $json.reportData.summary.totalConversions }}\n• Revenue: ${{ $json.reportData.summary.totalRevenue }}\n• ROAS: {{ $json.reportData.summary.blendedROAS }}x\n\n*AI Summary:*\n{{ $json.insights.executiveSummary }}\n\n✅ Report delivered to client at {{ new Date().toLocaleTimeString() }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notification",
+      "name": "Slack Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2000, 600]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.REPORT_LOG_SHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Report Log",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.generatedAt }}",
+            "client": "={{ $json.reportData.client.name }}",
+            "report_type": "={{ $json.reportType }}",
+            "period_start": "={{ $json.reportData.client.reportPeriod.start }}",
+            "period_end": "={{ $json.reportData.client.reportPeriod.end }}",
+            "total_spend": "={{ $json.reportData.summary.totalSpend }}",
+            "total_revenue": "={{ $json.reportData.summary.totalRevenue }}",
+            "roas": "={{ $json.reportData.summary.blendedROAS }}",
+            "status": "=sent"
+          }
+        }
+      },
+      "id": "log-report",
+      "name": "Log Report Delivery",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [2000, 800]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"client\": \"{{ $json.reportData.client.name }}\",\n  \"reportType\": \"{{ $json.reportType }}\",\n  \"metrics\": {\n    \"spend\": {{ $json.reportData.summary.totalSpend }},\n    \"revenue\": {{ $json.reportData.summary.totalRevenue }},\n    \"roas\": {{ $json.reportData.summary.blendedROAS }}\n  },\n  \"generatedAt\": \"{{ $json.generatedAt }}\"\n}"
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 1000]
+    }
+  ],
+  "connections": {
+    "Weekly Report Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Client List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monthly Report Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Client List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On-Demand Report Request": {
+      "main": [
+        [
+          {
+            "node": "Get Client List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Client List": {
+      "main": [
+        [
+          {
+            "node": "Fetch GA4 Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Google Ads Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Meta Ads Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch LinkedIn Ads Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch GA4 Data": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Google Ads Data": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Meta Ads Data": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch LinkedIn Ads Data": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Report Data": {
+      "main": [
+        [
+          {
+            "node": "AI Insights Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Insights Generator": {
+      "main": [
+        [
+          {
+            "node": "Generate Report HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Report HTML": {
+      "main": [
+        [
+          {
+            "node": "Generate PDF Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate PDF Report": {
+      "main": [
+        [
+          {
+            "node": "Send Report Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Report Delivery",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "grain-agency-client-reporting"
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 3,
+  "tags": [
+    {
+      "name": "Agency",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Reporting",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "White-Label",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ]
+}
