@@ -1,0 +1,446 @@
+{
+  "name": "Grain Social Listening & Sentiment v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 4 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Brand_Keywords" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-keywords",
+      "name": "Get Brand Keywords",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-keywords",
+      "name": "Process Each Keyword",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [650, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-KEY", "value": "={{ $env.SERPER_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": \"{{ $json.keyword }}\",\n  \"gl\": \"tr\",\n  \"hl\": \"tr\",\n  \"num\": 20,\n  \"tbs\": \"qdr:d\"\n}",
+        "options": {}
+      },
+      "id": "search-web",
+      "name": "Search Web Mentions",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.serper.dev/news",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-KEY", "value": "={{ $env.SERPER_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": \"{{ $json.keyword }}\",\n  \"gl\": \"tr\",\n  \"hl\": \"tr\",\n  \"num\": 10\n}",
+        "options": {}
+      },
+      "id": "search-news",
+      "name": "Search News Mentions",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 400],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v18.0/{{ $env.FB_PAGE_ID }}/tagged",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "message,from,created_time,permalink_url" },
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" },
+            { "name": "limit", "value": "50" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-facebook-mentions",
+      "name": "Get Facebook Mentions",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 600],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all mention sources\nconst keyword = $input.item.json;\nconst webResults = $('Search Web Mentions').item?.json?.organic || [];\nconst newsResults = $('Search News Mentions').item?.json?.news || [];\nconst fbMentions = $('Get Facebook Mentions').item?.json?.data || [];\n\nconst mentions = [];\n\n// Process web results\nwebResults.forEach(item => {\n  mentions.push({\n    source: 'web',\n    keyword: keyword.keyword,\n    brand: keyword.brand_name,\n    title: item.title,\n    snippet: item.snippet,\n    link: item.link,\n    date: item.date || new Date().toISOString(),\n    platform: new URL(item.link).hostname\n  });\n});\n\n// Process news results\nnewsResults.forEach(item => {\n  mentions.push({\n    source: 'news',\n    keyword: keyword.keyword,\n    brand: keyword.brand_name,\n    title: item.title,\n    snippet: item.snippet,\n    link: item.link,\n    date: item.date || new Date().toISOString(),\n    platform: item.source || 'news'\n  });\n});\n\n// Process Facebook mentions\nfbMentions.forEach(item => {\n  mentions.push({\n    source: 'facebook',\n    keyword: keyword.keyword,\n    brand: keyword.brand_name,\n    title: item.from?.name || 'Facebook User',\n    snippet: item.message || '',\n    link: item.permalink_url,\n    date: item.created_time,\n    platform: 'facebook'\n  });\n});\n\nreturn mentions.map(m => ({ json: m }));"
+      },
+      "id": "combine-mentions",
+      "name": "Combine All Mentions",
+      "type": "n8n-nodes-base.code",
+      "position": [1050, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "batch-analyze",
+      "name": "Batch for Analysis",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [1250, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir sosyal medya sentiment analisti olarak calismaktasin. Verilen mention'lari analiz et.\n\nHer mention icin:\n1. Sentiment belirle: positive, negative, neutral\n2. Duygu yoğunluğu: 1-10 (10 en güclü)\n3. Konu kategorisi: product, service, brand, competitor, general\n4. Etkileyici mi: true/false (takipci sayisi, engagement vb.)\n5. Aksiyon gerektiriyor mu: true/false\n6. Onerilen aksiyon\n\nJSON array formatinda dondur:\n[\n  {\n    \"index\": 0,\n    \"sentiment\": \"positive/negative/neutral\",\n    \"intensity\": 7,\n    \"category\": \"product\",\n    \"is_influencer\": false,\n    \"needs_action\": false,\n    \"suggested_action\": \"\",\n    \"key_topics\": [\"topic1\", \"topic2\"]\n  }\n]"
+            },
+            {
+              "role": "user",
+              "content": "Mentions:\n{{ $json.map((m, i) => `[${i}] ${m.title}: ${m.snippet}`).join('\\n') }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.3 }
+      },
+      "id": "analyze-sentiment",
+      "name": "AI Sentiment Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1450, 400],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI sentiment analysis and merge with mentions\nconst mentions = $input.item.json;\nconst aiResponse = $('AI Sentiment Analysis').item?.json?.message?.content || '[]';\n\nlet analyses;\ntry {\n  analyses = JSON.parse(aiResponse);\n} catch (e) {\n  analyses = [];\n}\n\n// Merge analysis with mentions\nconst enriched = mentions.map((mention, index) => {\n  const analysis = analyses.find(a => a.index === index) || {\n    sentiment: 'neutral',\n    intensity: 5,\n    category: 'general',\n    is_influencer: false,\n    needs_action: false,\n    suggested_action: '',\n    key_topics: []\n  };\n  \n  return {\n    json: {\n      ...mention,\n      sentiment: analysis.sentiment,\n      sentiment_intensity: analysis.intensity,\n      category: analysis.category,\n      is_influencer: analysis.is_influencer,\n      needs_action: analysis.needs_action,\n      suggested_action: analysis.suggested_action,\n      key_topics: analysis.key_topics?.join(', ') || '',\n      analyzed_at: new Date().toISOString()\n    }\n  };\n});\n\nreturn enriched;"
+      },
+      "id": "merge-analysis",
+      "name": "Merge Sentiment Data",
+      "type": "n8n-nodes-base.code",
+      "position": [1650, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Social_Mentions" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "brand": "={{ $json.brand }}",
+            "keyword": "={{ $json.keyword }}",
+            "source": "={{ $json.source }}",
+            "platform": "={{ $json.platform }}",
+            "title": "={{ $json.title }}",
+            "snippet": "={{ $json.snippet }}",
+            "link": "={{ $json.link }}",
+            "sentiment": "={{ $json.sentiment }}",
+            "intensity": "={{ $json.sentiment_intensity }}",
+            "category": "={{ $json.category }}",
+            "is_influencer": "={{ $json.is_influencer }}",
+            "needs_action": "={{ $json.needs_action }}",
+            "suggested_action": "={{ $json.suggested_action }}",
+            "key_topics": "={{ $json.key_topics }}",
+            "mention_date": "={{ $json.date }}",
+            "analyzed_at": "={{ $json.analyzed_at }}"
+          }
+        }
+      },
+      "id": "log-mentions",
+      "name": "Log Mentions",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1850, 400],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "negative-check",
+              "leftValue": "={{ $json.sentiment }}",
+              "rightValue": "negative",
+              "operator": { "type": "string", "operation": "equals" }
+            },
+            {
+              "id": "high-intensity",
+              "leftValue": "={{ $json.sentiment_intensity }}",
+              "rightValue": "7",
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-negative-alert",
+      "name": "If Negative & High Intensity",
+      "type": "n8n-nodes-base.if",
+      "position": [2050, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#brand-alerts",
+        "text": "=*NEGATIF MENTION ALARMI*\n\n*Marka:* {{ $json.brand }}\n*Platform:* {{ $json.platform }}\n*Kaynak:* {{ $json.source }}\n\n*Baslik:* {{ $json.title }}\n*Icerik:* {{ $json.snippet }}\n\n*Sentiment:* {{ $json.sentiment }} (Yogunluk: {{ $json.sentiment_intensity }}/10)\n*Kategori:* {{ $json.category }}\n*Influencer:* {{ $json.is_influencer }}\n\n*Onerilen Aksiyon:* {{ $json.suggested_action }}\n\n*Link:* {{ $json.link }}",
+        "otherOptions": {}
+      },
+      "id": "slack-negative-alert",
+      "name": "Negative Mention Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [2250, 300],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "influencer-check",
+              "leftValue": "={{ $json.is_influencer }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-influencer",
+      "name": "If Influencer",
+      "type": "n8n-nodes-base.if",
+      "position": [2050, 600],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#influencer-mentions",
+        "text": "=*INFLUENCER MENTION*\n\n*Marka:* {{ $json.brand }}\n*Platform:* {{ $json.platform }}\n*Sentiment:* {{ $json.sentiment }}\n\n*Baslik:* {{ $json.title }}\n*Icerik:* {{ $json.snippet }}\n\n*Link:* {{ $json.link }}\n\n*Not:* Potansiyel isbirligi firsati!",
+        "otherOptions": {}
+      },
+      "id": "slack-influencer-alert",
+      "name": "Influencer Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [2250, 600],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "daysInterval": 1 }]
+        }
+      },
+      "id": "daily-report-trigger",
+      "name": "Daily Sentiment Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 800],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Social_Mentions" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-daily-mentions",
+      "name": "Get Daily Mentions",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 800],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate daily sentiment metrics\nconst mentions = $input.all();\nconst yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);\n\nconst dailyMentions = mentions.filter(m => {\n  const analyzedDate = new Date(m.json.analyzed_at);\n  return analyzedDate >= yesterday;\n});\n\nconst metrics = {\n  total_mentions: dailyMentions.length,\n  \n  sentiment_breakdown: {\n    positive: dailyMentions.filter(m => m.json.sentiment === 'positive').length,\n    neutral: dailyMentions.filter(m => m.json.sentiment === 'neutral').length,\n    negative: dailyMentions.filter(m => m.json.sentiment === 'negative').length\n  },\n  \n  avg_intensity: dailyMentions.length > 0 \n    ? (dailyMentions.reduce((sum, m) => sum + (parseInt(m.json.intensity) || 5), 0) / dailyMentions.length).toFixed(1)\n    : 0,\n  \n  source_breakdown: {\n    web: dailyMentions.filter(m => m.json.source === 'web').length,\n    news: dailyMentions.filter(m => m.json.source === 'news').length,\n    facebook: dailyMentions.filter(m => m.json.source === 'facebook').length,\n    instagram: dailyMentions.filter(m => m.json.source === 'instagram').length,\n    twitter: dailyMentions.filter(m => m.json.source === 'twitter').length\n  },\n  \n  influencer_mentions: dailyMentions.filter(m => m.json.is_influencer === 'true' || m.json.is_influencer === true).length,\n  action_required: dailyMentions.filter(m => m.json.needs_action === 'true' || m.json.needs_action === true).length,\n  \n  top_topics: [...new Set(dailyMentions.flatMap(m => (m.json.key_topics || '').split(', ').filter(Boolean)))].slice(0, 10),\n  \n  sentiment_score: dailyMentions.length > 0\n    ? (((dailyMentions.filter(m => m.json.sentiment === 'positive').length - dailyMentions.filter(m => m.json.sentiment === 'negative').length) / dailyMentions.length) * 100).toFixed(1)\n    : 0\n};\n\nreturn { json: metrics };"
+      },
+      "id": "calculate-daily-metrics",
+      "name": "Calculate Daily Metrics",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 800],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#daily-reports",
+        "text": "=*GUNLUK SOSYAL DINLEME RAPORU*\n\n*Toplam Mention:* {{ $json.total_mentions }}\n*Sentiment Skoru:* {{ $json.sentiment_score }}% (pozitif yonde)\n\n*Sentiment Dagilimi:*\n- Pozitif: {{ $json.sentiment_breakdown.positive }}\n- Notr: {{ $json.sentiment_breakdown.neutral }}\n- Negatif: {{ $json.sentiment_breakdown.negative }}\n\n*Ortalama Yogunluk:* {{ $json.avg_intensity }}/10\n\n*Kaynak Dagilimi:*\n- Web: {{ $json.source_breakdown.web }}\n- Haber: {{ $json.source_breakdown.news }}\n- Facebook: {{ $json.source_breakdown.facebook }}\n- Instagram: {{ $json.source_breakdown.instagram }}\n- Twitter: {{ $json.source_breakdown.twitter }}\n\n*Influencer Mention:* {{ $json.influencer_mentions }}\n*Aksiyon Gerektiren:* {{ $json.action_required }}\n\n*One Cikan Konular:*\n{{ $json.top_topics.join(', ') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-daily-report",
+      "name": "Send Daily Report",
+      "type": "n8n-nodes-base.slack",
+      "position": [850, 800],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Gunluk sosyal dinleme verilerini analiz et ve trend raporu olustur.\n\nJSON formatinda dondur:\n{\n  \"overall_sentiment\": \"positive/negative/neutral\",\n  \"trend_direction\": \"improving/stable/declining\",\n  \"key_insights\": [\"onemli bulgular\"],\n  \"emerging_topics\": [\"yukselen konular\"],\n  \"risk_areas\": [\"dikkat edilmesi gereken alanlar\"],\n  \"opportunities\": [\"firsatlar\"],\n  \"recommended_actions\": [\"onerilen aksiyonlar\"]\n}"
+            },
+            {
+              "role": "user",
+              "content": "Sentiment skoru: {{ $json.sentiment_score }}%\nToplam mention: {{ $json.total_mentions }}\nPozitif: {{ $json.sentiment_breakdown.positive }}\nNegatif: {{ $json.sentiment_breakdown.negative }}\nInfluencer mention: {{ $json.influencer_mentions }}\nAksiyon gerektiren: {{ $json.action_required }}\nOne cikan konular: {{ $json.top_topics.join(', ') }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.4 }
+      },
+      "id": "ai-trend-analysis",
+      "name": "AI Trend Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1050, 800],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI trend analysis\nconst aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet analysis;\n\ntry {\n  analysis = JSON.parse(aiResponse);\n} catch (e) {\n  analysis = {\n    overall_sentiment: 'neutral',\n    trend_direction: 'stable',\n    key_insights: [],\n    emerging_topics: [],\n    risk_areas: [],\n    opportunities: [],\n    recommended_actions: []\n  };\n}\n\nreturn { json: analysis };"
+      },
+      "id": "parse-trend-analysis",
+      "name": "Parse Trend Analysis",
+      "type": "n8n-nodes-base.code",
+      "position": [1250, 800],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#brand-insights",
+        "text": "=*AI TREND ANALIZI*\n\n*Genel Sentiment:* {{ $json.overall_sentiment }}\n*Trend Yonu:* {{ $json.trend_direction }}\n\n*Onemli Bulgular:*\n{{ $json.key_insights?.map(i => '- ' + i).join('\\n') || 'Yok' }}\n\n*Yukselen Konular:*\n{{ $json.emerging_topics?.map(t => '- ' + t).join('\\n') || 'Yok' }}\n\n*Risk Alanlari:*\n{{ $json.risk_areas?.map(r => '- ' + r).join('\\n') || 'Yok' }}\n\n*Firsatlar:*\n{{ $json.opportunities?.map(o => '- ' + o).join('\\n') || 'Yok' }}\n\n*Onerilen Aksiyonlar:*\n{{ $json.recommended_actions?.map(a => '- ' + a).join('\\n') || 'Yok' }}",
+        "otherOptions": {}
+      },
+      "id": "slack-trend-report",
+      "name": "Send Trend Analysis",
+      "type": "n8n-nodes-base.slack",
+      "position": [1450, 800],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [[{ "node": "Get Brand Keywords", "type": "main", "index": 0 }]]
+    },
+    "Get Brand Keywords": {
+      "main": [[{ "node": "Process Each Keyword", "type": "main", "index": 0 }]]
+    },
+    "Process Each Keyword": {
+      "main": [[
+        { "node": "Search Web Mentions", "type": "main", "index": 0 },
+        { "node": "Search News Mentions", "type": "main", "index": 0 },
+        { "node": "Get Facebook Mentions", "type": "main", "index": 0 }
+      ]]
+    },
+    "Search Web Mentions": {
+      "main": [[{ "node": "Combine All Mentions", "type": "main", "index": 0 }]]
+    },
+    "Search News Mentions": {
+      "main": [[{ "node": "Combine All Mentions", "type": "main", "index": 0 }]]
+    },
+    "Get Facebook Mentions": {
+      "main": [[{ "node": "Combine All Mentions", "type": "main", "index": 0 }]]
+    },
+    "Combine All Mentions": {
+      "main": [[{ "node": "Batch for Analysis", "type": "main", "index": 0 }]]
+    },
+    "Batch for Analysis": {
+      "main": [[{ "node": "AI Sentiment Analysis", "type": "main", "index": 0 }]]
+    },
+    "AI Sentiment Analysis": {
+      "main": [[{ "node": "Merge Sentiment Data", "type": "main", "index": 0 }]]
+    },
+    "Merge Sentiment Data": {
+      "main": [[{ "node": "Log Mentions", "type": "main", "index": 0 }]]
+    },
+    "Log Mentions": {
+      "main": [[
+        { "node": "If Negative & High Intensity", "type": "main", "index": 0 },
+        { "node": "If Influencer", "type": "main", "index": 0 }
+      ]]
+    },
+    "If Negative & High Intensity": {
+      "main": [
+        [{ "node": "Negative Mention Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "If Influencer": {
+      "main": [
+        [{ "node": "Influencer Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Daily Sentiment Report": {
+      "main": [[{ "node": "Get Daily Mentions", "type": "main", "index": 0 }]]
+    },
+    "Get Daily Mentions": {
+      "main": [[{ "node": "Calculate Daily Metrics", "type": "main", "index": 0 }]]
+    },
+    "Calculate Daily Metrics": {
+      "main": [[
+        { "node": "Send Daily Report", "type": "main", "index": 0 },
+        { "node": "AI Trend Analysis", "type": "main", "index": 0 }
+      ]]
+    },
+    "AI Trend Analysis": {
+      "main": [[{ "node": "Parse Trend Analysis", "type": "main", "index": 0 }]]
+    },
+    "Parse Trend Analysis": {
+      "main": [[{ "node": "Send Trend Analysis", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "grain-automation" }, { "name": "social-listening" }, { "name": "sentiment" }],
+  "meta": {
+    "templateId": "grain-sls-v1",
+    "version": "1.0.0",
+    "description": "Monitor brand mentions across web, news, social media. AI sentiment analysis, influencer detection, daily trend reports.",
+    "requiredCredentials": ["Google Sheets OAuth2", "OpenAI API", "Serper API", "Meta Access Token", "Slack"],
+    "requiredEnvVars": ["SERPER_API_KEY", "META_ACCESS_TOKEN", "FB_PAGE_ID"]
+  }
+}

@@ -1,0 +1,361 @@
+{
+  "name": "Grain Competitive Intelligence v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "daysInterval": 1 }]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Competitors" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-competitors",
+      "name": "Get Competitor List",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-competitors",
+      "name": "Process Each Competitor",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [650, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://r.jina.ai/{{ $json.website }}",
+        "options": {
+          "response": { "response": { "fullResponse": true } }
+        }
+      },
+      "id": "scrape-website",
+      "name": "Scrape Competitor Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-KEY", "value": "={{ $env.SERPER_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": \"{{ $json.company_name }} news\",\n  \"gl\": \"tr\",\n  \"hl\": \"tr\",\n  \"num\": 10,\n  \"tbs\": \"qdr:w\"\n}",
+        "options": {}
+      },
+      "id": "search-news",
+      "name": "Search Competitor News",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 400],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v18.0/{{ $json.facebook_page_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "fan_count,posts.limit(5){message,created_time,shares,reactions.summary(true),comments.summary(true)}" },
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-facebook-data",
+      "name": "Get Facebook Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 600],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all competitor data\nconst competitor = $input.item.json;\nconst websiteData = $('Scrape Competitor Website').item?.json || {};\nconst newsData = $('Search Competitor News').item?.json || {};\nconst facebookData = $('Get Facebook Data').item?.json || {};\n\n// Parse website content\nconst websiteText = websiteData.body || '';\nconst wordCount = websiteText.split(/\\s+/).length;\n\n// Parse news\nconst newsItems = newsData.organic || [];\nconst recentNews = newsItems.slice(0, 5).map(n => ({\n  title: n.title,\n  link: n.link,\n  snippet: n.snippet,\n  date: n.date\n}));\n\n// Parse Facebook\nconst fbFollowers = facebookData.fan_count || 0;\nconst fbPosts = facebookData.posts?.data || [];\nconst avgEngagement = fbPosts.length > 0 \n  ? fbPosts.reduce((sum, p) => sum + (p.reactions?.summary?.total_count || 0) + (p.comments?.summary?.total_count || 0), 0) / fbPosts.length \n  : 0;\n\nreturn {\n  json: {\n    ...competitor,\n    website_word_count: wordCount,\n    recent_news: recentNews,\n    news_count: newsItems.length,\n    facebook_followers: fbFollowers,\n    facebook_avg_engagement: avgEngagement.toFixed(0),\n    facebook_recent_posts: fbPosts.slice(0, 3).map(p => p.message?.substring(0, 100)),\n    scraped_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "combine-data",
+      "name": "Combine Competitor Data",
+      "type": "n8n-nodes-base.code",
+      "position": [1050, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir rekabet analisti olarak calismaktasin. Rakip verilerini analiz et ve stratejik ongorular sun.\n\nJSON formatinda dondur:\n{\n  \"threat_level\": \"LOW\" | \"MEDIUM\" | \"HIGH\" | \"CRITICAL\",\n  \"key_activities\": [\"son donem aktiviteleri\"],\n  \"strengths\": [\"guclu yonleri\"],\n  \"weaknesses\": [\"zayif yonleri\"],\n  \"opportunities\": [\"bizim icin firsatlar\"],\n  \"threats\": [\"bizim icin tehditler\"],\n  \"recommended_response\": \"onerilen strateji\",\n  \"watch_items\": [\"takip edilmesi gerekenler\"]\n}"
+            },
+            {
+              "role": "user",
+              "content": "Rakip: {{ $json.company_name }}\nSektor: {{ $json.industry }}\nWebsite kelime sayisi: {{ $json.website_word_count }}\nSon haberler sayisi: {{ $json.news_count }}\nFacebook takipci: {{ $json.facebook_followers }}\nFacebook ort. etkilesim: {{ $json.facebook_avg_engagement }}\nSon haberler: {{ JSON.stringify($json.recent_news) }}\nSon Facebook postlari: {{ JSON.stringify($json.facebook_recent_posts) }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.4 }
+      },
+      "id": "ai-analysis",
+      "name": "AI Competitor Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1250, 400],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI analysis\nconst aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet analysis;\n\ntry {\n  analysis = JSON.parse(aiResponse);\n} catch (e) {\n  analysis = {\n    threat_level: 'MEDIUM',\n    key_activities: [],\n    strengths: [],\n    weaknesses: [],\n    opportunities: [],\n    threats: [],\n    recommended_response: 'Analiz yapilamadi',\n    watch_items: []\n  };\n}\n\nreturn {\n  json: {\n    ...$input.item.json,\n    threat_level: analysis.threat_level,\n    key_activities: analysis.key_activities?.join(', ') || '',\n    ai_strengths: analysis.strengths?.join(', ') || '',\n    ai_weaknesses: analysis.weaknesses?.join(', ') || '',\n    ai_opportunities: analysis.opportunities?.join(', ') || '',\n    ai_threats: analysis.threats?.join(', ') || '',\n    recommended_response: analysis.recommended_response,\n    watch_items: analysis.watch_items?.join(', ') || ''\n  }\n};"
+      },
+      "id": "parse-analysis",
+      "name": "Parse AI Analysis",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Competitor_Intel_Log" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "company_name": "={{ $json.company_name }}",
+            "threat_level": "={{ $json.threat_level }}",
+            "facebook_followers": "={{ $json.facebook_followers }}",
+            "facebook_engagement": "={{ $json.facebook_avg_engagement }}",
+            "news_count": "={{ $json.news_count }}",
+            "key_activities": "={{ $json.key_activities }}",
+            "opportunities": "={{ $json.ai_opportunities }}",
+            "threats": "={{ $json.ai_threats }}",
+            "recommended_response": "={{ $json.recommended_response }}",
+            "scraped_at": "={{ $json.scraped_at }}"
+          }
+        }
+      },
+      "id": "log-intel",
+      "name": "Log Intelligence",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1650, 400],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "high-threat",
+              "leftValue": "={{ $json.threat_level }}",
+              "rightValue": "HIGH",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "if-high-threat",
+      "name": "If High Threat",
+      "type": "n8n-nodes-base.if",
+      "position": [1850, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#competitive-intel",
+        "text": "=*RAKIP UYARISI - {{ $json.threat_level }}*\n\n*Rakip:* {{ $json.company_name }}\n\n*Son Aktiviteler:*\n{{ $json.key_activities }}\n\n*Tehditler:*\n{{ $json.ai_threats }}\n\n*Firsatlar:*\n{{ $json.ai_opportunities }}\n\n*Onerilen Aksiyon:*\n{{ $json.recommended_response }}\n\n*Takip Edilecekler:*\n{{ $json.watch_items }}",
+        "otherOptions": {}
+      },
+      "id": "slack-threat-alert",
+      "name": "Slack Threat Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [2050, 300],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-KEY", "value": "={{ $env.SERPER_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": \"{{ $json.industry }} trends 2025\",\n  \"gl\": \"tr\",\n  \"hl\": \"tr\",\n  \"num\": 10\n}",
+        "options": {}
+      },
+      "id": "search-trends",
+      "name": "Search Industry Trends",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 800],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sektor trendlerini analiz et ve onemli gelismeleri ozetle.\n\nJSON formatinda dondur:\n{\n  \"top_trends\": [\"en onemli 5 trend\"],\n  \"emerging_technologies\": [\"yukselen teknolojiler\"],\n  \"market_shifts\": [\"pazar degisimleri\"],\n  \"consumer_behavior_changes\": [\"tuketici davranis degisiklikleri\"],\n  \"recommendations\": [\"bizim icin oneriler\"]\n}"
+            },
+            {
+              "role": "user",
+              "content": "Sektor: {{ $json.industry }}\nArama sonuclari: {{ JSON.stringify($json.organic) }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.4 }
+      },
+      "id": "ai-trend-analysis",
+      "name": "AI Trend Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1050, 800],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "weeks", "weeksInterval": 1 }]
+        }
+      },
+      "id": "weekly-report-trigger",
+      "name": "Weekly Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 1000],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Competitor_Intel_Log" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-weekly-intel",
+      "name": "Get Weekly Intel",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 1000],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate weekly competitor intelligence\nconst data = $input.all();\nconst oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);\n\nconst weeklyData = data.filter(item => {\n  const scrapedDate = new Date(item.json.scraped_at);\n  return scrapedDate >= oneWeekAgo;\n});\n\nconst threatCounts = {\n  CRITICAL: weeklyData.filter(d => d.json.threat_level === 'CRITICAL').length,\n  HIGH: weeklyData.filter(d => d.json.threat_level === 'HIGH').length,\n  MEDIUM: weeklyData.filter(d => d.json.threat_level === 'MEDIUM').length,\n  LOW: weeklyData.filter(d => d.json.threat_level === 'LOW').length\n};\n\nconst allOpportunities = weeklyData.map(d => d.json.opportunities).filter(Boolean);\nconst allThreats = weeklyData.map(d => d.json.threats).filter(Boolean);\n\nreturn {\n  json: {\n    total_competitors_tracked: new Set(weeklyData.map(d => d.json.company_name)).size,\n    threat_distribution: threatCounts,\n    high_priority_count: threatCounts.CRITICAL + threatCounts.HIGH,\n    all_opportunities: allOpportunities.join(' | '),\n    all_threats: allThreats.join(' | '),\n    week_start: oneWeekAgo.toISOString().split('T')[0],\n    week_end: new Date().toISOString().split('T')[0]\n  }\n};"
+      },
+      "id": "aggregate-weekly",
+      "name": "Aggregate Weekly Intel",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 1000],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#weekly-reports",
+        "text": "=*HAFTALIK REKABET ISTIHBARATI RAPORU*\n*{{ $json.week_start }} - {{ $json.week_end }}*\n\n*Takip Edilen Rakip Sayisi:* {{ $json.total_competitors_tracked }}\n\n*Tehdit Dagilimi:*\n- CRITICAL: {{ $json.threat_distribution.CRITICAL }}\n- HIGH: {{ $json.threat_distribution.HIGH }}\n- MEDIUM: {{ $json.threat_distribution.MEDIUM }}\n- LOW: {{ $json.threat_distribution.LOW }}\n\n*Yuksek Oncelikli Uyari:* {{ $json.high_priority_count }} rakip\n\n*Tespit Edilen Firsatlar:*\n{{ $json.all_opportunities }}\n\n*Tespit Edilen Tehditler:*\n{{ $json.all_threats }}",
+        "otherOptions": {}
+      },
+      "id": "slack-weekly-report",
+      "name": "Send Weekly Intel Report",
+      "type": "n8n-nodes-base.slack",
+      "position": [850, 1000],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    }
+  ],
+  "connections": {
+    "Daily Check": {
+      "main": [[{ "node": "Get Competitor List", "type": "main", "index": 0 }]]
+    },
+    "Get Competitor List": {
+      "main": [[{ "node": "Process Each Competitor", "type": "main", "index": 0 }]]
+    },
+    "Process Each Competitor": {
+      "main": [[
+        { "node": "Scrape Competitor Website", "type": "main", "index": 0 },
+        { "node": "Search Competitor News", "type": "main", "index": 0 },
+        { "node": "Get Facebook Data", "type": "main", "index": 0 }
+      ]]
+    },
+    "Scrape Competitor Website": {
+      "main": [[{ "node": "Combine Competitor Data", "type": "main", "index": 0 }]]
+    },
+    "Search Competitor News": {
+      "main": [[{ "node": "Combine Competitor Data", "type": "main", "index": 0 }]]
+    },
+    "Get Facebook Data": {
+      "main": [[{ "node": "Combine Competitor Data", "type": "main", "index": 0 }]]
+    },
+    "Combine Competitor Data": {
+      "main": [[{ "node": "AI Competitor Analysis", "type": "main", "index": 0 }]]
+    },
+    "AI Competitor Analysis": {
+      "main": [[{ "node": "Parse AI Analysis", "type": "main", "index": 0 }]]
+    },
+    "Parse AI Analysis": {
+      "main": [[{ "node": "Log Intelligence", "type": "main", "index": 0 }]]
+    },
+    "Log Intelligence": {
+      "main": [[{ "node": "If High Threat", "type": "main", "index": 0 }]]
+    },
+    "If High Threat": {
+      "main": [
+        [{ "node": "Slack Threat Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Search Industry Trends": {
+      "main": [[{ "node": "AI Trend Analysis", "type": "main", "index": 0 }]]
+    },
+    "Weekly Report": {
+      "main": [[{ "node": "Get Weekly Intel", "type": "main", "index": 0 }]]
+    },
+    "Get Weekly Intel": {
+      "main": [[{ "node": "Aggregate Weekly Intel", "type": "main", "index": 0 }]]
+    },
+    "Aggregate Weekly Intel": {
+      "main": [[{ "node": "Send Weekly Intel Report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "grain-automation" }, { "name": "competitive-intel" }, { "name": "strategy" }],
+  "meta": {
+    "templateId": "grain-ci-v1",
+    "version": "1.0.0",
+    "description": "Monitor competitors: website changes, news, social media. AI-powered threat analysis, weekly reports.",
+    "requiredCredentials": ["Google Sheets OAuth2", "OpenAI API", "Serper API", "Meta Access Token", "Slack"],
+    "requiredEnvVars": ["SERPER_API_KEY", "META_ACCESS_TOKEN"]
+  }
+}

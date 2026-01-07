@@ -1,0 +1,471 @@
+{
+  "name": "Grain Video Performance Tracker v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 12 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 12 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Video_Tracking" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-videos",
+      "name": "Get Video List",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "active-tracking",
+              "leftValue": "={{ $json.tracking_active }}",
+              "rightValue": "TRUE",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-active",
+      "name": "Filter Active Videos",
+      "type": "n8n-nodes-base.filter",
+      "position": [650, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-videos",
+      "name": "Process Each Video",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [850, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "outputKey": "youtube",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.platform }}", "rightValue": "youtube", "operator": { "type": "string", "operation": "equals" } }
+                ]
+              }
+            },
+            {
+              "outputKey": "tiktok",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.platform }}", "rightValue": "tiktok", "operator": { "type": "string", "operation": "equals" } }
+                ]
+              }
+            },
+            {
+              "outputKey": "instagram",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.platform }}", "rightValue": "instagram", "operator": { "type": "string", "operation": "equals" } }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-platform",
+      "name": "Route by Platform",
+      "type": "n8n-nodes-base.switch",
+      "position": [1050, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/youtube/v3/videos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "={{ $json.video_id }}" },
+            { "name": "part", "value": "statistics,snippet" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "youtube-stats",
+      "name": "Get YouTube Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1250, 100],
+      "typeVersion": 4.2,
+      "credentials": { "oAuth2Api": { "id": "", "name": "YouTube OAuth2" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse YouTube API response\nconst item = $input.item.json.items?.[0];\n\nif (!item) {\n  return { json: { error: 'Video not found' } };\n}\n\nconst stats = item.statistics;\nconst snippet = item.snippet;\n\nreturn {\n  json: {\n    ...$input.item.json,\n    platform: 'youtube',\n    views: parseInt(stats.viewCount) || 0,\n    likes: parseInt(stats.likeCount) || 0,\n    comments: parseInt(stats.commentCount) || 0,\n    title: snippet.title,\n    published_at: snippet.publishedAt,\n    fetched_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "parse-youtube",
+      "name": "Parse YouTube Data",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 100],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v18.0/{{ $json.video_id }}/insights",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "metric", "value": "plays,reach,likes,comments,shares" },
+            { "name": "access_token", "value": "={{ $env.META_ACCESS_TOKEN }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "instagram-stats",
+      "name": "Get Instagram Reels Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1250, 300],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Instagram insights response\nconst data = $input.item.json.data || [];\n\nconst metrics = {};\ndata.forEach(item => {\n  metrics[item.name] = item.values?.[0]?.value || 0;\n});\n\nreturn {\n  json: {\n    ...$input.item.json,\n    platform: 'instagram',\n    views: metrics.plays || 0,\n    reach: metrics.reach || 0,\n    likes: metrics.likes || 0,\n    comments: metrics.comments || 0,\n    shares: metrics.shares || 0,\n    fetched_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "parse-instagram",
+      "name": "Parse Instagram Data",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://open.tiktokapis.com/v2/video/query/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filters\": {\n    \"video_ids\": [\"{{ $json.video_id }}\"]\n  },\n  \"fields\": [\"id\", \"title\", \"view_count\", \"like_count\", \"comment_count\", \"share_count\"]\n}",
+        "options": {}
+      },
+      "id": "tiktok-stats",
+      "name": "Get TikTok Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1250, 500],
+      "typeVersion": 4.2,
+      "credentials": { "oAuth2Api": { "id": "", "name": "TikTok OAuth2" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse TikTok API response\nconst video = $input.item.json.data?.videos?.[0];\n\nif (!video) {\n  return { json: { error: 'TikTok video not found' } };\n}\n\nreturn {\n  json: {\n    ...$input.item.json,\n    platform: 'tiktok',\n    views: video.view_count || 0,\n    likes: video.like_count || 0,\n    comments: video.comment_count || 0,\n    shares: video.share_count || 0,\n    title: video.title,\n    fetched_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "parse-tiktok",
+      "name": "Parse TikTok Data",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": { "values": [{ "field1": "video_id", "field2": "video_id" }] },
+        "options": {}
+      },
+      "id": "merge-stats",
+      "name": "Merge All Stats",
+      "type": "n8n-nodes-base.merge",
+      "position": [1650, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate performance metrics and trends\nconst current = $input.item.json;\n\n// Get previous data from workflow static data or default\nconst previous = $input.item.json.previous_views || 0;\nconst previousLikes = $input.item.json.previous_likes || 0;\n\n// Calculate growth\nconst viewGrowth = previous > 0 ? ((current.views - previous) / previous * 100).toFixed(2) : 0;\nconst engagementRate = current.views > 0 ? ((current.likes + current.comments) / current.views * 100).toFixed(2) : 0;\n\n// Determine performance level\nlet performanceLevel = 'LOW';\nif (engagementRate > 10) performanceLevel = 'VIRAL';\nelse if (engagementRate > 5) performanceLevel = 'HIGH';\nelse if (engagementRate > 2) performanceLevel = 'MEDIUM';\n\n// Calculate velocity (views per hour since publish)\nconst publishDate = new Date(current.published_at);\nconst hoursSincePublish = Math.max(1, (Date.now() - publishDate.getTime()) / (1000 * 60 * 60));\nconst viewsPerHour = (current.views / hoursSincePublish).toFixed(2);\n\nreturn {\n  json: {\n    ...current,\n    view_growth_percent: viewGrowth,\n    engagement_rate: engagementRate,\n    performance_level: performanceLevel,\n    views_per_hour: viewsPerHour,\n    hours_since_publish: hoursSincePublish.toFixed(1)\n  }\n};"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate Performance Metrics",
+      "type": "n8n-nodes-base.code",
+      "position": [1850, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir video performans analistisin. Verilen metriklere gore video performansini analiz et ve onerilerde bulun.\n\nJSON formatinda dondur:\n{\n  \"performance_summary\": \"1-2 cumle ozet\",\n  \"strengths\": [\"guclu yonler\"],\n  \"improvements\": [\"gelistirilecek alanlar\"],\n  \"recommended_actions\": [\"yapilmasi gerekenler\"],\n  \"content_suggestions\": \"benzer basarili icerik onerileri\",\n  \"best_posting_time\": \"onerilen paylasim zamani\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "Video Metrikleri:\nPlatform: {{ $json.platform }}\nBaslik: {{ $json.title }}\nGoruntulenme: {{ $json.views }}\nBegeni: {{ $json.likes }}\nYorum: {{ $json.comments }}\nEngagement Rate: {{ $json.engagement_rate }}%\nPerformans Seviyesi: {{ $json.performance_level }}\nSaat basi goruntulenme: {{ $json.views_per_hour }}\nYayindan bu yana (saat): {{ $json.hours_since_publish }}"
+            }
+          ]
+        },
+        "options": { "temperature": 0.5 }
+      },
+      "id": "ai-analysis",
+      "name": "AI Performance Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [2050, 300],
+      "typeVersion": 1.4,
+      "credentials": { "openAiApi": { "id": "", "name": "OpenAI" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI analysis\nconst aiResponse = $input.item.json.message?.content || $input.item.json.content;\nlet analysis;\n\ntry {\n  analysis = JSON.parse(aiResponse);\n} catch (e) {\n  analysis = {\n    performance_summary: 'Analiz yapilamadi',\n    strengths: [],\n    improvements: [],\n    recommended_actions: [],\n    content_suggestions: '',\n    best_posting_time: ''\n  };\n}\n\nreturn {\n  json: {\n    ...$input.item.json,\n    ai_summary: analysis.performance_summary,\n    ai_strengths: analysis.strengths?.join(', ') || '',\n    ai_improvements: analysis.improvements?.join(', ') || '',\n    ai_actions: analysis.recommended_actions?.join(', ') || '',\n    ai_content_suggestions: analysis.content_suggestions,\n    ai_best_time: analysis.best_posting_time\n  }\n};"
+      },
+      "id": "parse-analysis",
+      "name": "Parse AI Analysis",
+      "type": "n8n-nodes-base.code",
+      "position": [2250, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Performance_History" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "video_id": "={{ $json.video_id }}",
+            "platform": "={{ $json.platform }}",
+            "title": "={{ $json.title }}",
+            "views": "={{ $json.views }}",
+            "likes": "={{ $json.likes }}",
+            "comments": "={{ $json.comments }}",
+            "shares": "={{ $json.shares || 0 }}",
+            "engagement_rate": "={{ $json.engagement_rate }}",
+            "performance_level": "={{ $json.performance_level }}",
+            "views_per_hour": "={{ $json.views_per_hour }}",
+            "ai_summary": "={{ $json.ai_summary }}",
+            "fetched_at": "={{ $json.fetched_at }}"
+          }
+        }
+      },
+      "id": "log-performance",
+      "name": "Log Performance History",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2450, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Video_Tracking" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "last_views": "={{ $json.views }}",
+            "last_likes": "={{ $json.likes }}",
+            "last_engagement": "={{ $json.engagement_rate }}",
+            "performance_level": "={{ $json.performance_level }}",
+            "last_check": "={{ $json.fetched_at }}",
+            "ai_summary": "={{ $json.ai_summary }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-tracking",
+      "name": "Update Video Tracking",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2650, 300],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "viral-check",
+              "leftValue": "={{ $json.performance_level }}",
+              "rightValue": "VIRAL",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-viral",
+      "name": "If Viral",
+      "type": "n8n-nodes-base.if",
+      "position": [2850, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#content-wins",
+        "text": "=*VIRAL ICERIK ALARMII*\n\n*Platform:* {{ $json.platform }}\n*Baslik:* {{ $json.title }}\n\n*Metrikler:*\n- Goruntulenme: {{ $json.views }}\n- Begeni: {{ $json.likes }}\n- Yorum: {{ $json.comments }}\n- Engagement: {{ $json.engagement_rate }}%\n- Saat basi izlenme: {{ $json.views_per_hour }}\n\n*AI Analizi:* {{ $json.ai_summary }}\n\n*Oneriler:* {{ $json.ai_actions }}",
+        "otherOptions": {}
+      },
+      "id": "slack-viral-alert",
+      "name": "Slack Viral Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [3050, 200],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "weeks", "weeksInterval": 1 }]
+        }
+      },
+      "id": "weekly-report-trigger",
+      "name": "Weekly Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 600],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Performance_History" },
+        "options": { "range": "A:Z" }
+      },
+      "id": "get-weekly-data",
+      "name": "Get Weekly Performance Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [450, 600],
+      "typeVersion": 4.2,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate weekly performance\nconst data = $input.all();\nconst oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);\n\nconst weeklyData = data.filter(item => {\n  const fetchDate = new Date(item.json.fetched_at);\n  return fetchDate >= oneWeekAgo;\n});\n\nconst summary = {\n  total_videos: new Set(weeklyData.map(d => d.json.video_id)).size,\n  total_views: weeklyData.reduce((sum, d) => sum + (parseInt(d.json.views) || 0), 0),\n  total_likes: weeklyData.reduce((sum, d) => sum + (parseInt(d.json.likes) || 0), 0),\n  total_comments: weeklyData.reduce((sum, d) => sum + (parseInt(d.json.comments) || 0), 0),\n  avg_engagement: (weeklyData.reduce((sum, d) => sum + (parseFloat(d.json.engagement_rate) || 0), 0) / weeklyData.length).toFixed(2),\n  viral_count: weeklyData.filter(d => d.json.performance_level === 'VIRAL').length,\n  high_count: weeklyData.filter(d => d.json.performance_level === 'HIGH').length,\n  top_video: weeklyData.sort((a, b) => (b.json.views || 0) - (a.json.views || 0))[0]?.json\n};\n\nreturn { json: summary };"
+      },
+      "id": "aggregate-weekly",
+      "name": "Aggregate Weekly Stats",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 600],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#weekly-reports",
+        "text": "=*HAFTALIK VIDEO PERFORMANS RAPORU*\n\n*Genel Bakis:*\n- Toplam Video: {{ $json.total_videos }}\n- Toplam Izlenme: {{ $json.total_views }}\n- Toplam Begeni: {{ $json.total_likes }}\n- Toplam Yorum: {{ $json.total_comments }}\n- Ort. Engagement: {{ $json.avg_engagement }}%\n\n*Performans Dagilimi:*\n- VIRAL: {{ $json.viral_count }}\n- HIGH: {{ $json.high_count }}\n\n*En Iyi Video:*\n{{ $json.top_video?.title }} ({{ $json.top_video?.views }} izlenme)",
+        "otherOptions": {}
+      },
+      "id": "slack-weekly-report",
+      "name": "Send Weekly Report",
+      "type": "n8n-nodes-base.slack",
+      "position": [850, 600],
+      "typeVersion": 2.1,
+      "credentials": { "slackApi": { "id": "", "name": "Slack" } }
+    }
+  ],
+  "connections": {
+    "Every 12 Hours": {
+      "main": [[{ "node": "Get Video List", "type": "main", "index": 0 }]]
+    },
+    "Get Video List": {
+      "main": [[{ "node": "Filter Active Videos", "type": "main", "index": 0 }]]
+    },
+    "Filter Active Videos": {
+      "main": [[{ "node": "Process Each Video", "type": "main", "index": 0 }]]
+    },
+    "Process Each Video": {
+      "main": [[{ "node": "Route by Platform", "type": "main", "index": 0 }]]
+    },
+    "Route by Platform": {
+      "main": [
+        [{ "node": "Get YouTube Stats", "type": "main", "index": 0 }],
+        [{ "node": "Get TikTok Stats", "type": "main", "index": 0 }],
+        [{ "node": "Get Instagram Reels Stats", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get YouTube Stats": {
+      "main": [[{ "node": "Parse YouTube Data", "type": "main", "index": 0 }]]
+    },
+    "Parse YouTube Data": {
+      "main": [[{ "node": "Merge All Stats", "type": "main", "index": 0 }]]
+    },
+    "Get Instagram Reels Stats": {
+      "main": [[{ "node": "Parse Instagram Data", "type": "main", "index": 0 }]]
+    },
+    "Parse Instagram Data": {
+      "main": [[{ "node": "Merge All Stats", "type": "main", "index": 1 }]]
+    },
+    "Get TikTok Stats": {
+      "main": [[{ "node": "Parse TikTok Data", "type": "main", "index": 0 }]]
+    },
+    "Parse TikTok Data": {
+      "main": [[{ "node": "Merge All Stats", "type": "main", "index": 2 }]]
+    },
+    "Merge All Stats": {
+      "main": [[{ "node": "Calculate Performance Metrics", "type": "main", "index": 0 }]]
+    },
+    "Calculate Performance Metrics": {
+      "main": [[{ "node": "AI Performance Analysis", "type": "main", "index": 0 }]]
+    },
+    "AI Performance Analysis": {
+      "main": [[{ "node": "Parse AI Analysis", "type": "main", "index": 0 }]]
+    },
+    "Parse AI Analysis": {
+      "main": [[{ "node": "Log Performance History", "type": "main", "index": 0 }]]
+    },
+    "Log Performance History": {
+      "main": [[{ "node": "Update Video Tracking", "type": "main", "index": 0 }]]
+    },
+    "Update Video Tracking": {
+      "main": [[{ "node": "If Viral", "type": "main", "index": 0 }]]
+    },
+    "If Viral": {
+      "main": [
+        [{ "node": "Slack Viral Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Weekly Report": {
+      "main": [[{ "node": "Get Weekly Performance Data", "type": "main", "index": 0 }]]
+    },
+    "Get Weekly Performance Data": {
+      "main": [[{ "node": "Aggregate Weekly Stats", "type": "main", "index": 0 }]]
+    },
+    "Aggregate Weekly Stats": {
+      "main": [[{ "node": "Send Weekly Report", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "grain-automation" }, { "name": "video-analytics" }, { "name": "performance" }],
+  "meta": {
+    "templateId": "grain-vpt-v1",
+    "version": "1.0.0",
+    "description": "Track video performance across YouTube, TikTok, Instagram. AI analysis, viral alerts, weekly reports.",
+    "requiredCredentials": ["Google Sheets OAuth2", "OpenAI API", "YouTube OAuth2", "TikTok OAuth2", "Meta Access Token", "Slack"],
+    "requiredEnvVars": ["META_ACCESS_TOKEN"]
+  }
+}
