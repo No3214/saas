@@ -1,0 +1,1092 @@
+{
+  "name": "Grain Local Business Listing Manager v1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "start-node",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Hourly Review Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 500]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-sync-trigger",
+      "name": "Daily Listing Sync",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 700]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "listing-manager/webhook",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "External Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 900]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "business_id",
+              "value": "={{$json.business_id || 'BIZ_001'}}"
+            },
+            {
+              "name": "business_name",
+              "value": "={{$json.business_name || 'İşletme Adı'}}"
+            },
+            {
+              "name": "google_place_id",
+              "value": "={{$json.google_place_id || ''}}"
+            },
+            {
+              "name": "tripadvisor_id",
+              "value": "={{$json.tripadvisor_id || ''}}"
+            },
+            {
+              "name": "yelp_id",
+              "value": "={{$json.yelp_id || ''}}"
+            },
+            {
+              "name": "phone",
+              "value": "={{$json.phone || '+90 XXX XXX XX XX'}}"
+            },
+            {
+              "name": "website",
+              "value": "={{$json.website || 'https://example.com'}}"
+            },
+            {
+              "name": "address",
+              "value": "={{$json.address || 'Adres bilgisi'}}"
+            },
+            {
+              "name": "latitude",
+              "value": "={{$json.latitude || '41.0082'}}"
+            },
+            {
+              "name": "longitude",
+              "value": "={{$json.longitude || '28.9784'}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-business-config",
+      "name": "Business Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://maps.googleapis.com/maps/api/place/details/json?place_id={{$json.google_place_id}}&fields=name,rating,reviews,user_ratings_total,formatted_address,formatted_phone_number,opening_hours,website,url&key={{$credentials.googleApiKey}}",
+        "options": {}
+      },
+      "id": "google-places-reviews",
+      "name": "Google Places API - Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.yelp.com/v3/businesses/{{$json.yelp_id}}/reviews",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "yelp-reviews",
+      "name": "Yelp API - Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yelp-auth",
+          "name": "Yelp API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.tripadvisor.com/api/partner/2.0/location/{{$json.tripadvisor_id}}/reviews?key={{$credentials.tripadvisorApiKey}}",
+        "options": {}
+      },
+      "id": "tripadvisor-reviews",
+      "name": "TripAdvisor API - Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 600]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v18.0/{{$json.facebook_page_id}}/ratings?access_token={{$credentials.facebookAccessToken}}",
+        "options": {}
+      },
+      "id": "facebook-reviews",
+      "name": "Facebook Graph API - Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 800]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-reviews",
+      "name": "Merge All Reviews",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [960, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tüm platformlardan gelen yorumları birleştir ve standartlaştır\nconst allReviews = [];\n\nfor (const item of $input.all()) {\n  const data = item.json;\n  \n  // Google Reviews\n  if (data.result && data.result.reviews) {\n    for (const review of data.result.reviews) {\n      allReviews.push({\n        platform: 'google',\n        review_id: `google_${review.time}`,\n        author_name: review.author_name,\n        author_avatar: review.profile_photo_url,\n        rating: review.rating,\n        text: review.text,\n        date: new Date(review.time * 1000).toISOString(),\n        language: review.language || 'tr',\n        relative_time: review.relative_time_description,\n        responded: false,\n        response_needed: review.rating <= 3\n      });\n    }\n  }\n  \n  // Yelp Reviews\n  if (data.reviews) {\n    for (const review of data.reviews) {\n      allReviews.push({\n        platform: 'yelp',\n        review_id: review.id,\n        author_name: review.user.name,\n        author_avatar: review.user.image_url,\n        rating: review.rating,\n        text: review.text,\n        date: review.time_created,\n        language: 'en',\n        responded: false,\n        response_needed: review.rating <= 3\n      });\n    }\n  }\n  \n  // TripAdvisor Reviews\n  if (data.data) {\n    for (const review of data.data) {\n      allReviews.push({\n        platform: 'tripadvisor',\n        review_id: review.id,\n        author_name: review.user.username,\n        author_avatar: review.user.avatar?.small?.url,\n        rating: review.rating,\n        text: review.text,\n        date: review.published_date,\n        language: review.lang || 'en',\n        title: review.title,\n        responded: false,\n        response_needed: review.rating <= 3\n      });\n    }\n  }\n  \n  // Facebook Reviews\n  if (data.data && data.data[0]?.recommendation_type) {\n    for (const review of data.data) {\n      allReviews.push({\n        platform: 'facebook',\n        review_id: review.open_graph_story?.id,\n        author_name: review.reviewer?.name,\n        rating: review.recommendation_type === 'positive' ? 5 : 2,\n        text: review.review_text,\n        date: review.created_time,\n        language: 'tr',\n        responded: false,\n        response_needed: review.recommendation_type !== 'positive'\n      });\n    }\n  }\n}\n\n// Tarihe göre sırala (en yeni önce)\nallReviews.sort((a, b) => new Date(b.date) - new Date(a.date));\n\nreturn allReviews.map(review => ({ json: review }));"
+      },
+      "id": "process-reviews",
+      "name": "Process & Standardize Reviews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "filter-new-reviews",
+              "leftValue": "={{$json.response_needed}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-needs-response",
+      "name": "Filter: Needs Response",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1440, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "negative-reviews",
+              "leftValue": "={{$json.rating}}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-by-sentiment",
+      "name": "Route by Rating",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1680, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir işletme için profesyonel müşteri ilişkileri uzmanısın. Müşteri yorumlarına sıcak, samimi ama profesyonel yanıtlar yazıyorsun. Türk misafirperverliğini yansıt. Yanıtlar kısa ve öz olsun (max 150 kelime).\n\nKurallar:\n- Her zaman müşteriye ismiyle hitap et\n- Olumlu yorumlarda teşekkür et ve tekrar davet et\n- Olumsuz yorumlarda asla savunmacı olma\n- İletişim bilgisi paylaş (olumsuz yorumlarda)\n- Emoji kullanabilirsin ama abartma\n- Yanıtın sonuna işletme imzası ekle"
+            },
+            {
+              "role": "user",
+              "content": "Platform: {{$json.platform}}\nMüşteri Adı: {{$json.author_name}}\nPuan: {{$json.rating}}/5\nYorum: {{$json.text}}\n\nBu yoruma uygun bir yanıt yaz."
+            }
+          ]
+        }
+      },
+      "id": "ai-positive-response",
+      "name": "AI: Positive Response",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [1920, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo",
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 600
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir işletme için kriz yönetimi uzmanısın. Olumsuz müşteri yorumlarına empatik, profesyonel ve çözüm odaklı yanıtlar yazıyorsun.\n\nKurallar:\n- Müşteriye ismiyle hitap et (Sayın/Değerli X Bey/Hanım)\n- Yaşanan deneyim için içtenlikle özür dile\n- Asla savunmacı olma veya bahane üretme\n- Konuyu özel olarak ele almak istediğini belirt\n- Doğrudan iletişim için telefon numarası ver\n- Sorunun çözüleceğine dair güvence ver\n- İmza olarak 'İşletme Müdürü' kullan\n- Maksimum 200 kelime"
+            },
+            {
+              "role": "user",
+              "content": "Platform: {{$json.platform}}\nMüşteri Adı: {{$json.author_name}}\nPuan: {{$json.rating}}/5\nYorum: {{$json.text}}\n\nBu olumsuz yoruma uygun, empatik ve çözüm odaklı bir yanıt yaz. İletişim numarası: +90 212 XXX XX XX"
+            }
+          ]
+        }
+      },
+      "id": "ai-negative-response",
+      "name": "AI: Negative Response",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [1920, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_id",
+              "value": "={{$json.review_id}}"
+            },
+            {
+              "name": "platform",
+              "value": "={{$json.platform}}"
+            },
+            {
+              "name": "original_review",
+              "value": "={{$json.text}}"
+            },
+            {
+              "name": "ai_response",
+              "value": "={{$('AI: Positive Response').item.json.text || $('AI: Negative Response').item.json.text}}"
+            },
+            {
+              "name": "rating",
+              "value": "={{$json.rating}}"
+            },
+            {
+              "name": "author_name",
+              "value": "={{$json.author_name}}"
+            },
+            {
+              "name": "response_time",
+              "value": "={{new Date().toISOString()}}"
+            },
+            {
+              "name": "requires_approval",
+              "value": "={{$json.rating <= 2}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-response",
+      "name": "Prepare Response Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [2160, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "auto-post",
+              "leftValue": "={{$json.requires_approval}}",
+              "rightValue": "false",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-auto-post",
+      "name": "Auto Post or Approval?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2400, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mybusiness.googleapis.com/v4/accounts/{{$json.account_id}}/locations/{{$json.location_id}}/reviews/{{$json.review_id}}/reply",
+        "authentication": "oAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "comment",
+              "value": "={{$json.ai_response}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "post-google-reply",
+      "name": "Post Google Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2640, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{$json.approval_sheet_id}}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Onay Bekleyenler",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Review ID": "={{$json.review_id}}",
+            "Platform": "={{$json.platform}}",
+            "Author": "={{$json.author_name}}",
+            "Rating": "={{$json.rating}}",
+            "Original Review": "={{$json.original_review}}",
+            "AI Response": "={{$json.ai_response}}",
+            "Date": "={{$json.response_time}}",
+            "Status": "Onay Bekliyor"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "add-to-approval-queue",
+      "name": "Add to Approval Queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.3,
+      "position": [2640, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#reviews",
+        "text": "=🔔 *Yeni Olumsuz Yorum - Onay Gerekiyor*\n\n📍 Platform: *{{$json.platform}}*\n👤 Müşteri: {{$json.author_name}}\n⭐ Puan: {{$json.rating}}/5\n\n💬 *Yorum:*\n{{$json.original_review}}\n\n🤖 *AI Yanıt Önerisi:*\n{{$json.ai_response}}\n\n✅ Onaylamak için: <{{$json.approval_link}}|Buraya Tıklayın>",
+        "otherOptions": {}
+      },
+      "id": "slack-notification",
+      "name": "Slack: Approval Request",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [2880, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-cred",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$json.manager_email || 'manager@isletme.com'}}",
+        "subject": "=⚠️ Olumsuz Yorum Onay Bekliyor - {{$json.platform}}",
+        "emailType": "html",
+        "message": "=<h2>Yeni Olumsuz Yorum Onay Bekliyor</h2>\n\n<table style=\"border-collapse: collapse; width: 100%;\">\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Platform:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{$json.platform}}</td></tr>\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Müşteri:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{$json.author_name}}</td></tr>\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Puan:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{$json.rating}}/5 ⭐</td></tr>\n</table>\n\n<h3>Müşteri Yorumu:</h3>\n<blockquote style=\"background: #f9f9f9; padding: 15px; border-left: 4px solid #e74c3c;\">{{$json.original_review}}</blockquote>\n\n<h3>AI Yanıt Önerisi:</h3>\n<blockquote style=\"background: #f0fff0; padding: 15px; border-left: 4px solid #27ae60;\">{{$json.ai_response}}</blockquote>\n\n<p><a href=\"{{$json.approval_link}}\" style=\"background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;\">Yanıtı Onayla</a></p>",
+        "options": {}
+      },
+      "id": "email-notification",
+      "name": "Email: Approval Request",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2880, 700],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-cred",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{$json.analytics_sheet_id}}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Review Analytics",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{new Date().toISOString()}}",
+            "Platform": "={{$json.platform}}",
+            "Author": "={{$json.author_name}}",
+            "Rating": "={{$json.rating}}",
+            "Review Text": "={{$json.original_review}}",
+            "AI Response": "={{$json.ai_response}}",
+            "Response Time (min)": "={{Math.round((new Date() - new Date($json.date)) / 60000)}}",
+            "Auto Posted": "={{!$json.requires_approval}}",
+            "Sentiment": "={{$json.rating >= 4 ? 'Positive' : ($json.rating >= 3 ? 'Neutral' : 'Negative')}}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "log-to-analytics",
+      "name": "Log to Analytics Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.3,
+      "position": [2880, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://maps.googleapis.com/maps/api/place/textsearch/json?query={{encodeURIComponent($json.search_keyword)}}&location={{$json.latitude}},{{$json.longitude}}&radius=5000&type=restaurant&key={{$credentials.googleApiKey}}",
+        "options": {}
+      },
+      "id": "rank-tracking-search",
+      "name": "Map Rank Tracking",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 1000]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Harita sıralaması analizi\nconst results = $input.first().json.results || [];\nconst businessName = $('Business Configuration').first().json.business_name;\nconst searchKeyword = $('Business Configuration').first().json.search_keyword || 'restoran';\n\nlet rank = -1;\nlet foundBusiness = null;\n\nfor (let i = 0; i < results.length; i++) {\n  if (results[i].name.toLowerCase().includes(businessName.toLowerCase())) {\n    rank = i + 1;\n    foundBusiness = results[i];\n    break;\n  }\n}\n\nconst competitors = results.slice(0, 10).map((r, i) => ({\n  rank: i + 1,\n  name: r.name,\n  rating: r.rating,\n  total_reviews: r.user_ratings_total,\n  address: r.formatted_address\n}));\n\nreturn [{\n  json: {\n    tracking_date: new Date().toISOString(),\n    search_keyword: searchKeyword,\n    business_name: businessName,\n    current_rank: rank,\n    found: rank > 0,\n    business_details: foundBusiness,\n    top_10_competitors: competitors,\n    total_results: results.length\n  }\n}];"
+      },
+      "id": "analyze-ranking",
+      "name": "Analyze Map Ranking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 1000]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{$json.ranking_sheet_id}}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Ranking History",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{$json.tracking_date}}",
+            "Keyword": "={{$json.search_keyword}}",
+            "Rank": "={{$json.current_rank}}",
+            "Found": "={{$json.found}}",
+            "Top Competitor": "={{$json.top_10_competitors[0]?.name}}",
+            "Top Competitor Rating": "={{$json.top_10_competitors[0]?.rating}}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "save-ranking",
+      "name": "Save Ranking Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.3,
+      "position": [1200, 1000]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "rank-drop",
+              "leftValue": "={{$json.current_rank}}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-rank-alert",
+      "name": "Rank Drop Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1440, 1000]
+    },
+    {
+      "parameters": {
+        "channel": "#seo-alerts",
+        "text": "=⚠️ *Harita Sıralaması Düştü!*\n\n🔍 Anahtar Kelime: *{{$json.search_keyword}}*\n📍 Mevcut Sıra: *{{$json.current_rank}}*\n📅 Tarih: {{$json.tracking_date}}\n\n🏆 *İlk 5 Rakip:*\n{{$json.top_10_competitors.slice(0,5).map((c, i) => `${i+1}. ${c.name} (⭐${c.rating})`).join('\\n')}}",
+        "otherOptions": {}
+      },
+      "id": "rank-alert-slack",
+      "name": "Slack: Rank Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1680, 1000],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-cred",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Günlük analitik özeti oluştur\nconst reviews = $input.all().map(i => i.json);\n\nconst summary = {\n  date: new Date().toISOString().split('T')[0],\n  total_reviews_today: reviews.length,\n  average_rating: reviews.length > 0 \n    ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2) \n    : 0,\n  platform_breakdown: {},\n  sentiment_breakdown: {\n    positive: reviews.filter(r => r.rating >= 4).length,\n    neutral: reviews.filter(r => r.rating === 3).length,\n    negative: reviews.filter(r => r.rating <= 2).length\n  },\n  response_rate: reviews.filter(r => r.responded).length / reviews.length * 100 || 0,\n  needs_attention: reviews.filter(r => r.rating <= 2 && !r.responded).length\n};\n\n// Platform breakdown\nreviews.forEach(r => {\n  if (!summary.platform_breakdown[r.platform]) {\n    summary.platform_breakdown[r.platform] = {\n      count: 0,\n      avg_rating: 0,\n      ratings: []\n    };\n  }\n  summary.platform_breakdown[r.platform].count++;\n  summary.platform_breakdown[r.platform].ratings.push(r.rating);\n});\n\nObject.keys(summary.platform_breakdown).forEach(platform => {\n  const ratings = summary.platform_breakdown[platform].ratings;\n  summary.platform_breakdown[platform].avg_rating = \n    (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2);\n  delete summary.platform_breakdown[platform].ratings;\n});\n\nreturn [{ json: summary }];"
+      },
+      "id": "daily-analytics",
+      "name": "Generate Daily Analytics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mybusiness.googleapis.com/v4/accounts/{{$json.account_id}}/locations/{{$json.location_id}}/localPosts",
+        "authentication": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"languageCode\": \"tr\",\n  \"summary\": \"{{$json.post_content}}\",\n  \"callToAction\": {\n    \"actionType\": \"{{$json.cta_type || 'LEARN_MORE'}}\",\n    \"url\": \"{{$json.cta_url || $json.website}}\"\n  },\n  \"media\": [\n    {\n      \"mediaFormat\": \"PHOTO\",\n      \"sourceUrl\": \"{{$json.post_image_url}}\"\n    }\n  ],\n  \"topicType\": \"{{$json.post_type || 'STANDARD'}}\"\n}",
+        "options": {}
+      },
+      "id": "create-gbp-post",
+      "name": "Create GBP Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1200, 1200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo",
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 300
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen bir restoran için sosyal medya içerik uzmanısın. Google Business Profile için kısa, etkileyici ve SEO uyumlu postlar yazıyorsun.\n\nKurallar:\n- Maksimum 300 karakter\n- Türkçe yaz\n- Emojiler kullan\n- CTA (Call to Action) ekle\n- Yerel SEO anahtar kelimeleri kullan"
+            },
+            {
+              "role": "user",
+              "content": "İşletme: {{$json.business_name}}\nKonum: {{$json.location}}\nKategori: {{$json.category}}\nPost Türü: {{$json.post_type || 'Genel tanıtım'}}\nÖzel Not: {{$json.special_note || 'Yok'}}\n\nBu işletme için etkileyici bir GBP postu yaz."
+            }
+          ]
+        }
+      },
+      "id": "ai-generate-post",
+      "name": "AI: Generate GBP Post",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [960, 1200],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-cred",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tüm platformlara senkronizasyon durumu kontrolü\nconst platforms = [\n  'google_business_profile',\n  'apple_maps',\n  'bing_places',\n  'tripadvisor',\n  'yelp',\n  'facebook',\n  'foursquare',\n  'yandex_maps',\n  'waze',\n  'here_maps',\n  'yemeksepeti',\n  'getir_yemek',\n  'trendyol_yemek'\n];\n\nconst businessInfo = $input.first().json;\n\nconst syncStatus = platforms.map(platform => ({\n  platform,\n  status: 'pending_check',\n  business_name: businessInfo.business_name,\n  address: businessInfo.address,\n  phone: businessInfo.phone,\n  website: businessInfo.website,\n  last_sync: null,\n  nap_consistent: null\n}));\n\nreturn syncStatus.map(s => ({ json: s }));"
+      },
+      "id": "prepare-sync-check",
+      "name": "Prepare Platform Sync Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 1400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "summary-report",
+              "name": "daily_report",
+              "value": "=# 📊 Günlük Listeleme Raporu\n\n**Tarih:** {{new Date().toLocaleDateString('tr-TR')}}\n\n## Yorum Özeti\n- Toplam Yorum: {{$json.total_reviews_today}}\n- Ortalama Puan: {{$json.average_rating}} ⭐\n- Olumlu: {{$json.sentiment_breakdown.positive}} ✅\n- Nötr: {{$json.sentiment_breakdown.neutral}} ➖\n- Olumsuz: {{$json.sentiment_breakdown.negative}} ❌\n\n## Platform Dağılımı\n{{Object.entries($json.platform_breakdown).map(([p, d]) => `- ${p}: ${d.count} yorum (${d.avg_rating}⭐)`).join('\\n')}}\n\n## Dikkat Gerektiren\n- Yanıt bekleyen olumsuz: {{$json.needs_attention}}\n- Yanıt oranı: %{{$json.response_rate.toFixed(1)}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-daily-report",
+      "name": "Format Daily Report",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1680, 600]
+    },
+    {
+      "parameters": {
+        "channel": "#daily-reports",
+        "text": "={{$json.daily_report}}",
+        "otherOptions": {}
+      },
+      "id": "send-daily-report",
+      "name": "Slack: Daily Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1920, 600],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-cred",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Business Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly Review Check": {
+      "main": [
+        [
+          {
+            "node": "Business Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Listing Sync": {
+      "main": [
+        [
+          {
+            "node": "Business Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "External Webhook": {
+      "main": [
+        [
+          {
+            "node": "Business Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Business Configuration": {
+      "main": [
+        [
+          {
+            "node": "Google Places API - Reviews",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Yelp API - Reviews",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TripAdvisor API - Reviews",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Facebook Graph API - Reviews",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Map Rank Tracking",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Platform Sync Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Places API - Reviews": {
+      "main": [
+        [
+          {
+            "node": "Merge All Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yelp API - Reviews": {
+      "main": [
+        [
+          {
+            "node": "Merge All Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TripAdvisor API - Reviews": {
+      "main": [
+        [
+          {
+            "node": "Merge All Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facebook Graph API - Reviews": {
+      "main": [
+        [
+          {
+            "node": "Merge All Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Reviews": {
+      "main": [
+        [
+          {
+            "node": "Process & Standardize Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process & Standardize Reviews": {
+      "main": [
+        [
+          {
+            "node": "Filter: Needs Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Daily Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: Needs Response": {
+      "main": [
+        [
+          {
+            "node": "Route by Rating",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Rating": {
+      "main": [
+        [
+          {
+            "node": "AI: Negative Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI: Positive Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Positive Response": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Negative Response": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response Data": {
+      "main": [
+        [
+          {
+            "node": "Check Auto Post or Approval?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auto Post or Approval?": {
+      "main": [
+        [
+          {
+            "node": "Post Google Reply",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Analytics Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add to Approval Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Approval Queue": {
+      "main": [
+        [
+          {
+            "node": "Slack: Approval Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email: Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Rank Tracking": {
+      "main": [
+        [
+          {
+            "node": "Analyze Map Ranking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Map Ranking": {
+      "main": [
+        [
+          {
+            "node": "Save Ranking Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Ranking Data": {
+      "main": [
+        [
+          {
+            "node": "Rank Drop Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank Drop Alert?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Rank Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Daily Analytics": {
+      "main": [
+        [
+          {
+            "node": "Format Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Daily Report": {
+      "main": [
+        [
+          {
+            "node": "Slack: Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Generate GBP Post": {
+      "main": [
+        [
+          {
+            "node": "Create GBP Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": {
+    "templateId": "grain_local_listing_manager_v1",
+    "templateName": "Grain Local Business Listing Manager",
+    "templateVersion": "1.0.0",
+    "templateDescription": "Semrush tarzı yerel işletme listeleme yönetimi - Tüm haritalara kayıt, yorum yönetimi, AI otomatik yanıt, sıralama takibi",
+    "categories": ["local_seo", "review_management", "automation"],
+    "author": "Grain AI Team",
+    "created": "2024-01-20",
+    "keywords": ["local seo", "google business", "review management", "ai response", "tripadvisor", "yelp", "listing management"]
+  },
+  "tags": [
+    {"name": "local-seo"},
+    {"name": "review-management"},
+    {"name": "ai-automation"},
+    {"name": "google-business"},
+    {"name": "tripadvisor"},
+    {"name": "grain-premium"}
+  ]
+}

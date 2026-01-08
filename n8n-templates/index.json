@@ -1,5 +1,5 @@
 {
-  "count": 95,
+  "count": 121,
   "lastUpdated": "2026-01-08",
   "enterprise_ready": true,
   "mcp_enabled": true,
@@ -147,6 +147,10 @@
     ],
     "real_estate": [
       "Grain_Real_Estate_Land_Showcase_v1.json"
+    ],
+    "local_business": [
+      "Grain_Local_Business_Listing_Manager_v1.json",
+      "Grain_AI_Review_Responder_v1.json"
     ]
   },
   "files": [
@@ -827,7 +831,27 @@
       "category": "real_estate",
       "description": "Emlakçılar için arazi tanıtım otomasyonu - uydu görüntüsü, harita linkleri, KML ve AI pazarlama metni",
       "roi": "Yerinde ziyaret gerektirmeden profesyonel arazi sunumu",
-      "features": ["Mapbox Satellite", "GPT-4 Marketing", "Google Earth KML", "Multi-platform Maps", "TKGM Integration"]
+      "features": [
+        "Mapbox Satellite",
+        "GPT-4 Marketing",
+        "Google Earth KML",
+        "Multi-platform Maps",
+        "TKGM Integration"
+      ]
+    },
+    {
+      "filename": "Grain_Local_Business_Listing_Manager_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Local_Business_Listing_Manager_v1.json",
+      "category": "local_business",
+      "description": "Semrush-style local business listing management - Multi-platform sync, review monitoring, AI responses, map ranking",
+      "roi": "50% time savings on review management"
+    },
+    {
+      "filename": "Grain_AI_Review_Responder_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Review_Responder_v1.json",
+      "category": "local_business",
+      "description": "AI-powered automatic review responses for Google and TripAdvisor with sentiment routing",
+      "roi": "4x faster response time, 95% consistency"
     }
   ]
 }
