@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grain Local SEO Suite - Yerel İşletme Otomasyon Araçları</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .gradient-text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-8px); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+        .pulse-badge { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .floating { animation: floating 3s ease-in-out infinite; }
+        @keyframes floating { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Hero Section -->
+    <header class="gradient-bg text-white">
+        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <svg class="w-10 h-10" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" stroke="white" stroke-width="2"/>
+                    <path d="M12 20L18 26L28 14" stroke="white" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+                <span class="text-2xl font-bold">Grain Local</span>
+            </div>
+            <div class="hidden md:flex space-x-8">
+                <a href="#features" class="hover:text-purple-200 transition">Özellikler</a>
+                <a href="#pricing" class="hover:text-purple-200 transition">Fiyatlar</a>
+                <a href="#templates" class="hover:text-purple-200 transition">Şablonlar</a>
+                <a href="#demo" class="hover:text-purple-200 transition">Demo</a>
+            </div>
+            <a href="#pricing" class="bg-white text-purple-600 px-6 py-2 rounded-full font-semibold hover:bg-purple-100 transition">
+                Hemen Başla
+            </a>
+        </nav>
+
+        <div class="container mx-auto px-6 py-20 text-center">
+            <span class="pulse-badge bg-purple-800 bg-opacity-50 text-sm px-4 py-2 rounded-full inline-block mb-6">
+                🚀 Semrush & BrightLocal Alternatifi - %80 Daha Ucuz
+            </span>
+            <h1 class="text-5xl md:text-6xl font-extrabold mb-6 leading-tight">
+                Yerel İşletme Listeleme<br/>
+                <span class="text-purple-200">Yönetimi Otomasyonu</span>
+            </h1>
+            <p class="text-xl text-purple-100 max-w-3xl mx-auto mb-10">
+                Google, TripAdvisor, Yelp, Facebook ve 25+ platformda işletmenizi yönetin.
+                AI ile otomatik yorum yanıtlama, harita sıralaması takibi ve günlük raporlama.
+            </p>
+            <div class="flex flex-col md:flex-row justify-center gap-4">
+                <a href="#pricing" class="bg-white text-purple-600 px-8 py-4 rounded-full font-bold text-lg hover:bg-purple-100 transition shadow-xl">
+                    Ücretsiz Dene - 14 Gün
+                </a>
+                <a href="#demo" class="border-2 border-white px-8 py-4 rounded-full font-bold text-lg hover:bg-white hover:text-purple-600 transition">
+                    Demo İzle →
+                </a>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mt-16 max-w-4xl mx-auto">
+                <div class="text-center">
+                    <div class="text-4xl font-bold">117+</div>
+                    <div class="text-purple-200">Otomasyon Şablonu</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-bold">25+</div>
+                    <div class="text-purple-200">Platform Entegrasyonu</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-bold">%95</div>
+                    <div class="text-purple-200">Yanıt Tutarlılığı</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-4xl font-bold">4x</div>
+                    <div class="text-purple-200">Daha Hızlı Yanıt</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Competitors Comparison -->
+    <section class="py-16 bg-white">
+        <div class="container mx-auto px-6">
+            <h2 class="text-3xl font-bold text-center mb-4">Rakiplerle Karşılaştırma</h2>
+            <p class="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
+                Aynı özellikleri çok daha uygun fiyata sunuyoruz. Üstelik tamamen sizin kontrolünüzde.
+            </p>
+
+            <div class="overflow-x-auto">
+                <table class="w-full max-w-5xl mx-auto">
+                    <thead>
+                        <tr class="border-b-2">
+                            <th class="py-4 px-6 text-left">Özellik</th>
+                            <th class="py-4 px-6 text-center">
+                                <span class="gradient-text font-bold">Grain Local</span>
+                            </th>
+                            <th class="py-4 px-6 text-center text-gray-500">Semrush Local</th>
+                            <th class="py-4 px-6 text-center text-gray-500">BrightLocal</th>
+                            <th class="py-4 px-6 text-center text-gray-500">Yext</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b">
+                            <td class="py-4 px-6 font-medium">Yıllık Fiyat (1 Lokasyon)</td>
+                            <td class="py-4 px-6 text-center"><span class="bg-green-100 text-green-800 px-3 py-1 rounded-full font-bold">$99</span></td>
+                            <td class="py-4 px-6 text-center text-gray-600">$240</td>
+                            <td class="py-4 px-6 text-center text-gray-600">$432</td>
+                            <td class="py-4 px-6 text-center text-gray-600">$499</td>
+                        </tr>
+                        <tr class="border-b bg-gray-50">
+                            <td class="py-4 px-6 font-medium">AI Yorum Yanıtlama</td>
+                            <td class="py-4 px-6 text-center text-green-600">✓ GPT-4</td>
+                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
+                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
+                            <td class="py-4 px-6 text-center text-yellow-600">Sınırlı</td>
+                        </tr>
+                        <tr class="border-b">
+                            <td class="py-4 px-6 font-medium">Platform Sayısı</td>
+                            <td class="py-4 px-6 text-center text-green-600 font-bold">25+</td>
+                            <td class="py-4 px-6 text-center text-gray-600">70+</td>
+                            <td class="py-4 px-6 text-center text-gray-600">45</td>
+                            <td class="py-4 px-6 text-center text-gray-600">200+</td>
+                        </tr>
+                        <tr class="border-b bg-gray-50">
+                            <td class="py-4 px-6 font-medium">Listeleme Sahipliği</td>
+                            <td class="py-4 px-6 text-center text-green-600">✓ Sizin</td>
+                            <td class="py-4 px-6 text-center text-green-600">✓ Sizin</td>
+                            <td class="py-4 px-6 text-center text-green-600">✓ Sizin</td>
+                            <td class="py-4 px-6 text-center text-red-600">✗ Kiralık</td>
+                        </tr>
+                        <tr class="border-b">
+                            <td class="py-4 px-6 font-medium">Self-Hosted Seçeneği</td>
+                            <td class="py-4 px-6 text-center text-green-600">✓</td>
+                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
+                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
+                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
+                        </tr>
+                        <tr class="border-b bg-gray-50">
+                            <td class="py-4 px-6 font-medium">n8n Entegrasyonu</td>
+                            <td class="py-4 px-6 text-center text-green-600">✓ Native</td>
+                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
+                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
+                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
+                        </tr>
+                        <tr>
+                            <td class="py-4 px-6 font-medium">Özelleştirme</td>
+                            <td class="py-4 px-6 text-center text-green-600">✓ Tam</td>
+                            <td class="py-4 px-6 text-center text-yellow-600">Sınırlı</td>
+                            <td class="py-4 px-6 text-center text-yellow-600">Sınırlı</td>
+                            <td class="py-4 px-6 text-center text-yellow-600">Sınırlı</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl font-bold text-center mb-4">Güçlü Özellikler</h2>
+            <p class="text-gray-600 text-center mb-16 max-w-2xl mx-auto">
+                Yerel SEO ve işletme yönetimi için ihtiyacınız olan her şey tek pakette
+            </p>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
+                    <div class="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Çoklu Platform Listeleme</h3>
+                    <p class="text-gray-600">
+                        Google, TripAdvisor, Yelp, Facebook, Yemeksepeti, Foursquare ve 25+ platformda tek merkezden yönetim.
+                    </p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
+                    <div class="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">AI Yorum Yanıtlama</h3>
+                    <p class="text-gray-600">
+                        GPT-4 ile otomatik, kişiselleştirilmiş yorum yanıtları. Olumlu/olumsuz ayrımı ve onay sistemi.
+                    </p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
+                    <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Harita Sıralaması Takibi</h3>
+                    <p class="text-gray-600">
+                        Google Maps, Apple Maps, Bing'de sıralamanızı takip edin. Rakip analizi ve trend raporları.
+                    </p>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
+                    <div class="w-14 h-14 bg-yellow-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Yorum Yönetimi</h3>
+                    <p class="text-gray-600">
+                        Tüm platformlardan yorumları tek ekranda görün. Sentiment analizi ve öncelik sıralaması.
+                    </p>
+                </div>
+
+                <!-- Feature 5 -->
+                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
+                    <div class="w-14 h-14 bg-red-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Akıllı Bildirimler</h3>
+                    <p class="text-gray-600">
+                        Slack, Email, WhatsApp ile anlık bildirimler. Olumsuz yorumlarda acil uyarı sistemi.
+                    </p>
+                </div>
+
+                <!-- Feature 6 -->
+                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
+                    <div class="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Günlük Raporlar</h3>
+                    <p class="text-gray-600">
+                        Otomatik günlük/haftalık raporlar. Google Sheets entegrasyonu ve analitik dashboard.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Templates Section -->
+    <section id="templates" class="py-20 bg-white">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl font-bold text-center mb-4">Hazır Otomasyon Şablonları</h2>
+            <p class="text-gray-600 text-center mb-16 max-w-2xl mx-auto">
+                n8n için özel olarak geliştirilmiş, hemen kullanıma hazır workflow şablonları
+            </p>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Template Card 1 -->
+                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full">PREMIUM</span>
+                        <span class="text-2xl font-bold text-purple-600">$49</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Local Business Listing Manager</h3>
+                    <p class="text-gray-600 text-sm mb-4">
+                        25+ platform entegrasyonu, AI yorum yanıtlama, harita sıralaması takibi
+                    </p>
+                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
+                        <li>✓ Google Places API entegrasyonu</li>
+                        <li>✓ TripAdvisor & Yelp desteği</li>
+                        <li>✓ GPT-4 otomatik yanıtlar</li>
+                        <li>✓ Slack/Email bildirimler</li>
+                    </ul>
+                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
+                        Satın Al
+                    </button>
+                </div>
+
+                <!-- Template Card 2 -->
+                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">POPÜLER</span>
+                        <span class="text-2xl font-bold text-purple-600">$29</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">AI Review Responder</h3>
+                    <p class="text-gray-600 text-sm mb-4">
+                        Google ve TripAdvisor yorumlarına AI ile otomatik yanıt
+                    </p>
+                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
+                        <li>✓ Sentiment routing (olumlu/olumsuz)</li>
+                        <li>✓ Onay sistemi</li>
+                        <li>✓ Günlük raporlama</li>
+                        <li>✓ Email bildirimleri</li>
+                    </ul>
+                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
+                        Satın Al
+                    </button>
+                </div>
+
+                <!-- Template Card 3 -->
+                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">YENİ</span>
+                        <span class="text-2xl font-bold text-purple-600">$39</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Real Estate Land Showcase</h3>
+                    <p class="text-gray-600 text-sm mb-4">
+                        Emlakçılar için arazi tanıtım otomasyonu
+                    </p>
+                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
+                        <li>✓ Uydu görüntüleri (Mapbox)</li>
+                        <li>✓ GPT-4 pazarlama metni</li>
+                        <li>✓ QR kod oluşturma</li>
+                        <li>✓ HTML rapor çıktısı</li>
+                    </ul>
+                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
+                        Satın Al
+                    </button>
+                </div>
+
+                <!-- Template Card 4 -->
+                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full">SEO</span>
+                        <span class="text-2xl font-bold text-purple-600">$35</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">GBP Auto Posting</h3>
+                    <p class="text-gray-600 text-sm mb-4">
+                        Google Business Profile otomatik post paylaşımı
+                    </p>
+                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
+                        <li>✓ AI içerik üretimi</li>
+                        <li>✓ Zamanlanmış paylaşım</li>
+                        <li>✓ Görsel ekleme</li>
+                        <li>✓ CTA butonları</li>
+                    </ul>
+                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
+                        Satın Al
+                    </button>
+                </div>
+
+                <!-- Template Card 5 -->
+                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="bg-pink-100 text-pink-800 text-xs font-bold px-3 py-1 rounded-full">HOSPITALITY</span>
+                        <span class="text-2xl font-bold text-purple-600">$45</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Review Management AI</h3>
+                    <p class="text-gray-600 text-sm mb-4">
+                        Otel ve restoranlar için yorum yönetimi
+                    </p>
+                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
+                        <li>✓ Multi-platform toplama</li>
+                        <li>✓ Sentiment analizi</li>
+                        <li>✓ Otomatik yanıtlama</li>
+                        <li>✓ Haftalık raporlar</li>
+                    </ul>
+                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
+                        Satın Al
+                    </button>
+                </div>
+
+                <!-- Bundle Card -->
+                <div class="border-2 border-purple-400 rounded-2xl p-6 card-hover bg-gradient-to-br from-purple-50 to-white relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-purple-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">
+                        %40 İNDİRİM
+                    </div>
+                    <div class="flex justify-between items-start mb-4 mt-4">
+                        <span class="bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full">BUNDLE</span>
+                        <div>
+                            <span class="text-gray-400 line-through text-lg">$197</span>
+                            <span class="text-3xl font-bold text-purple-600 ml-2">$99</span>
+                        </div>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Local SEO Complete Suite</h3>
+                    <p class="text-gray-600 text-sm mb-4">
+                        Tüm yerel SEO şablonları tek pakette
+                    </p>
+                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
+                        <li>✓ 5 Premium şablon dahil</li>
+                        <li>✓ Ömür boyu güncelleme</li>
+                        <li>✓ Öncelikli destek</li>
+                        <li>✓ Video eğitimler</li>
+                    </ul>
+                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
+                        Bundle Satın Al
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-20 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl font-bold text-center mb-4">Basit & Şeffaf Fiyatlandırma</h2>
+            <p class="text-gray-600 text-center mb-16 max-w-2xl mx-auto">
+                Gizli maliyet yok. İstediğiniz zaman iptal edin.
+            </p>
+
+            <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <!-- Starter Plan -->
+                <div class="bg-white rounded-2xl shadow-lg p-8">
+                    <h3 class="text-xl font-bold mb-2">Starter</h3>
+                    <p class="text-gray-500 mb-6">Tek lokasyon için ideal</p>
+                    <div class="mb-6">
+                        <span class="text-5xl font-bold">$29</span>
+                        <span class="text-gray-500">/ay</span>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            1 Lokasyon
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            10 Platform
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            100 AI yanıt/ay
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Email desteği
+                        </li>
+                    </ul>
+                    <button class="w-full border-2 border-purple-600 text-purple-600 py-3 rounded-xl font-semibold hover:bg-purple-50 transition">
+                        Başla
+                    </button>
+                </div>
+
+                <!-- Professional Plan -->
+                <div class="bg-purple-600 rounded-2xl shadow-xl p-8 text-white transform scale-105">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-xl font-bold">Professional</h3>
+                        <span class="bg-yellow-400 text-purple-900 text-xs font-bold px-3 py-1 rounded-full">EN POPÜLER</span>
+                    </div>
+                    <p class="text-purple-200 mb-6">Büyüyen işletmeler için</p>
+                    <div class="mb-6">
+                        <span class="text-5xl font-bold">$79</span>
+                        <span class="text-purple-200">/ay</span>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            5 Lokasyon
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            25+ Platform
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Sınırsız AI yanıt
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Harita sıralaması
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Öncelikli destek
+                        </li>
+                    </ul>
+                    <button class="w-full bg-white text-purple-600 py-3 rounded-xl font-semibold hover:bg-purple-100 transition">
+                        14 Gün Ücretsiz Dene
+                    </button>
+                </div>
+
+                <!-- Enterprise Plan -->
+                <div class="bg-white rounded-2xl shadow-lg p-8">
+                    <h3 class="text-xl font-bold mb-2">Enterprise</h3>
+                    <p class="text-gray-500 mb-6">Ajanslar ve zincirler için</p>
+                    <div class="mb-6">
+                        <span class="text-5xl font-bold">$199</span>
+                        <span class="text-gray-500">/ay</span>
+                    </div>
+                    <ul class="space-y-4 mb-8">
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Sınırsız lokasyon
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            White-label
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            API erişimi
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Özel entegrasyonlar
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Dedicated hesap yöneticisi
+                        </li>
+                    </ul>
+                    <button class="w-full border-2 border-purple-600 text-purple-600 py-3 rounded-xl font-semibold hover:bg-purple-50 transition">
+                        İletişime Geç
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="gradient-bg py-20">
+        <div class="container mx-auto px-6 text-center">
+            <h2 class="text-4xl font-bold text-white mb-6">
+                Yerel SEO'nuzu Otomatikleştirmeye<br/>Bugün Başlayın
+            </h2>
+            <p class="text-purple-100 text-xl mb-10 max-w-2xl mx-auto">
+                14 gün ücretsiz deneyin. Kredi kartı gerekmez.
+            </p>
+            <div class="flex flex-col md:flex-row justify-center gap-4">
+                <a href="#" class="bg-white text-purple-600 px-8 py-4 rounded-full font-bold text-lg hover:bg-purple-100 transition shadow-xl">
+                    Ücretsiz Denemeyi Başlat
+                </a>
+                <a href="#" class="border-2 border-white text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-white hover:text-purple-600 transition">
+                    Demo Randevusu Al
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-400 py-16">
+        <div class="container mx-auto px-6">
+            <div class="grid md:grid-cols-4 gap-12">
+                <div>
+                    <div class="flex items-center space-x-2 mb-6">
+                        <svg class="w-8 h-8 text-purple-500" viewBox="0 0 40 40" fill="none">
+                            <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2"/>
+                            <path d="M12 20L18 26L28 14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                        </svg>
+                        <span class="text-white text-xl font-bold">Grain Local</span>
+                    </div>
+                    <p class="text-sm">
+                        Yerel işletmeler için AI destekli listeleme yönetimi ve otomasyon araçları.
+                    </p>
+                </div>
+                <div>
+                    <h4 class="text-white font-semibold mb-4">Ürünler</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" class="hover:text-white transition">Listing Manager</a></li>
+                        <li><a href="#" class="hover:text-white transition">Review Responder</a></li>
+                        <li><a href="#" class="hover:text-white transition">Rank Tracker</a></li>
+                        <li><a href="#" class="hover:text-white transition">GBP Auto Posting</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-white font-semibold mb-4">Kaynaklar</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="#" class="hover:text-white transition">Dokümantasyon</a></li>
+                        <li><a href="#" class="hover:text-white transition">API Referansı</a></li>
+                        <li><a href="#" class="hover:text-white transition">Video Eğitimler</a></li>
+                        <li><a href="#" class="hover:text-white transition">Blog</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-white font-semibold mb-4">İletişim</h4>
+                    <ul class="space-y-2 text-sm">
+                        <li>info@grainlocal.com</li>
+                        <li>+90 212 XXX XX XX</li>
+                        <li class="flex space-x-4 pt-4">
+                            <a href="#" class="hover:text-white transition">Twitter</a>
+                            <a href="#" class="hover:text-white transition">LinkedIn</a>
+                            <a href="#" class="hover:text-white transition">GitHub</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-12 pt-8 text-center text-sm">
+                <p>&copy; 2025 Grain Local. Tüm hakları saklıdır.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+</body>
+</html>
