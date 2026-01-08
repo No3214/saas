@@ -1,0 +1,250 @@
+{
+  "name": "Grain Competitor Pricing Monitor v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "daily-check",
+      "name": "Daily Price Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.COMPETITOR_SHEET_ID }}" },
+        "sheetName": "Competitors",
+        "options": {}
+      },
+      "id": "get-competitors",
+      "name": "Get Competitor URLs",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bright Data MCP scraping request\nreturn {\n  json: {\n    url: $json.pricing_page_url,\n    competitor_name: $json.competitor_name,\n    selectors: {\n      price: $json.price_selector || '.price',\n      product_name: $json.product_selector || '.product-name',\n      features: $json.features_selector || '.features li'\n    }\n  }\n};"
+      },
+      "id": "prepare-scrape",
+      "name": "Prepare Scrape Request",
+      "type": "n8n-nodes-base.code",
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.brightdata.com/request",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "zone",
+              "value": "={{ $env.BRIGHTDATA_ZONE }}"
+            },
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "scrape-page",
+      "name": "Scrape with Bright Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a pricing data extraction expert. Extract all pricing information from the HTML content. Return JSON with: {\"products\": [{\"name\": \"...\", \"price\": 0.00, \"currency\": \"USD\", \"billing_cycle\": \"monthly/yearly\", \"features\": [...]}]}"
+            },
+            {
+              "role": "user",
+              "content": "Extract pricing data from this page:\n\n{{ $json.body.substring(0, 10000) }}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "extract-pricing",
+      "name": "AI Extract Pricing",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pricing = JSON.parse($input.item.json.message.content);\nconst competitor = $('Prepare Scrape Request').item.json.competitor_name;\n\nreturn pricing.products.map(product => ({\n  json: {\n    competitor: competitor,\n    product_name: product.name,\n    price: product.price,\n    currency: product.currency || 'USD',\n    billing_cycle: product.billing_cycle || 'monthly',\n    features: product.features || [],\n    scraped_at: new Date().toISOString()\n  }\n}));"
+      },
+      "id": "format-data",
+      "name": "Format Pricing Data",
+      "type": "n8n-nodes-base.code",
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.COMPETITOR_SHEET_ID }}" },
+        "sheetName": "Price History",
+        "options": {
+          "filters": {
+            "competitor": "={{ $json.competitor }}",
+            "product_name": "={{ $json.product_name }}"
+          }
+        }
+      },
+      "id": "get-previous",
+      "name": "Get Previous Price",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const current = $input.item.json;\nconst previous = $('Get Previous Price').item.json;\n\nconst priceChange = previous?.price \n  ? ((current.price - previous.price) / previous.price * 100).toFixed(1)\n  : null;\n\nreturn {\n  json: {\n    ...current,\n    previous_price: previous?.price || null,\n    price_change_percent: priceChange,\n    alert: Math.abs(parseFloat(priceChange)) > 5\n  }\n};"
+      },
+      "id": "calculate-change",
+      "name": "Calculate Price Change",
+      "type": "n8n-nodes-base.code",
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.COMPETITOR_SHEET_ID }}" },
+        "sheetName": "Price History",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.scraped_at }}",
+            "Competitor": "={{ $json.competitor }}",
+            "Product": "={{ $json.product_name }}",
+            "Price": "={{ $json.price }}",
+            "Currency": "={{ $json.currency }}",
+            "Billing": "={{ $json.billing_cycle }}",
+            "Change %": "={{ $json.price_change_percent || 'N/A' }}"
+          }
+        }
+      },
+      "id": "save-price",
+      "name": "Save to History",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.alert }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-alert",
+      "name": "Price Changed >5%?",
+      "type": "n8n-nodes-base.if",
+      "position": [1980, 450]
+    },
+    {
+      "parameters": {
+        "channel": "#competitive-intel",
+        "text": ":chart_with_{{ $json.price_change_percent > 0 ? 'upwards' : 'downwards' }}_trend: *Competitor Price Alert*\n\n*{{ $json.competitor }}* changed pricing for *{{ $json.product_name }}*\n\n:moneybag: Previous: ${{ $json.previous_price }}\n:money_with_wings: New: ${{ $json.price }}\n:{{ $json.price_change_percent > 0 ? 'arrow_up' : 'arrow_down' }}: Change: {{ $json.price_change_percent }}%",
+        "otherOptions": {}
+      },
+      "id": "slack-alert",
+      "name": "Alert Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [2200, 350]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.PRICING_TEAM_EMAIL }}",
+        "subject": "Competitor Price Change Alert: {{ $json.competitor }}",
+        "message": "{{ $json.competitor }} has changed their pricing for {{ $json.product_name }}.\n\nPrevious: ${{ $json.previous_price }}\nNew: ${{ $json.price }}\nChange: {{ $json.price_change_percent }}%\n\nReview the pricing dashboard for more details."
+      },
+      "id": "email-alert",
+      "name": "Email Alert",
+      "type": "n8n-nodes-base.gmail",
+      "position": [2200, 500]
+    }
+  ],
+  "connections": {
+    "Daily Price Check": {
+      "main": [
+        [{ "node": "Get Competitor URLs", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Competitor URLs": {
+      "main": [
+        [{ "node": "Prepare Scrape Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Scrape Request": {
+      "main": [
+        [{ "node": "Scrape with Bright Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Scrape with Bright Data": {
+      "main": [
+        [{ "node": "AI Extract Pricing", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Extract Pricing": {
+      "main": [
+        [{ "node": "Format Pricing Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Pricing Data": {
+      "main": [
+        [{ "node": "Get Previous Price", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Previous Price": {
+      "main": [
+        [{ "node": "Calculate Price Change", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calculate Price Change": {
+      "main": [
+        [
+          { "node": "Save to History", "type": "main", "index": 0 },
+          { "node": "Price Changed >5%?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Price Changed >5%?": {
+      "main": [
+        [
+          { "node": "Alert Slack", "type": "main", "index": 0 },
+          { "node": "Email Alert", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "category": "intelligence",
+    "description": "Automated competitor pricing monitoring using Bright Data MCP for scraping and OpenAI for data extraction. Tracks price history and alerts on significant changes.",
+    "roi": "Strategic pricing advantage",
+    "tags": ["competitor-monitoring", "pricing", "bright-data", "scraping", "alerts"],
+    "version": "1.0.0"
+  }
+}

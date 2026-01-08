@@ -1,0 +1,255 @@
+{
+  "name": "Grain Workflow Backup System v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 4 }]
+        }
+      },
+      "id": "schedule-backup",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_HOST }}/api/v1/workflows",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-workflows",
+      "name": "Get All Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "split-workflows",
+      "name": "Split Workflows",
+      "type": "n8n-nodes-base.splitOut",
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_HOST }}/api/v1/workflows/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-workflow-detail",
+      "name": "Get Workflow Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const workflow = $input.item.json;\nconst timestamp = new Date().toISOString().split('T')[0];\nconst safeName = workflow.name.replace(/[^a-zA-Z0-9-_]/g, '_');\n\nreturn {\n  json: {\n    filename: `${safeName}_${workflow.id}.json`,\n    folder_date: timestamp,\n    content: JSON.stringify(workflow, null, 2),\n    workflow_id: workflow.id,\n    workflow_name: workflow.name,\n    updated_at: workflow.updatedAt\n  }\n};"
+      },
+      "id": "prepare-backup",
+      "name": "Prepare Backup File",
+      "type": "n8n-nodes-base.code",
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "folderId": "={{ $env.BACKUP_FOLDER_ID }}",
+        "options": {
+          "fields": ["id", "name"]
+        }
+      },
+      "id": "check-folder",
+      "name": "Check Date Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const files = $input.all();\nconst dateFolder = $('Prepare Backup File').item.json.folder_date;\nconst existingFolder = files.find(f => f.json.name === dateFolder);\n\nreturn {\n  json: {\n    folder_exists: !!existingFolder,\n    folder_id: existingFolder?.json.id || null,\n    date_folder: dateFolder\n  }\n};"
+      },
+      "id": "check-folder-exists",
+      "name": "Folder Exists?",
+      "type": "n8n-nodes-base.code",
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.folder_exists }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-folder-exists",
+      "name": "Has Folder?",
+      "type": "n8n-nodes-base.if",
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "operation": "createFolder",
+        "name": "={{ $json.date_folder }}",
+        "parents": ["={{ $env.BACKUP_FOLDER_ID }}"]
+      },
+      "id": "create-folder",
+      "name": "Create Date Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [1980, 400]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "name": "={{ $('Prepare Backup File').item.json.filename }}",
+        "parents": ["={{ $json.folder_id || $('Create Date Folder').item.json.id }}"],
+        "options": {
+          "binaryData": false
+        },
+        "content": "={{ $('Prepare Backup File').item.json.content }}"
+      },
+      "id": "upload-backup",
+      "name": "Upload to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [2200, 300]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.aggregate",
+      "position": [2420, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#n8n-backups",
+        "text": ":white_check_mark: *Workflow Backup Complete*\n\n:file_folder: {{ $json.length }} workflows backed up\n:calendar: Date: {{ new Date().toISOString().split('T')[0] }}\n:clock3: Time: {{ new Date().toLocaleTimeString() }}",
+        "otherOptions": {}
+      },
+      "id": "notify-success",
+      "name": "Notify Success",
+      "type": "n8n-nodes-base.slack",
+      "position": [2640, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "folderId": "={{ $env.BACKUP_FOLDER_ID }}",
+        "options": {}
+      },
+      "id": "list-old-backups",
+      "name": "List Old Backups",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [2420, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const folders = $input.all();\nconst retentionDays = parseInt($env.BACKUP_RETENTION_DAYS || '7');\nconst cutoffDate = new Date();\ncutoffDate.setDate(cutoffDate.getDate() - retentionDays);\n\nconst foldersToDelete = folders.filter(f => {\n  const folderDate = new Date(f.json.name);\n  return !isNaN(folderDate) && folderDate < cutoffDate;\n});\n\nreturn foldersToDelete.map(f => ({ json: { id: f.json.id, name: f.json.name } }));"
+      },
+      "id": "find-old-folders",
+      "name": "Find Old Folders",
+      "type": "n8n-nodes-base.code",
+      "position": [2640, 500]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "fileId": "={{ $json.id }}"
+      },
+      "id": "delete-old",
+      "name": "Delete Old Backups",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [2860, 500]
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [
+        [{ "node": "Get All Workflows", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get All Workflows": {
+      "main": [
+        [{ "node": "Split Workflows", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Workflows": {
+      "main": [
+        [{ "node": "Get Workflow Details", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Workflow Details": {
+      "main": [
+        [{ "node": "Prepare Backup File", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Backup File": {
+      "main": [
+        [{ "node": "Check Date Folder", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Date Folder": {
+      "main": [
+        [{ "node": "Folder Exists?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Folder Exists?": {
+      "main": [
+        [{ "node": "Has Folder?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Folder?": {
+      "main": [
+        [{ "node": "Upload to Google Drive", "type": "main", "index": 0 }],
+        [{ "node": "Create Date Folder", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Date Folder": {
+      "main": [
+        [{ "node": "Upload to Google Drive", "type": "main", "index": 0 }]
+      ]
+    },
+    "Upload to Google Drive": {
+      "main": [
+        [{ "node": "Aggregate Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          { "node": "Notify Success", "type": "main", "index": 0 },
+          { "node": "List Old Backups", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "List Old Backups": {
+      "main": [
+        [{ "node": "Find Old Folders", "type": "main", "index": 0 }]
+      ]
+    },
+    "Find Old Folders": {
+      "main": [
+        [{ "node": "Delete Old Backups", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "category": "devops",
+    "description": "Automated backup of all n8n workflows to Google Drive every 4 hours. Includes version history, retention management, and Slack notifications.",
+    "roi": "Disaster recovery & version control",
+    "tags": ["backup", "google-drive", "disaster-recovery", "devops"],
+    "version": "1.0.0"
+  }
+}

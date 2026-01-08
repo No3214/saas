@@ -1,0 +1,178 @@
+{
+  "name": "Grain LLM Semantic Cache v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "semantic-cache",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-3-small",
+        "options": {}
+      },
+      "id": "embed-query",
+      "name": "Embed Query",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "indexName": "semantic-cache",
+        "topK": 1,
+        "options": {
+          "scoreThreshold": 0.92
+        }
+      },
+      "id": "redis-vector-search",
+      "name": "Redis Vector Search",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreRedis",
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.results.length > 0 }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-cache-hit",
+      "name": "Cache Hit?",
+      "type": "n8n-nodes-base.if",
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { cached: true, answer: $json.results[0].metadata.answer, similarity: $json.results[0].score } }}"
+      },
+      "id": "return-cached",
+      "name": "Return Cached Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "={{ $('Webhook Trigger').item.json.query }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "call-llm",
+      "name": "Call LLM",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "indexName": "semantic-cache",
+        "documentData": "={{ $('Webhook Trigger').item.json.query }}",
+        "metadata": {
+          "answer": "={{ $json.message.content }}",
+          "timestamp": "={{ new Date().toISOString() }}"
+        }
+      },
+      "id": "store-in-cache",
+      "name": "Store in Redis Cache",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreRedis",
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { cached: false, answer: $('Call LLM').item.json.message.content, cost_saved: false } }}"
+      },
+      "id": "return-fresh",
+      "name": "Return Fresh Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1540, 400]
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [
+            {
+              "name": "cache_hits",
+              "value": "={{ $getWorkflowStaticData('global').cache_hits || 0 }}"
+            },
+            {
+              "name": "cache_misses",
+              "value": "={{ $getWorkflowStaticData('global').cache_misses || 0 }}"
+            }
+          ]
+        }
+      },
+      "id": "track-metrics",
+      "name": "Track Cache Metrics",
+      "type": "n8n-nodes-base.set",
+      "position": [1320, 200]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [{ "node": "Embed Query", "type": "main", "index": 0 }]
+      ]
+    },
+    "Embed Query": {
+      "main": [
+        [{ "node": "Redis Vector Search", "type": "main", "index": 0 }]
+      ]
+    },
+    "Redis Vector Search": {
+      "main": [
+        [{ "node": "Cache Hit?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cache Hit?": {
+      "main": [
+        [{ "node": "Return Cached Response", "type": "main", "index": 0 }],
+        [{ "node": "Call LLM", "type": "main", "index": 0 }]
+      ]
+    },
+    "Call LLM": {
+      "main": [
+        [{ "node": "Store in Redis Cache", "type": "main", "index": 0 }]
+      ]
+    },
+    "Store in Redis Cache": {
+      "main": [
+        [{ "node": "Return Fresh Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Return Cached Response": {
+      "main": [
+        [{ "node": "Track Cache Metrics", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "category": "ai_cost_optimization",
+    "description": "Reduce LLM API costs by 60-90% using semantic caching with Redis Vector Store. Checks for semantically similar previous queries before calling the LLM.",
+    "roi": "60-90% LLM cost reduction",
+    "tags": ["cost-optimization", "llm", "caching", "redis", "vector-store"],
+    "version": "1.0.0"
+  }
+}

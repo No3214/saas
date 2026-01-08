@@ -1,5 +1,5 @@
 {
-  "count": 84,
+  "count": 94,
   "lastUpdated": "2026-01-08",
   "enterprise_ready": true,
   "mcp_enabled": true,
@@ -126,6 +126,24 @@
     ],
     "ecommerce": [
       "Grain_Ecommerce_Orchestrator_v1.json"
+    ],
+    "ai_cost_optimization": [
+      "Grain_LLM_Semantic_Cache_v1.json",
+      "Grain_AI_Token_Cost_Tracker_v1.json"
+    ],
+    "devops": [
+      "Grain_Workflow_Backup_System_v1.json",
+      "Grain_MCP_Workflow_Monitor_v1.json"
+    ],
+    "content_marketing": [
+      "Grain_AI_Content_Factory_v1.json"
+    ],
+    "pro": [
+      "Grain_Agentic_AI_Orchestrator_v2_Pro.json"
+    ],
+    "video": [
+      "Viral_Video_Ad_Factory.json",
+      "AI_SERP_Brand_Monitor.json"
     ]
   },
   "files": [
@@ -729,6 +747,76 @@
       "filename": "Online Marketing Weekly Report.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Online%20Marketing%20Weekly%20Report.json",
       "category": "legacy"
+    },
+    {
+      "filename": "Grain_LLM_Semantic_Cache_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_LLM_Semantic_Cache_v1.json",
+      "category": "ai_cost_optimization",
+      "description": "Reduce LLM API costs by 60-90% using semantic caching with Redis Vector Store",
+      "roi": "60-90% LLM cost reduction"
+    },
+    {
+      "filename": "Grain_AI_Token_Cost_Tracker_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Token_Cost_Tracker_v1.json",
+      "category": "ai_cost_optimization",
+      "description": "Track AI agent token usage across all workflows and estimate costs in Google Sheets with budget alerts",
+      "roi": "Full visibility into AI costs"
+    },
+    {
+      "filename": "Grain_Workflow_Backup_System_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Workflow_Backup_System_v1.json",
+      "category": "devops",
+      "description": "Automated backup of all n8n workflows to Google Drive every 4 hours with version history",
+      "roi": "Disaster recovery & version control"
+    },
+    {
+      "filename": "Grain_MCP_Workflow_Monitor_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_MCP_Workflow_Monitor_v1.json",
+      "category": "devops",
+      "description": "MCP server integration for Claude AI to monitor and debug n8n workflows with natural language",
+      "roi": "AI-powered workflow debugging"
+    },
+    {
+      "filename": "Grain_AI_Content_Factory_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Content_Factory_v1.json",
+      "category": "content_marketing",
+      "description": "AI-powered content factory that monitors trends and generates multi-platform content with Slack approval",
+      "roi": "10x content output"
+    },
+    {
+      "filename": "Grain_RAG_Company_Chatbot_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_RAG_Company_Chatbot_v1.json",
+      "category": "ai_productivity",
+      "description": "RAG-powered chatbot for company documents using Google Drive and Gemini with auto-indexing",
+      "roi": "70% faster information retrieval"
+    },
+    {
+      "filename": "Grain_Competitor_Pricing_Monitor_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Competitor_Pricing_Monitor_v1.json",
+      "category": "intelligence",
+      "description": "Automated competitor pricing monitoring using Bright Data and OpenAI with price change alerts",
+      "roi": "Strategic pricing advantage"
+    },
+    {
+      "filename": "Grain_Agentic_AI_Orchestrator_v2_Pro.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Agentic_AI_Orchestrator_v2_Pro.json",
+      "category": "pro",
+      "description": "Advanced multi-agent AI orchestrator with enhanced capabilities - Pro version",
+      "roi": "Enterprise AI automation"
+    },
+    {
+      "filename": "Viral_Video_Ad_Factory.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Viral_Video_Ad_Factory.json",
+      "category": "video",
+      "description": "Automated viral video ad creation and publishing pipeline",
+      "roi": "Viral content at scale"
+    },
+    {
+      "filename": "AI_SERP_Brand_Monitor.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/AI_SERP_Brand_Monitor.json",
+      "category": "video",
+      "description": "Monitor brand visibility in AI-powered search results and SERP positions",
+      "roi": "Brand visibility insights"
     }
   ]
 }

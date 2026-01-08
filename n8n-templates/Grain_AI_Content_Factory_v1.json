@@ -1,0 +1,287 @@
+{
+  "name": "Grain AI Content Factory v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Check Trends",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q={{ encodeURIComponent($env.CONTENT_NICHE) }}&hl=en",
+        "options": {}
+      },
+      "id": "fetch-trends",
+      "name": "Fetch Google News RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const xml = $input.item.json;\nconst items = [];\n\n// Parse RSS items\nconst matches = xml.match(/<item>[\\s\\S]*?<\\/item>/g) || [];\nmatches.slice(0, 10).forEach(item => {\n  const title = item.match(/<title><!\\[CDATA\\[(.+?)\\]\\]><\\/title>/)?.[1] || '';\n  const link = item.match(/<link>(.+?)<\\/link>/)?.[1] || '';\n  const pubDate = item.match(/<pubDate>(.+?)<\\/pubDate>/)?.[1] || '';\n  \n  items.push({ title, link, pubDate });\n});\n\nreturn items.map(item => ({ json: item }));"
+      },
+      "id": "parse-rss",
+      "name": "Parse RSS Feed",
+      "type": "n8n-nodes-base.code",
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an Editor-in-Chief AI. Analyze the news headlines and select the TOP 3 most viral-worthy topics for our niche. Return JSON array with: [{\"title\": \"...\", \"angle\": \"...\", \"viral_score\": 1-10}]"
+            },
+            {
+              "role": "user",
+              "content": "Headlines:\n{{ $json.map(i => i.title).join('\\n') }}\n\nNiche: {{ $env.CONTENT_NICHE }}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "filter-topics",
+      "name": "AI Filter Topics",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = JSON.parse($input.item.json.message.content);\nreturn (response.topics || response).map(topic => ({ json: topic }));"
+      },
+      "id": "split-topics",
+      "name": "Split Topics",
+      "type": "n8n-nodes-base.code",
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an SEO Blog Writer. Create a comprehensive blog post outline with:\n- Title (SEO optimized)\n- Meta description\n- H2 headings (5-7)\n- Key points for each section\n- Target keywords\n\nReturn as JSON."
+            },
+            {
+              "role": "user",
+              "content": "Topic: {{ $json.title }}\nAngle: {{ $json.angle }}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "generate-blog",
+      "name": "Generate Blog Outline",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an Instagram Content Creator. Create a 5-slide carousel plan:\n- Slide 1: Hook/Headline\n- Slides 2-4: Key insights\n- Slide 5: CTA\n\nInclude: caption (with hashtags), alt text for each slide. Return as JSON."
+            },
+            {
+              "role": "user",
+              "content": "Topic: {{ $json.title }}\nAngle: {{ $json.angle }}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "generate-instagram",
+      "name": "Generate Instagram Carousel",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a Short Video Script Writer. Create a 30-60 second video script for TikTok/Reels:\n- Hook (first 3 seconds)\n- Problem/Context\n- Solution/Insight\n- CTA\n\nInclude: voiceover text, visual suggestions, trending sounds. Return as JSON."
+            },
+            {
+              "role": "user",
+              "content": "Topic: {{ $json.title }}\nAngle: {{ $json.angle }}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "generate-video",
+      "name": "Generate Video Script",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-content",
+      "name": "Merge All Content",
+      "type": "n8n-nodes-base.merge",
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#content-approval",
+        "text": ":sparkles: *New Content Ready for Review*\n\n*Topic:* {{ $('Split Topics').item.json.title }}\n*Viral Score:* {{ $('Split Topics').item.json.viral_score }}/10\n\n:memo: *Blog:* {{ JSON.parse($('Generate Blog Outline').item.json.message.content).title }}\n:camera: *Instagram:* 5-slide carousel ready\n:movie_camera: *Video:* 30-60s script ready\n\nReact with :white_check_mark: to approve or :x: to reject",
+        "otherOptions": {
+          "unfurl_links": false
+        }
+      },
+      "id": "slack-approval",
+      "name": "Send for Approval",
+      "type": "n8n-nodes-base.slack",
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "events": ["reaction_added"],
+        "options": {}
+      },
+      "id": "wait-approval",
+      "name": "Wait for Reaction",
+      "type": "n8n-nodes-base.slackTrigger",
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.reaction }}",
+              "operation": "equals",
+              "value2": "white_check_mark"
+            }
+          ]
+        }
+      },
+      "id": "check-approval",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "position": [2200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.CONTENT_CALENDAR_SHEET }}" },
+        "sheetName": "Content Queue",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ new Date().toISOString() }}",
+            "Topic": "={{ $('Split Topics').item.json.title }}",
+            "Blog": "={{ $('Generate Blog Outline').item.json.message.content }}",
+            "Instagram": "={{ $('Generate Instagram Carousel').item.json.message.content }}",
+            "Video": "={{ $('Generate Video Script').item.json.message.content }}",
+            "Status": "Approved"
+          }
+        }
+      },
+      "id": "save-approved",
+      "name": "Save to Content Calendar",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2420, 200]
+    }
+  ],
+  "connections": {
+    "Check Trends": {
+      "main": [
+        [{ "node": "Fetch Google News RSS", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Google News RSS": {
+      "main": [
+        [{ "node": "Parse RSS Feed", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse RSS Feed": {
+      "main": [
+        [{ "node": "AI Filter Topics", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Filter Topics": {
+      "main": [
+        [{ "node": "Split Topics", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Topics": {
+      "main": [
+        [
+          { "node": "Generate Blog Outline", "type": "main", "index": 0 },
+          { "node": "Generate Instagram Carousel", "type": "main", "index": 0 },
+          { "node": "Generate Video Script", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Generate Blog Outline": {
+      "main": [
+        [{ "node": "Merge All Content", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Instagram Carousel": {
+      "main": [
+        [{ "node": "Merge All Content", "type": "main", "index": 1 }]
+      ]
+    },
+    "Generate Video Script": {
+      "main": [
+        [{ "node": "Merge All Content", "type": "main", "index": 2 }]
+      ]
+    },
+    "Merge All Content": {
+      "main": [
+        [{ "node": "Send for Approval", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait for Reaction": {
+      "main": [
+        [{ "node": "Approved?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [{ "node": "Save to Content Calendar", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "category": "content_marketing",
+    "description": "AI-powered content factory that monitors trends, generates multi-platform content (Blog, Instagram, TikTok), and requires human approval via Slack before publishing.",
+    "roi": "10x content output",
+    "tags": ["content-factory", "ai-content", "multi-platform", "slack-approval", "rss"],
+    "version": "1.0.0"
+  }
+}
