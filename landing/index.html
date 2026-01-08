@@ -5,609 +5,650 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Grain Local SEO Suite - Yerel İşletme Otomasyon Araçları</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { font-family: 'Inter', sans-serif; }
-        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .gradient-bg { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); }
         .gradient-text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .gradient-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .glow { box-shadow: 0 0 60px rgba(102, 126, 234, 0.3); }
         .card-hover { transition: all 0.3s ease; }
-        .card-hover:hover { transform: translateY(-8px); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
-        .pulse-badge { animation: pulse 2s infinite; }
+        .card-hover:hover { transform: translateY(-5px); }
+        .strike { text-decoration: line-through; opacity: 0.5; }
+        .pulse { animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-        .floating { animation: floating 3s ease-in-out infinite; }
-        @keyframes floating { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .check-animation { animation: checkIn 0.5s ease-out; }
+        @keyframes checkIn { from { transform: scale(0); } to { transform: scale(1); } }
     </style>
 </head>
-<body class="bg-gray-50">
-    <!-- Hero Section -->
-    <header class="gradient-bg text-white">
-        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <div class="flex items-center space-x-2">
-                <svg class="w-10 h-10" viewBox="0 0 40 40" fill="none">
-                    <circle cx="20" cy="20" r="18" stroke="white" stroke-width="2"/>
-                    <path d="M12 20L18 26L28 14" stroke="white" stroke-width="3" stroke-linecap="round"/>
-                </svg>
-                <span class="text-2xl font-bold">Grain Local</span>
-            </div>
-            <div class="hidden md:flex space-x-8">
-                <a href="#features" class="hover:text-purple-200 transition">Özellikler</a>
-                <a href="#pricing" class="hover:text-purple-200 transition">Fiyatlar</a>
-                <a href="#templates" class="hover:text-purple-200 transition">Şablonlar</a>
-                <a href="#demo" class="hover:text-purple-200 transition">Demo</a>
-            </div>
-            <a href="#pricing" class="bg-white text-purple-600 px-6 py-2 rounded-full font-semibold hover:bg-purple-100 transition">
-                Hemen Başla
-            </a>
-        </nav>
+<body class="bg-gray-900 text-white">
 
-        <div class="container mx-auto px-6 py-20 text-center">
-            <span class="pulse-badge bg-purple-800 bg-opacity-50 text-sm px-4 py-2 rounded-full inline-block mb-6">
-                🚀 Semrush & BrightLocal Alternatifi - %80 Daha Ucuz
-            </span>
-            <h1 class="text-5xl md:text-6xl font-extrabold mb-6 leading-tight">
-                Yerel İşletme Listeleme<br/>
-                <span class="text-purple-200">Yönetimi Otomasyonu</span>
-            </h1>
-            <p class="text-xl text-purple-100 max-w-3xl mx-auto mb-10">
-                Google, TripAdvisor, Yelp, Facebook ve 25+ platformda işletmenizi yönetin.
-                AI ile otomatik yorum yanıtlama, harita sıralaması takibi ve günlük raporlama.
-            </p>
-            <div class="flex flex-col md:flex-row justify-center gap-4">
-                <a href="#pricing" class="bg-white text-purple-600 px-8 py-4 rounded-full font-bold text-lg hover:bg-purple-100 transition shadow-xl">
-                    Ücretsiz Dene - 14 Gün
-                </a>
-                <a href="#demo" class="border-2 border-white px-8 py-4 rounded-full font-bold text-lg hover:bg-white hover:text-purple-600 transition">
-                    Demo İzle →
-                </a>
-            </div>
+    <!-- ============================================ -->
+    <!-- 1. HERO SECTION -->
+    <!-- Job: Get email or get scroll -->
+    <!-- ============================================ -->
+    <section class="gradient-bg min-h-screen flex items-center relative overflow-hidden">
+        <!-- Background decoration -->
+        <div class="absolute inset-0 overflow-hidden">
+            <div class="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full filter blur-3xl opacity-20"></div>
+            <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full filter blur-3xl opacity-20"></div>
+        </div>
 
-            <!-- Stats -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mt-16 max-w-4xl mx-auto">
-                <div class="text-center">
-                    <div class="text-4xl font-bold">117+</div>
-                    <div class="text-purple-200">Otomasyon Şablonu</div>
+        <div class="container mx-auto px-6 py-20 relative z-10">
+            <div class="max-w-4xl mx-auto text-center">
+                <!-- Eyebrow -->
+                <div class="inline-flex items-center bg-purple-900 bg-opacity-50 rounded-full px-4 py-2 mb-8 border border-purple-500 border-opacity-30">
+                    <span class="w-2 h-2 bg-green-400 rounded-full mr-2 pulse"></span>
+                    <span class="text-purple-300 text-sm font-medium">117 İşletme Bu Hafta Katıldı</span>
                 </div>
-                <div class="text-center">
-                    <div class="text-4xl font-bold">25+</div>
-                    <div class="text-purple-200">Platform Entegrasyonu</div>
+
+                <!-- Headline -->
+                <h1 class="text-5xl md:text-7xl font-black mb-6 leading-tight">
+                    Yorumlara <span class="gradient-text">4 Saat</span> Değil,<br/>
+                    <span class="gradient-text">4 Dakikada</span> Yanıt Verin
+                </h1>
+
+                <!-- Subheadline -->
+                <p class="text-xl md:text-2xl text-gray-300 mb-10 max-w-2xl mx-auto leading-relaxed">
+                    GPT-4 destekli AI, Google ve TripAdvisor yorumlarınıza
+                    <span class="text-white font-semibold">profesyonel, kişiselleştirilmiş</span> yanıtlar yazar.
+                    Siz uyurken bile.
+                </p>
+
+                <!-- CTA -->
+                <div class="flex flex-col sm:flex-row justify-center gap-4 mb-12">
+                    <a href="#pricing" class="gradient-btn text-white px-10 py-5 rounded-full font-bold text-lg hover:opacity-90 transition shadow-2xl glow">
+                        Ücretsiz Başla — Kredi Kartı Yok
+                    </a>
                 </div>
-                <div class="text-center">
-                    <div class="text-4xl font-bold">%95</div>
-                    <div class="text-purple-200">Yanıt Tutarlılığı</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-4xl font-bold">4x</div>
-                    <div class="text-purple-200">Daha Hızlı Yanıt</div>
+
+                <!-- Trust Signals -->
+                <div class="flex flex-wrap justify-center items-center gap-8 text-gray-400 text-sm">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>14 gün ücretsiz</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>5 dakikada kurulum</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>İstediğiniz an iptal</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                        <span>4.9/5 (238 değerlendirme)</span>
+                    </div>
                 </div>
             </div>
         </div>
-    </header>
 
-    <!-- Competitors Comparison -->
-    <section class="py-16 bg-white">
-        <div class="container mx-auto px-6">
-            <h2 class="text-3xl font-bold text-center mb-4">Rakiplerle Karşılaştırma</h2>
-            <p class="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
-                Aynı özellikleri çok daha uygun fiyata sunuyoruz. Üstelik tamamen sizin kontrolünüzde.
-            </p>
-
-            <div class="overflow-x-auto">
-                <table class="w-full max-w-5xl mx-auto">
-                    <thead>
-                        <tr class="border-b-2">
-                            <th class="py-4 px-6 text-left">Özellik</th>
-                            <th class="py-4 px-6 text-center">
-                                <span class="gradient-text font-bold">Grain Local</span>
-                            </th>
-                            <th class="py-4 px-6 text-center text-gray-500">Semrush Local</th>
-                            <th class="py-4 px-6 text-center text-gray-500">BrightLocal</th>
-                            <th class="py-4 px-6 text-center text-gray-500">Yext</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="border-b">
-                            <td class="py-4 px-6 font-medium">Yıllık Fiyat (1 Lokasyon)</td>
-                            <td class="py-4 px-6 text-center"><span class="bg-green-100 text-green-800 px-3 py-1 rounded-full font-bold">$99</span></td>
-                            <td class="py-4 px-6 text-center text-gray-600">$240</td>
-                            <td class="py-4 px-6 text-center text-gray-600">$432</td>
-                            <td class="py-4 px-6 text-center text-gray-600">$499</td>
-                        </tr>
-                        <tr class="border-b bg-gray-50">
-                            <td class="py-4 px-6 font-medium">AI Yorum Yanıtlama</td>
-                            <td class="py-4 px-6 text-center text-green-600">✓ GPT-4</td>
-                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
-                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
-                            <td class="py-4 px-6 text-center text-yellow-600">Sınırlı</td>
-                        </tr>
-                        <tr class="border-b">
-                            <td class="py-4 px-6 font-medium">Platform Sayısı</td>
-                            <td class="py-4 px-6 text-center text-green-600 font-bold">25+</td>
-                            <td class="py-4 px-6 text-center text-gray-600">70+</td>
-                            <td class="py-4 px-6 text-center text-gray-600">45</td>
-                            <td class="py-4 px-6 text-center text-gray-600">200+</td>
-                        </tr>
-                        <tr class="border-b bg-gray-50">
-                            <td class="py-4 px-6 font-medium">Listeleme Sahipliği</td>
-                            <td class="py-4 px-6 text-center text-green-600">✓ Sizin</td>
-                            <td class="py-4 px-6 text-center text-green-600">✓ Sizin</td>
-                            <td class="py-4 px-6 text-center text-green-600">✓ Sizin</td>
-                            <td class="py-4 px-6 text-center text-red-600">✗ Kiralık</td>
-                        </tr>
-                        <tr class="border-b">
-                            <td class="py-4 px-6 font-medium">Self-Hosted Seçeneği</td>
-                            <td class="py-4 px-6 text-center text-green-600">✓</td>
-                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
-                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
-                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
-                        </tr>
-                        <tr class="border-b bg-gray-50">
-                            <td class="py-4 px-6 font-medium">n8n Entegrasyonu</td>
-                            <td class="py-4 px-6 text-center text-green-600">✓ Native</td>
-                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
-                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
-                            <td class="py-4 px-6 text-center text-gray-400">✗</td>
-                        </tr>
-                        <tr>
-                            <td class="py-4 px-6 font-medium">Özelleştirme</td>
-                            <td class="py-4 px-6 text-center text-green-600">✓ Tam</td>
-                            <td class="py-4 px-6 text-center text-yellow-600">Sınırlı</td>
-                            <td class="py-4 px-6 text-center text-yellow-600">Sınırlı</td>
-                            <td class="py-4 px-6 text-center text-yellow-600">Sınırlı</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+        <!-- Scroll indicator -->
+        <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+            </svg>
         </div>
     </section>
 
-    <!-- Features Section -->
-    <section id="features" class="py-20 bg-gray-50">
+    <!-- ============================================ -->
+    <!-- 2. SUCCESS SECTION (What You Get) -->
+    <!-- Job: Kill buyer's remorse -->
+    <!-- ============================================ -->
+    <section class="py-20 bg-gray-800">
         <div class="container mx-auto px-6">
-            <h2 class="text-4xl font-bold text-center mb-4">Güçlü Özellikler</h2>
-            <p class="text-gray-600 text-center mb-16 max-w-2xl mx-auto">
-                Yerel SEO ve işletme yönetimi için ihtiyacınız olan her şey tek pakette
-            </p>
-
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <!-- Feature 1 -->
-                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
-                    <div class="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
-                        <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            <div class="max-w-4xl mx-auto">
+                <div class="text-center mb-12">
+                    <div class="inline-flex items-center justify-center w-20 h-20 bg-green-500 bg-opacity-20 rounded-full mb-6">
+                        <svg class="w-10 h-10 text-green-400 check-animation" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold mb-3">Çoklu Platform Listeleme</h3>
-                    <p class="text-gray-600">
-                        Google, TripAdvisor, Yelp, Facebook, Yemeksepeti, Foursquare ve 25+ platformda tek merkezden yönetim.
-                    </p>
+                    <h2 class="text-3xl md:text-4xl font-bold mb-4">Bugün Başladığınızda Alacaklarınız:</h2>
                 </div>
 
-                <!-- Feature 2 -->
-                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
-                    <div class="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center mb-6">
-                        <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">AI Yorum Yanıtlama</h3>
-                    <p class="text-gray-600">
-                        GPT-4 ile otomatik, kişiselleştirilmiş yorum yanıtları. Olumlu/olumsuz ayrımı ve onay sistemi.
-                    </p>
-                </div>
-
-                <!-- Feature 3 -->
-                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
-                    <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mb-6">
-                        <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Harita Sıralaması Takibi</h3>
-                    <p class="text-gray-600">
-                        Google Maps, Apple Maps, Bing'de sıralamanızı takip edin. Rakip analizi ve trend raporları.
-                    </p>
-                </div>
-
-                <!-- Feature 4 -->
-                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
-                    <div class="w-14 h-14 bg-yellow-100 rounded-xl flex items-center justify-center mb-6">
-                        <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Yorum Yönetimi</h3>
-                    <p class="text-gray-600">
-                        Tüm platformlardan yorumları tek ekranda görün. Sentiment analizi ve öncelik sıralaması.
-                    </p>
-                </div>
-
-                <!-- Feature 5 -->
-                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
-                    <div class="w-14 h-14 bg-red-100 rounded-xl flex items-center justify-center mb-6">
-                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Akıllı Bildirimler</h3>
-                    <p class="text-gray-600">
-                        Slack, Email, WhatsApp ile anlık bildirimler. Olumsuz yorumlarda acil uyarı sistemi.
-                    </p>
-                </div>
-
-                <!-- Feature 6 -->
-                <div class="bg-white p-8 rounded-2xl shadow-lg card-hover">
-                    <div class="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center mb-6">
-                        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-bold mb-3">Günlük Raporlar</h3>
-                    <p class="text-gray-600">
-                        Otomatik günlük/haftalık raporlar. Google Sheets entegrasyonu ve analitik dashboard.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Templates Section -->
-    <section id="templates" class="py-20 bg-white">
-        <div class="container mx-auto px-6">
-            <h2 class="text-4xl font-bold text-center mb-4">Hazır Otomasyon Şablonları</h2>
-            <p class="text-gray-600 text-center mb-16 max-w-2xl mx-auto">
-                n8n için özel olarak geliştirilmiş, hemen kullanıma hazır workflow şablonları
-            </p>
-
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Template Card 1 -->
-                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
-                    <div class="flex justify-between items-start mb-4">
-                        <span class="bg-purple-100 text-purple-800 text-xs font-bold px-3 py-1 rounded-full">PREMIUM</span>
-                        <span class="text-2xl font-bold text-purple-600">$49</span>
-                    </div>
-                    <h3 class="text-xl font-bold mb-2">Local Business Listing Manager</h3>
-                    <p class="text-gray-600 text-sm mb-4">
-                        25+ platform entegrasyonu, AI yorum yanıtlama, harita sıralaması takibi
-                    </p>
-                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
-                        <li>✓ Google Places API entegrasyonu</li>
-                        <li>✓ TripAdvisor & Yelp desteği</li>
-                        <li>✓ GPT-4 otomatik yanıtlar</li>
-                        <li>✓ Slack/Email bildirimler</li>
-                    </ul>
-                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
-                        Satın Al
-                    </button>
-                </div>
-
-                <!-- Template Card 2 -->
-                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
-                    <div class="flex justify-between items-start mb-4">
-                        <span class="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded-full">POPÜLER</span>
-                        <span class="text-2xl font-bold text-purple-600">$29</span>
-                    </div>
-                    <h3 class="text-xl font-bold mb-2">AI Review Responder</h3>
-                    <p class="text-gray-600 text-sm mb-4">
-                        Google ve TripAdvisor yorumlarına AI ile otomatik yanıt
-                    </p>
-                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
-                        <li>✓ Sentiment routing (olumlu/olumsuz)</li>
-                        <li>✓ Onay sistemi</li>
-                        <li>✓ Günlük raporlama</li>
-                        <li>✓ Email bildirimleri</li>
-                    </ul>
-                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
-                        Satın Al
-                    </button>
-                </div>
-
-                <!-- Template Card 3 -->
-                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
-                    <div class="flex justify-between items-start mb-4">
-                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">YENİ</span>
-                        <span class="text-2xl font-bold text-purple-600">$39</span>
-                    </div>
-                    <h3 class="text-xl font-bold mb-2">Real Estate Land Showcase</h3>
-                    <p class="text-gray-600 text-sm mb-4">
-                        Emlakçılar için arazi tanıtım otomasyonu
-                    </p>
-                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
-                        <li>✓ Uydu görüntüleri (Mapbox)</li>
-                        <li>✓ GPT-4 pazarlama metni</li>
-                        <li>✓ QR kod oluşturma</li>
-                        <li>✓ HTML rapor çıktısı</li>
-                    </ul>
-                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
-                        Satın Al
-                    </button>
-                </div>
-
-                <!-- Template Card 4 -->
-                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
-                    <div class="flex justify-between items-start mb-4">
-                        <span class="bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full">SEO</span>
-                        <span class="text-2xl font-bold text-purple-600">$35</span>
-                    </div>
-                    <h3 class="text-xl font-bold mb-2">GBP Auto Posting</h3>
-                    <p class="text-gray-600 text-sm mb-4">
-                        Google Business Profile otomatik post paylaşımı
-                    </p>
-                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
-                        <li>✓ AI içerik üretimi</li>
-                        <li>✓ Zamanlanmış paylaşım</li>
-                        <li>✓ Görsel ekleme</li>
-                        <li>✓ CTA butonları</li>
-                    </ul>
-                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
-                        Satın Al
-                    </button>
-                </div>
-
-                <!-- Template Card 5 -->
-                <div class="border-2 border-gray-200 rounded-2xl p-6 card-hover hover:border-purple-400">
-                    <div class="flex justify-between items-start mb-4">
-                        <span class="bg-pink-100 text-pink-800 text-xs font-bold px-3 py-1 rounded-full">HOSPITALITY</span>
-                        <span class="text-2xl font-bold text-purple-600">$45</span>
-                    </div>
-                    <h3 class="text-xl font-bold mb-2">Review Management AI</h3>
-                    <p class="text-gray-600 text-sm mb-4">
-                        Otel ve restoranlar için yorum yönetimi
-                    </p>
-                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
-                        <li>✓ Multi-platform toplama</li>
-                        <li>✓ Sentiment analizi</li>
-                        <li>✓ Otomatik yanıtlama</li>
-                        <li>✓ Haftalık raporlar</li>
-                    </ul>
-                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
-                        Satın Al
-                    </button>
-                </div>
-
-                <!-- Bundle Card -->
-                <div class="border-2 border-purple-400 rounded-2xl p-6 card-hover bg-gradient-to-br from-purple-50 to-white relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-purple-600 text-white text-xs font-bold px-4 py-1 rounded-bl-xl">
-                        %40 İNDİRİM
-                    </div>
-                    <div class="flex justify-between items-start mb-4 mt-4">
-                        <span class="bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full">BUNDLE</span>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="flex items-start gap-4 bg-gray-700 bg-opacity-50 p-6 rounded-xl">
+                        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
                         <div>
-                            <span class="text-gray-400 line-through text-lg">$197</span>
-                            <span class="text-3xl font-bold text-purple-600 ml-2">$99</span>
+                            <h3 class="font-bold text-lg mb-1">AI Review Responder</h3>
+                            <p class="text-gray-400">Google & TripAdvisor için GPT-4 destekli otomatik yanıtlar</p>
                         </div>
                     </div>
-                    <h3 class="text-xl font-bold mb-2">Local SEO Complete Suite</h3>
-                    <p class="text-gray-600 text-sm mb-4">
-                        Tüm yerel SEO şablonları tek pakette
+
+                    <div class="flex items-start gap-4 bg-gray-700 bg-opacity-50 p-6 rounded-xl">
+                        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg mb-1">25+ Platform Entegrasyonu</h3>
+                            <p class="text-gray-400">Yelp, Facebook, Yemeksepeti ve daha fazlası</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-start gap-4 bg-gray-700 bg-opacity-50 p-6 rounded-xl">
+                        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg mb-1">Harita Sıralaması Takibi</h3>
+                            <p class="text-gray-400">Google Maps'te kaçıncı sıradasınız? Anlık takip</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-start gap-4 bg-gray-700 bg-opacity-50 p-6 rounded-xl">
+                        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg mb-1">Akıllı Bildirimler</h3>
+                            <p class="text-gray-400">Olumsuz yorum? Anında Slack/Email uyarısı</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-start gap-4 bg-gray-700 bg-opacity-50 p-6 rounded-xl">
+                        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg mb-1">Günlük/Haftalık Raporlar</h3>
+                            <p class="text-gray-400">Otomatik analitik raporları inbox'ınıza</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-start gap-4 bg-gray-700 bg-opacity-50 p-6 rounded-xl">
+                        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg mb-1">Video Eğitimler + Destek</h3>
+                            <p class="text-gray-400">Adım adım kurulum videoları ve öncelikli destek</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- 3. PROBLEM-AGITATE SECTION -->
+    <!-- Job: Make status quo painful -->
+    <!-- ============================================ -->
+    <section class="py-24 bg-gray-900">
+        <div class="container mx-auto px-6">
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-3xl md:text-5xl font-bold text-center mb-16">
+                    Bu Hikaye Tanıdık Geldi mi?
+                </h2>
+
+                <!-- Problem 1 -->
+                <div class="mb-12 p-8 bg-red-900 bg-opacity-20 border border-red-500 border-opacity-30 rounded-2xl">
+                    <div class="flex items-start gap-4">
+                        <span class="text-4xl">😤</span>
+                        <div>
+                            <h3 class="text-xl font-bold text-red-400 mb-3">
+                                "Yine bir olumsuz yorum... 3 gündür cevap veremedim"
+                            </h3>
+                            <p class="text-gray-300 leading-relaxed">
+                                Her gün onlarca iş var. Yorum takip etmeye vakit yok.
+                                Ama o 1 yıldızlı yorum Google'da en üstte duruyor.
+                                <span class="text-red-400 font-semibold">Potansiyel müşteriler görüyor ve gidiyor.</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Problem 2 -->
+                <div class="mb-12 p-8 bg-orange-900 bg-opacity-20 border border-orange-500 border-opacity-30 rounded-2xl">
+                    <div class="flex items-start gap-4">
+                        <span class="text-4xl">🤯</span>
+                        <div>
+                            <h3 class="text-xl font-bold text-orange-400 mb-3">
+                                "Google, TripAdvisor, Yelp, Facebook... Hepsini ayrı ayrı mı kontrol edeceğim?"
+                            </h3>
+                            <p class="text-gray-300 leading-relaxed">
+                                Her platforma ayrı giriş. Ayrı şifre. Ayrı arayüz.
+                                <span class="text-orange-400 font-semibold">Günde 2-3 saat sadece yorum takibine gidiyor.</span>
+                                Bu zamanla işletmeyi büyütebilirdiniz.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Problem 3 -->
+                <div class="mb-16 p-8 bg-yellow-900 bg-opacity-20 border border-yellow-500 border-opacity-30 rounded-2xl">
+                    <div class="flex items-start gap-4">
+                        <span class="text-4xl">💸</span>
+                        <div>
+                            <h3 class="text-xl font-bold text-yellow-400 mb-3">
+                                "Semrush/Yext çok pahalı. Yılda $500 veremem her lokasyon için."
+                            </h3>
+                            <p class="text-gray-300 leading-relaxed">
+                                Kurumsal araçlar kurumsal fiyatlarla geliyor.
+                                3 şubeniz varsa <span class="text-yellow-400 font-semibold">yılda $1,500</span>.
+                                10 şube? $5,000. Üstelik listeleme sahipliği bile sizin değil.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Personal Transition -->
+                <div class="text-center bg-gradient-to-r from-purple-900 to-blue-900 bg-opacity-50 p-10 rounded-2xl border border-purple-500 border-opacity-30">
+                    <p class="text-xl md:text-2xl text-gray-200 leading-relaxed mb-6">
+                        Biz de aynı sorunları yaşadık. 15 lokasyonlu bir restoran zinciri için
+                        ayda 40+ saat sadece yorum yönetimine gidiyordu.
                     </p>
-                    <ul class="text-sm text-gray-500 space-y-2 mb-6">
-                        <li>✓ 5 Premium şablon dahil</li>
-                        <li>✓ Ömür boyu güncelleme</li>
-                        <li>✓ Öncelikli destek</li>
-                        <li>✓ Video eğitimler</li>
-                    </ul>
-                    <button class="w-full bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition">
-                        Bundle Satın Al
-                    </button>
+                    <p class="text-2xl md:text-3xl font-bold gradient-text">
+                        Sonra kendi sistemimizi kurduk. Ve her şey değişti.
+                    </p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Pricing Section -->
-    <section id="pricing" class="py-20 bg-gray-50">
+    <!-- ============================================ -->
+    <!-- 4. VALUE STACK SECTION -->
+    <!-- Job: Make saying no feel stupid -->
+    <!-- ============================================ -->
+    <section id="pricing" class="py-24 bg-gray-800">
         <div class="container mx-auto px-6">
-            <h2 class="text-4xl font-bold text-center mb-4">Basit & Şeffaf Fiyatlandırma</h2>
-            <p class="text-gray-600 text-center mb-16 max-w-2xl mx-auto">
-                Gizli maliyet yok. İstediğiniz zaman iptal edin.
-            </p>
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-3xl md:text-5xl font-bold text-center mb-4">
+                    Bugün Katılırsanız Alacaklarınız
+                </h2>
+                <p class="text-gray-400 text-center mb-16 text-lg">
+                    Her biri ayrı ayrı satılan premium araçlar, tek pakette
+                </p>
 
-            <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-                <!-- Starter Plan -->
-                <div class="bg-white rounded-2xl shadow-lg p-8">
-                    <h3 class="text-xl font-bold mb-2">Starter</h3>
-                    <p class="text-gray-500 mb-6">Tek lokasyon için ideal</p>
-                    <div class="mb-6">
-                        <span class="text-5xl font-bold">$29</span>
-                        <span class="text-gray-500">/ay</span>
+                <!-- Value Items -->
+                <div class="space-y-6 mb-12">
+                    <!-- Item 1 -->
+                    <div class="flex justify-between items-center p-6 bg-gray-700 bg-opacity-50 rounded-xl">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-purple-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-lg">AI Review Responder (GPT-4)</h3>
+                                <p class="text-gray-400 text-sm">Sınırsız otomatik yanıt</p>
+                            </div>
+                        </div>
+                        <span class="text-2xl font-bold text-gray-400">$197</span>
                     </div>
-                    <ul class="space-y-4 mb-8">
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            1 Lokasyon
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            10 Platform
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            100 AI yanıt/ay
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            Email desteği
-                        </li>
-                    </ul>
-                    <button class="w-full border-2 border-purple-600 text-purple-600 py-3 rounded-xl font-semibold hover:bg-purple-50 transition">
-                        Başla
-                    </button>
+
+                    <!-- Item 2 -->
+                    <div class="flex justify-between items-center p-6 bg-gray-700 bg-opacity-50 rounded-xl">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-lg">25+ Platform Listing Manager</h3>
+                                <p class="text-gray-400 text-sm">Tek merkezden tüm platformlar</p>
+                            </div>
+                        </div>
+                        <span class="text-2xl font-bold text-gray-400">$149</span>
+                    </div>
+
+                    <!-- Item 3 -->
+                    <div class="flex justify-between items-center p-6 bg-gray-700 bg-opacity-50 rounded-xl">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-green-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-lg">Map Rank Tracker</h3>
+                                <p class="text-gray-400 text-sm">Google Maps sıralama takibi</p>
+                            </div>
+                        </div>
+                        <span class="text-2xl font-bold text-gray-400">$99</span>
+                    </div>
+
+                    <!-- Item 4 -->
+                    <div class="flex justify-between items-center p-6 bg-gray-700 bg-opacity-50 rounded-xl">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-yellow-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-lg">Smart Notification System</h3>
+                                <p class="text-gray-400 text-sm">Slack, Email, WhatsApp entegrasyonu</p>
+                            </div>
+                        </div>
+                        <span class="text-2xl font-bold text-gray-400">$79</span>
+                    </div>
+
+                    <!-- Bonus -->
+                    <div class="flex justify-between items-center p-6 bg-gradient-to-r from-purple-900 to-blue-900 bg-opacity-50 rounded-xl border border-purple-500 border-opacity-30">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-white bg-opacity-10 rounded-xl flex items-center justify-center">
+                                <span class="text-2xl">🎁</span>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-lg text-purple-300">BONUS: Video Eğitim Serisi</h3>
+                                <p class="text-gray-400 text-sm">Adım adım kurulum + ileri seviye stratejiler</p>
+                            </div>
+                        </div>
+                        <span class="text-2xl font-bold text-gray-400">$97</span>
+                    </div>
                 </div>
 
-                <!-- Professional Plan -->
-                <div class="bg-purple-600 rounded-2xl shadow-xl p-8 text-white transform scale-105">
-                    <div class="flex justify-between items-start mb-2">
-                        <h3 class="text-xl font-bold">Professional</h3>
-                        <span class="bg-yellow-400 text-purple-900 text-xs font-bold px-3 py-1 rounded-full">EN POPÜLER</span>
-                    </div>
-                    <p class="text-purple-200 mb-6">Büyüyen işletmeler için</p>
-                    <div class="mb-6">
-                        <span class="text-5xl font-bold">$79</span>
-                        <span class="text-purple-200">/ay</span>
-                    </div>
-                    <ul class="space-y-4 mb-8">
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            5 Lokasyon
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            25+ Platform
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            Sınırsız AI yanıt
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            Harita sıralaması
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-yellow-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            Öncelikli destek
-                        </li>
-                    </ul>
-                    <button class="w-full bg-white text-purple-600 py-3 rounded-xl font-semibold hover:bg-purple-100 transition">
-                        14 Gün Ücretsiz Dene
-                    </button>
-                </div>
+                <!-- Total -->
+                <div class="text-center p-10 bg-gray-900 rounded-2xl border border-gray-700">
+                    <p class="text-gray-400 mb-2">Toplam Değer:</p>
+                    <p class="text-5xl font-bold text-gray-500 strike mb-4">$621</p>
 
-                <!-- Enterprise Plan -->
-                <div class="bg-white rounded-2xl shadow-lg p-8">
-                    <h3 class="text-xl font-bold mb-2">Enterprise</h3>
-                    <p class="text-gray-500 mb-6">Ajanslar ve zincirler için</p>
-                    <div class="mb-6">
-                        <span class="text-5xl font-bold">$199</span>
-                        <span class="text-gray-500">/ay</span>
-                    </div>
-                    <ul class="space-y-4 mb-8">
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            Sınırsız lokasyon
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            White-label
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            API erişimi
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            Özel entegrasyonlar
-                        </li>
-                        <li class="flex items-center">
-                            <svg class="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                            </svg>
-                            Dedicated hesap yöneticisi
-                        </li>
-                    </ul>
-                    <button class="w-full border-2 border-purple-600 text-purple-600 py-3 rounded-xl font-semibold hover:bg-purple-50 transition">
-                        İletişime Geç
-                    </button>
+                    <p class="text-gray-400 mb-2">Bugünkü Fiyatınız:</p>
+                    <p class="text-6xl md:text-7xl font-black gradient-text mb-2">$79</p>
+                    <p class="text-gray-400 mb-8">/ay — istediğiniz zaman iptal</p>
+
+                    <a href="#" class="inline-block gradient-btn text-white px-12 py-5 rounded-full font-bold text-xl hover:opacity-90 transition shadow-2xl glow">
+                        14 Gün Ücretsiz Dene →
+                    </a>
+
+                    <p class="text-gray-500 text-sm mt-6">
+                        💳 Kredi kartı gerekmez • ⚡ 5 dakikada kurulum • 🔒 İstediğiniz an iptal
+                    </p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- CTA Section -->
-    <section class="gradient-bg py-20">
-        <div class="container mx-auto px-6 text-center">
-            <h2 class="text-4xl font-bold text-white mb-6">
-                Yerel SEO'nuzu Otomatikleştirmeye<br/>Bugün Başlayın
-            </h2>
-            <p class="text-purple-100 text-xl mb-10 max-w-2xl mx-auto">
-                14 gün ücretsiz deneyin. Kredi kartı gerekmez.
-            </p>
-            <div class="flex flex-col md:flex-row justify-center gap-4">
-                <a href="#" class="bg-white text-purple-600 px-8 py-4 rounded-full font-bold text-lg hover:bg-purple-100 transition shadow-xl">
-                    Ücretsiz Denemeyi Başlat
-                </a>
-                <a href="#" class="border-2 border-white text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-white hover:text-purple-600 transition">
-                    Demo Randevusu Al
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="bg-gray-900 text-gray-400 py-16">
+    <!-- ============================================ -->
+    <!-- 5. SOCIAL PROOF SECTION -->
+    <!-- Job: Let others convince them -->
+    <!-- ============================================ -->
+    <section class="py-24 bg-gray-900">
         <div class="container mx-auto px-6">
-            <div class="grid md:grid-cols-4 gap-12">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">
+                    238 İşletme Zaten Kullanıyor
+                </h2>
+                <p class="text-gray-400 text-center mb-16">
+                    Gerçek sonuçlar, gerçek işletmelerden
+                </p>
+
+                <div class="grid md:grid-cols-3 gap-8">
+                    <!-- Testimonial 1 -->
+                    <div class="bg-gray-800 p-8 rounded-2xl">
+                        <div class="flex items-center gap-1 mb-4">
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                        </div>
+                        <p class="text-gray-300 mb-6 leading-relaxed">
+                            "Google puanımız <span class="text-green-400 font-bold">3.8'den 4.6'ya</span> çıktı.
+                            AI yanıtları o kadar doğal ki müşteriler benim yazdığımı sanıyor."
+                        </p>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center font-bold">AK</div>
+                            <div>
+                                <p class="font-semibold">Ahmet K.</p>
+                                <p class="text-gray-500 text-sm">Restoran Sahibi, İstanbul</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Testimonial 2 -->
+                    <div class="bg-gray-800 p-8 rounded-2xl">
+                        <div class="flex items-center gap-1 mb-4">
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                        </div>
+                        <p class="text-gray-300 mb-6 leading-relaxed">
+                            "8 şubemiz var. Eskiden <span class="text-green-400 font-bold">haftada 15 saat</span>
+                            yorum yanıtlıyorduk. Şimdi 30 dakika bile sürmüyor."
+                        </p>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center font-bold">MY</div>
+                            <div>
+                                <p class="font-semibold">Mehmet Y.</p>
+                                <p class="text-gray-500 text-sm">Otel Zinciri Yöneticisi, Antalya</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Testimonial 3 -->
+                    <div class="bg-gray-800 p-8 rounded-2xl">
+                        <div class="flex items-center gap-1 mb-4">
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                        </div>
+                        <p class="text-gray-300 mb-6 leading-relaxed">
+                            "Yext'e yılda <span class="text-green-400 font-bold">$6,000</span> veriyorduk.
+                            Şimdi aynı işi $948'e yapıyoruz. Ve listeleme sahipliği bizde!"
+                        </p>
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center font-bold">SK</div>
+                            <div>
+                                <p class="font-semibold">Selin K.</p>
+                                <p class="text-gray-500 text-sm">Dijital Pazarlama Ajansı, Ankara</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- 6. TRANSFORMATION SECTION -->
+    <!-- Job: Make outcome tangible -->
+    <!-- ============================================ -->
+    <section class="py-24 bg-gray-800">
+        <div class="container mx-auto px-6">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-3xl md:text-4xl font-bold text-center mb-4">
+                    30 Günde Neler Değişecek?
+                </h2>
+                <p class="text-gray-400 text-center mb-16">
+                    Adım adım dönüşüm yolculuğunuz
+                </p>
+
+                <div class="grid md:grid-cols-4 gap-6">
+                    <!-- Stage 1: Quick Win -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-green-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="text-3xl">⚡</span>
+                        </div>
+                        <h3 class="font-bold text-lg mb-2 text-green-400">Gün 1-3: Hızlı Kazanım</h3>
+                        <p class="text-gray-400 text-sm">
+                            Sistemи kuruyorsunuz. İlk AI yanıtınız gönderiliyor.
+                            <span class="text-white">İlk "Vay canına!" anı.</span>
+                        </p>
+                    </div>
+
+                    <!-- Stage 2: Compound -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-blue-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="text-3xl">📈</span>
+                        </div>
+                        <h3 class="font-bold text-lg mb-2 text-blue-400">Hafta 1-2: Bileşik Etki</h3>
+                        <p class="text-gray-400 text-sm">
+                            Her yorum dakikalar içinde yanıtlanıyor.
+                            <span class="text-white">Müşteriler şaşırıyor.</span>
+                        </p>
+                    </div>
+
+                    <!-- Stage 3: Advantage -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-purple-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="text-3xl">🏆</span>
+                        </div>
+                        <h3 class="font-bold text-lg mb-2 text-purple-400">Hafta 2-3: Rekabet Avantajı</h3>
+                        <p class="text-gray-400 text-sm">
+                            Google puanınız yükseliyor.
+                            <span class="text-white">Rakipler hala manuel yapıyor.</span>
+                        </p>
+                    </div>
+
+                    <!-- Stage 4: 10x -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-yellow-500 bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="text-3xl">🚀</span>
+                        </div>
+                        <h3 class="font-bold text-lg mb-2 text-yellow-400">Ay 1+: 10x Dönüşüm</h3>
+                        <p class="text-gray-400 text-sm">
+                            Haftada 10+ saat kazandınız.
+                            <span class="text-white">Bunu işletmeyi büyütmeye harcıyorsunuz.</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- 7. SECONDARY CTA SECTION -->
+    <!-- Job: Catch the scrollers -->
+    <!-- ============================================ -->
+    <section class="py-24 bg-gradient-to-r from-purple-900 to-blue-900">
+        <div class="container mx-auto px-6">
+            <div class="max-w-3xl mx-auto text-center">
+                <!-- Avatar Stack -->
+                <div class="flex justify-center -space-x-3 mb-8">
+                    <div class="w-12 h-12 bg-purple-500 rounded-full border-4 border-purple-900 flex items-center justify-center font-bold text-sm">AK</div>
+                    <div class="w-12 h-12 bg-blue-500 rounded-full border-4 border-purple-900 flex items-center justify-center font-bold text-sm">MY</div>
+                    <div class="w-12 h-12 bg-green-500 rounded-full border-4 border-purple-900 flex items-center justify-center font-bold text-sm">SK</div>
+                    <div class="w-12 h-12 bg-yellow-500 rounded-full border-4 border-purple-900 flex items-center justify-center font-bold text-sm">+235</div>
+                </div>
+
+                <!-- Question Headline -->
+                <h2 class="text-3xl md:text-5xl font-bold mb-6">
+                    Hâlâ Yorumlara Manuel mi<br/>Yanıt Veriyorsunuz?
+                </h2>
+
+                <p class="text-xl text-purple-200 mb-10">
+                    238 işletme çoktan AI'a geçti. Sıra sizde.
+                </p>
+
+                <!-- "Yes" Button -->
+                <a href="#pricing" class="inline-block bg-white text-purple-900 px-12 py-5 rounded-full font-bold text-xl hover:bg-purple-100 transition shadow-2xl">
+                    Evet, Ben de Başlamak İstiyorum →
+                </a>
+
+                <p class="text-purple-300 text-sm mt-6">
+                    🔒 14 gün ücretsiz • Kredi kartı gerekmez • 5 dakikada kurulum
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- 8. FOOTER SECTION -->
+    <!-- Job: Professional legitimacy -->
+    <!-- ============================================ -->
+    <footer class="bg-gray-900 py-16 border-t border-gray-800">
+        <div class="container mx-auto px-6">
+            <div class="grid md:grid-cols-4 gap-12 mb-12">
+                <!-- Logo -->
                 <div>
-                    <div class="flex items-center space-x-2 mb-6">
+                    <div class="flex items-center gap-2 mb-4">
                         <svg class="w-8 h-8 text-purple-500" viewBox="0 0 40 40" fill="none">
                             <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2"/>
                             <path d="M12 20L18 26L28 14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
                         </svg>
-                        <span class="text-white text-xl font-bold">Grain Local</span>
+                        <span class="font-bold text-xl">Grain Local</span>
                     </div>
-                    <p class="text-sm">
-                        Yerel işletmeler için AI destekli listeleme yönetimi ve otomasyon araçları.
+                    <p class="text-gray-500 text-sm">
+                        AI destekli yerel işletme yönetimi ve otomasyon araçları.
                     </p>
                 </div>
+
+                <!-- Nav 1 -->
                 <div>
-                    <h4 class="text-white font-semibold mb-4">Ürünler</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="#" class="hover:text-white transition">Listing Manager</a></li>
-                        <li><a href="#" class="hover:text-white transition">Review Responder</a></li>
-                        <li><a href="#" class="hover:text-white transition">Rank Tracker</a></li>
-                        <li><a href="#" class="hover:text-white transition">GBP Auto Posting</a></li>
+                    <h4 class="font-semibold mb-4">Ürün</h4>
+                    <ul class="space-y-2 text-gray-500 text-sm">
+                        <li><a href="#" class="hover:text-white transition">Özellikler</a></li>
+                        <li><a href="#pricing" class="hover:text-white transition">Fiyatlandırma</a></li>
+                        <li><a href="#" class="hover:text-white transition">Entegrasyonlar</a></li>
+                        <li><a href="#" class="hover:text-white transition">API</a></li>
                     </ul>
                 </div>
+
+                <!-- Nav 2 -->
                 <div>
-                    <h4 class="text-white font-semibold mb-4">Kaynaklar</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="#" class="hover:text-white transition">Dokümantasyon</a></li>
-                        <li><a href="#" class="hover:text-white transition">API Referansı</a></li>
-                        <li><a href="#" class="hover:text-white transition">Video Eğitimler</a></li>
+                    <h4 class="font-semibold mb-4">Şirket</h4>
+                    <ul class="space-y-2 text-gray-500 text-sm">
+                        <li><a href="#" class="hover:text-white transition">Hakkımızda</a></li>
                         <li><a href="#" class="hover:text-white transition">Blog</a></li>
+                        <li><a href="#" class="hover:text-white transition">Kariyer</a></li>
+                        <li><a href="#" class="hover:text-white transition">İletişim</a></li>
                     </ul>
                 </div>
+
+                <!-- Nav 3 -->
                 <div>
-                    <h4 class="text-white font-semibold mb-4">İletişim</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li>info@grainlocal.com</li>
-                        <li>+90 212 XXX XX XX</li>
-                        <li class="flex space-x-4 pt-4">
-                            <a href="#" class="hover:text-white transition">Twitter</a>
-                            <a href="#" class="hover:text-white transition">LinkedIn</a>
-                            <a href="#" class="hover:text-white transition">GitHub</a>
-                        </li>
+                    <h4 class="font-semibold mb-4">Destek</h4>
+                    <ul class="space-y-2 text-gray-500 text-sm">
+                        <li><a href="#" class="hover:text-white transition">Yardım Merkezi</a></li>
+                        <li><a href="#" class="hover:text-white transition">Dokümantasyon</a></li>
+                        <li><a href="#" class="hover:text-white transition">Video Eğitimler</a></li>
+                        <li><a href="#" class="hover:text-white transition">Status</a></li>
                     </ul>
                 </div>
             </div>
-            <div class="border-t border-gray-800 mt-12 pt-8 text-center text-sm">
-                <p>&copy; 2025 Grain Local. Tüm hakları saklıdır.</p>
+
+            <!-- Legal & Social -->
+            <div class="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="text-gray-500 text-sm">
+                    © 2025 Grain Local. Tüm hakları saklıdır.
+                </div>
+                <div class="flex gap-6 text-gray-500 text-sm">
+                    <a href="#" class="hover:text-white transition">Gizlilik Politikası</a>
+                    <a href="#" class="hover:text-white transition">Kullanım Şartları</a>
+                    <a href="#" class="hover:text-white transition">KVKK</a>
+                </div>
+                <div class="flex gap-4">
+                    <a href="#" class="text-gray-500 hover:text-white transition">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg>
+                    </a>
+                    <a href="#" class="text-gray-500 hover:text-white transition">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+                    </a>
+                    <a href="#" class="text-gray-500 hover:text-white transition">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    </a>
+                </div>
             </div>
         </div>
     </footer>
@@ -617,9 +658,10 @@
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({
-                    behavior: 'smooth'
-                });
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
             });
         });
     </script>
