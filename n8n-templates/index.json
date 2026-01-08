@@ -1,70 +1,103 @@
 {
-  "count": 80,
+  "count": 84,
   "lastUpdated": "2026-01-08",
+  "enterprise_ready": true,
+  "mcp_enabled": true,
   "categories": {
+    "core": [
+      "Grain_Master_Orchestrator_v1.json",
+      "Grain_MCP_Client_Connector_v1.json",
+      "Grain_Self_Healing_Pipeline_v1.json",
+      "Grain_Autonomous_Decision_Engine_v1.json"
+    ],
     "hospitality": [
       "Grain_Dynamic_Pricing_Engine_v1.json",
       "Grain_Booking_Channel_Sync_v1.json",
       "Grain_Housekeeping_Operations_v1.json",
       "Grain_Guest_Communication_Journey_v1.json",
-      "Grain_Review_Management_AI_v1.json"
+      "Grain_Review_Management_AI_v1.json",
+      "Grain_Review_Management_v1.json",
+      "Grain_Restaurant_Reservation_v1.json"
     ],
     "agency": [
       "Grain_Campaign_Performance_Monitor_v1.json",
       "Grain_Client_Onboarding_Automation_v1.json",
-      "Grain_Client_Reporting_Dashboard_v1.json"
+      "Grain_Client_Reporting_Dashboard_v1.json",
+      "Grain_Proposal_Contract_Generator_v1.json"
     ],
     "marketing": [
       "Grain_Email_Marketing_Automation_v1.json",
       "Grain_Omnichannel_Marketing_Hub_v1.json",
       "Grain_Influencer_Marketing_Hub_v1.json",
+      "Grain_Influencer_Outreach_v1.json",
       "Grain_SEO_Content_Pipeline_v1.json",
       "Grain_Multi_Platform_Publisher_v1.json",
-      "Grain_Multi_Platform_Publisher_v2.json"
+      "Grain_Multi_Platform_Publisher_v2.json",
+      "Grain_Content_Repurposing_Engine_v1.json"
     ],
     "ai_content": [
       "Grain_Multi_Agent_Content_System_v1.json",
       "Grain_AI_Copywriting_Studio_v1.json",
       "Grain_AI_Visual_Content_Generator_v1.json",
       "Grain_Agentic_AI_Orchestrator_v1.json",
-      "Grain_Prompt_Engineering_Studio_v1.json"
+      "Grain_Prompt_Engineering_Studio_v1.json",
+      "Grain_Knowledge_Base_AI_Search_v1.json",
+      "Grain_Knowledge_RAG_v1.json",
+      "Grain_Voice_AI_Assistant_v1.json"
     ],
     "analytics": [
       "Grain_Unified_Analytics_Dashboard_v1.json",
       "Grain_AB_Testing_Engine_v1.json",
       "Grain_Video_Performance_Tracker_v1.json",
-      "Grain_Content_Performance_Analyzer_v1.json"
+      "Grain_Content_Performance_Analyzer_v1.json",
+      "Grain_Predictive_Analytics_Engine_v1.json",
+      "Grain_Root_Cause_Analyzer_v1.json"
     ],
     "customer_success": [
       "Grain_Churn_Prediction_Prevention_v1.json",
       "Grain_Customer_Support_Automation_v1.json",
-      "Grain_Personalization_Engine_v1.json"
+      "Grain_Personalization_Engine_v1.json",
+      "Grain_NPS_Feedback_Collection_v1.json",
+      "Grain_Customer_Onboarding_Automation_v1.json",
+      "Grain_Subscription_Lifecycle_Manager_v1.json",
+      "Grain_Ticket_Escalation_Manager_v1.json"
     ],
     "growth": [
       "Grain_Referral_Program_Automation_v1.json",
+      "Grain_Referral_Affiliate_Program_v1.json",
       "Grain_Webinar_Event_Automation_v1.json",
       "Grain_Lead_Conversion_Funnel_v1.json",
-      "Grain_Landing_Page_CRO_Hub_v1.json"
+      "Grain_Landing_Page_CRO_Hub_v1.json",
+      "Grain_Meeting_Intelligence_Hub_v1.json"
     ],
     "operations": [
       "Grain_RevOps_Hub_v1.json",
       "Grain_Invoice_Billing_Automation_v1.json",
-      "Grain_Intelligent_CDP_v1.json"
+      "Grain_Intelligent_CDP_v1.json",
+      "Grain_Contract_Review_Compliance_v1.json"
     ],
     "intelligence": [
       "Grain_Competitive_Intelligence_v1.json",
-      "Grain_Social_Listening_Sentiment_v1.json"
+      "Grain_Competitor_Monitoring_Hub_v1.json",
+      "Grain_Social_Listening_Sentiment_v1.json",
+      "Grain_Social_Inbox_Manager_v1.json"
     ],
     "seo": [
       "Grain_SEO_Site_Audit_v1.json",
+      "Grain_SEO_Engine_v1.json",
+      "Grain_SEO_Keyword_Research_Free_v1.json",
       "Grain_Keyword_Research_Pipeline_v1.json",
+      "Grain_Keyword_Gap_Analysis_v1.json",
       "Grain_Rank_Tracking_v1.json",
+      "Grain_SERP_Rank_Tracker_Free_v1.json",
       "Grain_Backlink_Monitor_v1.json",
-      "Grain_Local_Citation_Builder_v1.json"
+      "Grain_Local_Citation_Builder_v1.json",
+      "Grain_GSC_Hub_v1.json"
     ],
     "local_seo": [
       "Grain_Local_SEO_Automation_Hub_v1.json",
-      "Grain_Local_Citation_Builder_v1.json"
+      "Grain_Local_Citation_Builder_v1.json",
+      "Grain_GBP_Auto_Posting_v1.json"
     ],
     "restaurant": [
       "Grain_Restaurant_Marketing_Hub_v1.json",
@@ -86,6 +119,13 @@
     ],
     "media": [
       "Grain_Podcast_Production_Pipeline_v1.json"
+    ],
+    "hr": [
+      "Grain_HR_Onboarding_Offboarding_v1.json",
+      "Grain_Recruitment_AI_Agent_v1.json"
+    ],
+    "ecommerce": [
+      "Grain_Ecommerce_Orchestrator_v1.json"
     ]
   },
   "files": [
@@ -435,6 +475,230 @@
       "category": "ai_productivity",
       "description": "AI-powered Slack and Microsoft Teams bot with intent detection and knowledge base integration",
       "roi": "40% faster internal queries resolved"
+    },
+    {
+      "filename": "Grain_Master_Orchestrator_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Master_Orchestrator_v1.json",
+      "category": "core",
+      "description": "Central workflow orchestrator for managing and coordinating all automation workflows",
+      "roi": "Enterprise-grade automation control"
+    },
+    {
+      "filename": "Grain_MCP_Client_Connector_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_MCP_Client_Connector_v1.json",
+      "category": "core",
+      "description": "MCP protocol integration for AI agent connections and tool orchestration",
+      "roi": "Seamless AI integration"
+    },
+    {
+      "filename": "Grain_Self_Healing_Pipeline_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Self_Healing_Pipeline_v1.json",
+      "category": "core",
+      "description": "Auto-recovery pipeline with error detection and self-healing capabilities",
+      "roi": "99.9% uptime guarantee"
+    },
+    {
+      "filename": "Grain_Autonomous_Decision_Engine_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Autonomous_Decision_Engine_v1.json",
+      "category": "core",
+      "description": "AI-powered decision engine for autonomous business process automation",
+      "roi": "80% faster decision cycles"
+    },
+    {
+      "filename": "Grain_Voice_AI_Assistant_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Voice_AI_Assistant_v1.json",
+      "category": "ai_content",
+      "description": "Voice-enabled AI assistant with speech-to-text and natural language processing",
+      "roi": "Hands-free automation control"
+    },
+    {
+      "filename": "Grain_Knowledge_Base_AI_Search_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Knowledge_Base_AI_Search_v1.json",
+      "category": "ai_content",
+      "description": "AI-powered knowledge base search with semantic understanding",
+      "roi": "70% faster information retrieval"
+    },
+    {
+      "filename": "Grain_Knowledge_RAG_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Knowledge_RAG_v1.json",
+      "category": "ai_content",
+      "description": "Retrieval-Augmented Generation system for context-aware AI responses",
+      "roi": "95% answer accuracy"
+    },
+    {
+      "filename": "Grain_Ecommerce_Orchestrator_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Ecommerce_Orchestrator_v1.json",
+      "category": "ecommerce",
+      "description": "Full e-commerce automation hub for orders, inventory, and customer lifecycle",
+      "roi": "50% operational efficiency increase"
+    },
+    {
+      "filename": "Grain_HR_Onboarding_Offboarding_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_HR_Onboarding_Offboarding_v1.json",
+      "category": "hr",
+      "description": "Automated employee onboarding and offboarding workflows with compliance tracking",
+      "roi": "75% HR time saved"
+    },
+    {
+      "filename": "Grain_Recruitment_AI_Agent_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Recruitment_AI_Agent_v1.json",
+      "category": "hr",
+      "description": "AI-powered recruitment automation with candidate screening and scheduling",
+      "roi": "60% faster hiring process"
+    },
+    {
+      "filename": "Grain_Competitor_Monitoring_Hub_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Competitor_Monitoring_Hub_v1.json",
+      "category": "intelligence",
+      "description": "Real-time competitor tracking with pricing, content, and social monitoring",
+      "roi": "Strategic market advantage"
+    },
+    {
+      "filename": "Grain_Social_Inbox_Manager_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Social_Inbox_Manager_v1.json",
+      "category": "intelligence",
+      "description": "Unified social media inbox with AI-powered response suggestions",
+      "roi": "80% faster response times"
+    },
+    {
+      "filename": "Grain_Content_Repurposing_Engine_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Content_Repurposing_Engine_v1.json",
+      "category": "marketing",
+      "description": "Transform content across formats - blog to social, video to podcast, etc.",
+      "roi": "5x content output from single source"
+    },
+    {
+      "filename": "Grain_Influencer_Outreach_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Influencer_Outreach_v1.json",
+      "category": "marketing",
+      "description": "Automated influencer discovery and personalized outreach campaigns",
+      "roi": "40% higher response rates"
+    },
+    {
+      "filename": "Grain_Proposal_Contract_Generator_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Proposal_Contract_Generator_v1.json",
+      "category": "agency",
+      "description": "AI-powered proposal and contract generation with e-signature integration",
+      "roi": "70% faster deal closure"
+    },
+    {
+      "filename": "Grain_Contract_Review_Compliance_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Contract_Review_Compliance_v1.json",
+      "category": "operations",
+      "description": "AI contract analysis with risk detection and compliance checking",
+      "roi": "90% legal review time saved"
+    },
+    {
+      "filename": "Grain_Customer_Onboarding_Automation_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Customer_Onboarding_Automation_v1.json",
+      "category": "customer_success",
+      "description": "Automated customer onboarding journey with milestone tracking",
+      "roi": "50% faster time-to-value"
+    },
+    {
+      "filename": "Grain_NPS_Feedback_Collection_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_NPS_Feedback_Collection_v1.json",
+      "category": "customer_success",
+      "description": "NPS surveys with automated follow-up and sentiment analysis",
+      "roi": "3x response rates"
+    },
+    {
+      "filename": "Grain_Subscription_Lifecycle_Manager_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Subscription_Lifecycle_Manager_v1.json",
+      "category": "customer_success",
+      "description": "Full subscription lifecycle management with upgrade/downgrade automation",
+      "roi": "30% revenue expansion"
+    },
+    {
+      "filename": "Grain_Ticket_Escalation_Manager_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Ticket_Escalation_Manager_v1.json",
+      "category": "customer_success",
+      "description": "Intelligent ticket routing and escalation with SLA management",
+      "roi": "40% faster resolution times"
+    },
+    {
+      "filename": "Grain_Meeting_Intelligence_Hub_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Meeting_Intelligence_Hub_v1.json",
+      "category": "growth",
+      "description": "Meeting analytics with conversation intelligence and deal insights",
+      "roi": "25% higher win rates"
+    },
+    {
+      "filename": "Grain_Referral_Affiliate_Program_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Referral_Affiliate_Program_v1.json",
+      "category": "growth",
+      "description": "Affiliate program management with tracking and commission automation",
+      "roi": "35% new customer acquisition"
+    },
+    {
+      "filename": "Grain_Predictive_Analytics_Engine_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Predictive_Analytics_Engine_v1.json",
+      "category": "analytics",
+      "description": "ML-powered predictive analytics for forecasting and trend detection",
+      "roi": "Data-driven decision making"
+    },
+    {
+      "filename": "Grain_Root_Cause_Analyzer_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Root_Cause_Analyzer_v1.json",
+      "category": "analytics",
+      "description": "Automated root cause analysis with incident correlation",
+      "roi": "60% faster issue resolution"
+    },
+    {
+      "filename": "Grain_SEO_Engine_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SEO_Engine_v1.json",
+      "category": "seo",
+      "description": "Comprehensive SEO automation engine with AI optimization",
+      "roi": "40% organic traffic growth"
+    },
+    {
+      "filename": "Grain_SEO_Keyword_Research_Free_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SEO_Keyword_Research_Free_v1.json",
+      "category": "seo",
+      "description": "Free keyword research tool using Google Suggest and PAA",
+      "roi": "Cost-effective keyword insights"
+    },
+    {
+      "filename": "Grain_Keyword_Gap_Analysis_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Keyword_Gap_Analysis_v1.json",
+      "category": "seo",
+      "description": "Competitive keyword gap analysis with opportunity scoring",
+      "roi": "Identify ranking opportunities"
+    },
+    {
+      "filename": "Grain_SERP_Rank_Tracker_Free_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SERP_Rank_Tracker_Free_v1.json",
+      "category": "seo",
+      "description": "Free SERP position tracking with daily updates",
+      "roi": "Real-time ranking visibility"
+    },
+    {
+      "filename": "Grain_GSC_Hub_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_GSC_Hub_v1.json",
+      "category": "seo",
+      "description": "Google Search Console integration hub with automated reporting",
+      "roi": "Actionable search insights"
+    },
+    {
+      "filename": "Grain_GBP_Auto_Posting_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_GBP_Auto_Posting_v1.json",
+      "category": "local_seo",
+      "description": "Automated Google Business Profile posting and updates",
+      "roi": "30% more local engagement"
+    },
+    {
+      "filename": "Grain_Restaurant_Reservation_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Restaurant_Reservation_v1.json",
+      "category": "hospitality",
+      "description": "Restaurant reservation management with confirmations and reminders",
+      "roi": "20% reduced no-shows"
+    },
+    {
+      "filename": "Grain_Review_Management_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Review_Management_v1.json",
+      "category": "hospitality",
+      "description": "Multi-platform review aggregation and response management",
+      "roi": "Improved online reputation"
     },
     {
       "filename": "0 - MARKETING TEAM.json",
