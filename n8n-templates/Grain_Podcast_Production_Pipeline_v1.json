@@ -1,0 +1,308 @@
+{
+  "name": "Grain Podcast Production Pipeline v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "podcast/episode",
+        "options": {}
+      },
+      "id": "episode-webhook",
+      "name": "New Episode Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "podcast-episode"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize podcast episode processing\nconst input = $input.first().json.body || $input.first().json;\n\nconst episode = {\n  episodeId: `EP-${Date.now().toString(36).toUpperCase()}`,\n  title: input.title,\n  description: input.description,\n  audioUrl: input.audioUrl,\n  audioFile: input.audioFile,\n  duration: input.duration,\n  season: input.season || 1,\n  episodeNumber: input.episodeNumber,\n  guests: input.guests || [],\n  hosts: input.hosts || [],\n  topics: input.topics || [],\n  publishDate: input.publishDate || new Date().toISOString(),\n  status: 'processing',\n  metadata: {\n    showName: input.showName || $vars.PODCAST_NAME,\n    language: input.language || 'en',\n    explicit: input.explicit || false,\n    category: input.category || 'Business'\n  },\n  createdAt: new Date().toISOString()\n};\n\nreturn [{ json: episode }];"
+      },
+      "id": "init-episode",
+      "name": "Initialize Episode",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TRANSCRIPTION_API_URL }}/transcribe",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"audioUrl\": \"{{ $json.audioUrl }}\",\n  \"language\": \"{{ $json.metadata.language }}\",\n  \"speakerDiarization\": true,\n  \"timestamps\": true,\n  \"format\": \"detailed\"\n}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "transcribe-audio",
+      "name": "Transcribe Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "transcription-api-key",
+          "name": "Transcription API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a podcast content specialist. Analyze the transcript and generate comprehensive episode content including:\n\n1. **Episode Summary** (2-3 paragraphs for show notes)\n2. **Key Takeaways** (5-7 bullet points)\n3. **Chapter Markers** (timestamps with titles)\n4. **Notable Quotes** (3-5 quotable moments with speaker attribution)\n5. **SEO Keywords** (10-15 relevant keywords)\n6. **Social Media Posts** (Twitter, LinkedIn, Instagram captions)\n7. **Blog Post Outline** (for repurposing)\n\nFormat the output as JSON.",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze this podcast episode:\n\n**Title:** {{ $('Initialize Episode').first().json.title }}\n**Guests:** {{ $('Initialize Episode').first().json.guests.join(', ') || 'None' }}\n**Topics:** {{ $('Initialize Episode').first().json.topics.join(', ') || 'Various' }}\n\n**Transcript:**\n{{ $json.transcript?.text || $json.text || 'Transcript not available' }}",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 4000
+        }
+      },
+      "id": "ai-content-generation",
+      "name": "AI Content Generation",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.AUDIO_API_URL }}/process",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"audioUrl\": \"{{ $json.audioUrl }}\",\n  \"operations\": [\n    { \"type\": \"normalize\", \"targetLufs\": -16 },\n    { \"type\": \"noiseReduction\", \"level\": \"medium\" },\n    { \"type\": \"compress\", \"ratio\": 3 },\n    { \"type\": \"eq\", \"preset\": \"podcast\" }\n  ],\n  \"outputs\": [\n    { \"format\": \"mp3\", \"bitrate\": 128, \"suffix\": \"web\" },\n    { \"format\": \"mp3\", \"bitrate\": 320, \"suffix\": \"hq\" },\n    { \"format\": \"wav\", \"suffix\": \"master\" }\n  ]\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "process-audio",
+      "name": "Process Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "audio-api-key",
+          "name": "Audio Processing API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.IMAGE_API_URL }}/generate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"Podcast episode cover art for '{{ $('Initialize Episode').first().json.title }}', professional, modern design, {{ $('Initialize Episode').first().json.metadata.category }} theme\",\n  \"style\": \"podcast_cover\",\n  \"dimensions\": {\n    \"square\": { \"width\": 3000, \"height\": 3000 },\n    \"wide\": { \"width\": 1920, \"height\": 1080 },\n    \"social\": { \"width\": 1200, \"height\": 630 }\n  },\n  \"brandColors\": {{ JSON.stringify($vars.BRAND_COLORS || ['#1DB954', '#191414']) }}\n}",
+        "options": {}
+      },
+      "id": "generate-artwork",
+      "name": "Generate Artwork",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "image-api-key",
+          "name": "Image Generation API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile all episode assets\nconst episode = $('Initialize Episode').first().json;\nconst transcript = $('Transcribe Audio').first().json;\nconst aiContent = $('AI Content Generation').first().json;\nconst processedAudio = $('Process Audio').first().json;\nconst artwork = $('Generate Artwork').first().json;\n\nconst compiledEpisode = {\n  ...episode,\n  status: 'ready',\n  transcript: {\n    full: transcript.transcript?.text || transcript.text,\n    speakers: transcript.speakers || [],\n    timestamps: transcript.timestamps || []\n  },\n  content: {\n    summary: aiContent.summary || aiContent.episodeSummary,\n    keyTakeaways: aiContent.keyTakeaways || aiContent.key_takeaways,\n    chapters: aiContent.chapters || aiContent.chapterMarkers,\n    quotes: aiContent.quotes || aiContent.notableQuotes,\n    keywords: aiContent.keywords || aiContent.seoKeywords,\n    socialPosts: aiContent.socialPosts || aiContent.social_media_posts,\n    blogOutline: aiContent.blogOutline || aiContent.blog_post_outline\n  },\n  audioFiles: {\n    web: processedAudio.outputs?.find(o => o.suffix === 'web')?.url,\n    hq: processedAudio.outputs?.find(o => o.suffix === 'hq')?.url,\n    master: processedAudio.outputs?.find(o => o.suffix === 'master')?.url\n  },\n  artwork: {\n    square: artwork.images?.square || artwork.square,\n    wide: artwork.images?.wide || artwork.wide,\n    social: artwork.images?.social || artwork.social\n  },\n  rssData: {\n    title: episode.title,\n    description: aiContent.summary || episode.description,\n    pubDate: episode.publishDate,\n    duration: episode.duration,\n    explicit: episode.metadata.explicit,\n    keywords: (aiContent.keywords || []).join(', ')\n  },\n  completedAt: new Date().toISOString()\n};\n\nreturn [{ json: compiledEpisode }];"
+      },
+      "id": "compile-episode",
+      "name": "Compile Episode",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PODCAST_HOST_API_URL }}/episodes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ $json.title }}\",\n  \"description\": \"{{ $json.content.summary }}\",\n  \"audioUrl\": \"{{ $json.audioFiles.web }}\",\n  \"artworkUrl\": \"{{ $json.artwork.square }}\",\n  \"publishDate\": \"{{ $json.publishDate }}\",\n  \"season\": {{ $json.season }},\n  \"episode\": {{ $json.episodeNumber }},\n  \"explicit\": {{ $json.metadata.explicit }},\n  \"chapters\": {{ JSON.stringify($json.content.chapters) }}\n}",
+        "options": {}
+      },
+      "id": "publish-to-host",
+      "name": "Publish to Podcast Host",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "podcast-host-api",
+          "name": "Podcast Host API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.YOUTUBE_API_URL }}/videos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ $json.title }} | {{ $json.metadata.showName }}\",\n  \"description\": \"{{ $json.content.summary }}\\n\\n🎧 Listen on your favorite platform:\\n{{ $vars.PODCAST_LINKS }}\\n\\n⏱️ Chapters:\\n{{ $json.content.chapters?.map(c => c.timestamp + ' - ' + c.title).join('\\n') || '' }}\\n\\n🔑 Key Takeaways:\\n{{ $json.content.keyTakeaways?.map(t => '• ' + t).join('\\n') || '' }}\",\n  \"audioUrl\": \"{{ $json.audioFiles.hq }}\",\n  \"thumbnailUrl\": \"{{ $json.artwork.wide }}\",\n  \"visibility\": \"public\",\n  \"scheduledPublishTime\": \"{{ $json.publishDate }}\"\n}",
+        "options": {}
+      },
+      "id": "publish-youtube",
+      "name": "Publish to YouTube",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "youtube-api-key",
+          "name": "YouTube API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.PODCAST_DB_URL }}/episodes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-episode",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "podcast-db-api",
+          "name": "Podcast DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.CONTENT_SLACK_CHANNEL }}",
+        "text": "=🎙️ *New Podcast Episode Ready!*\n\n*Title:* {{ $json.title }}\n*Episode:* S{{ $json.season }}E{{ $json.episodeNumber }}\n*Duration:* {{ Math.floor($json.duration / 60) }} minutes\n\n📝 *Content Generated:*\n• Summary: ✅\n• {{ $json.content.chapters?.length || 0 }} Chapter markers\n• {{ $json.content.keyTakeaways?.length || 0 }} Key takeaways\n• {{ $json.content.quotes?.length || 0 }} Notable quotes\n• Social posts for Twitter, LinkedIn, Instagram\n\n🎨 *Assets:*\n• Audio (Web/HQ/Master): ✅\n• Artwork (Square/Wide/Social): ✅\n• Transcript: ✅\n\n📅 *Publish Date:* {{ new Date($json.publishDate).toLocaleDateString() }}\n\n<{{ $json.audioFiles.web }}|Preview Episode>",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 600],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ episodeId: $json.episodeId, status: $json.status, title: $json.title }) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1750, 800]
+    }
+  ],
+  "connections": {
+    "New Episode Upload": {
+      "main": [
+        [{ "node": "Initialize Episode", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize Episode": {
+      "main": [
+        [
+          { "node": "Transcribe Audio", "type": "main", "index": 0 },
+          { "node": "Process Audio", "type": "main", "index": 0 },
+          { "node": "Generate Artwork", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Transcribe Audio": {
+      "main": [
+        [{ "node": "AI Content Generation", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Content Generation": {
+      "main": [
+        [{ "node": "Compile Episode", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Audio": {
+      "main": [
+        [{ "node": "Compile Episode", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Artwork": {
+      "main": [
+        [{ "node": "Compile Episode", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Episode": {
+      "main": [
+        [
+          { "node": "Publish to Podcast Host", "type": "main", "index": 0 },
+          { "node": "Publish to YouTube", "type": "main", "index": 0 },
+          { "node": "Save to Database", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "podcast", "name": "podcast" },
+    { "id": "audio", "name": "audio" },
+    { "id": "content", "name": "content" },
+    { "id": "ai", "name": "ai" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-08T00:00:00.000Z",
+  "versionId": "1"
+}

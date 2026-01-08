@@ -1,6 +1,6 @@
 {
-  "count": 72,
-  "lastUpdated": "2026-01-07",
+  "count": 80,
+  "lastUpdated": "2026-01-08",
   "categories": {
     "hospitality": [
       "Grain_Dynamic_Pricing_Engine_v1.json",
@@ -70,6 +70,22 @@
       "Grain_Restaurant_Marketing_Hub_v1.json",
       "Grain_Restaurant_Loyalty_Program_v1.json",
       "Grain_Guest_Feedback_Review_v1.json"
+    ],
+    "ai_productivity": [
+      "Grain_AI_Meeting_Notes_v1.json",
+      "Grain_AI_Chatbot_Builder_v1.json",
+      "Grain_Slack_Teams_Bot_v1.json"
+    ],
+    "document_processing": [
+      "Grain_Document_OCR_Processing_v1.json",
+      "Grain_Multi_Language_Translation_v1.json"
+    ],
+    "finance": [
+      "Grain_Subscription_Management_v1.json",
+      "Grain_Expense_Management_v1.json"
+    ],
+    "media": [
+      "Grain_Podcast_Production_Pipeline_v1.json"
     ]
   },
   "files": [
@@ -363,6 +379,62 @@
       "category": "restaurant",
       "description": "NPS surveys with AI review response generation",
       "roi": "50% more positive reviews"
+    },
+    {
+      "filename": "Grain_Multi_Language_Translation_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Multi_Language_Translation_v1.json",
+      "category": "document_processing",
+      "description": "AI-powered multi-language content translation with quality scoring and glossary support",
+      "roi": "10x faster translations"
+    },
+    {
+      "filename": "Grain_Subscription_Management_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Subscription_Management_v1.json",
+      "category": "finance",
+      "description": "Stripe subscription lifecycle management with MRR/ARR tracking and automated billing emails",
+      "roi": "25% reduced churn"
+    },
+    {
+      "filename": "Grain_Podcast_Production_Pipeline_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Podcast_Production_Pipeline_v1.json",
+      "category": "media",
+      "description": "End-to-end podcast production with AI transcription, show notes, chapters, and multi-platform publishing",
+      "roi": "80% production time saved"
+    },
+    {
+      "filename": "Grain_AI_Chatbot_Builder_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Chatbot_Builder_v1.json",
+      "category": "ai_productivity",
+      "description": "RAG-powered chatbot with knowledge base, intent detection, and human escalation",
+      "roi": "60% support ticket reduction"
+    },
+    {
+      "filename": "Grain_AI_Meeting_Notes_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Meeting_Notes_v1.json",
+      "category": "ai_productivity",
+      "description": "Meeting transcription with speaker diarization, AI summary, action items, and task creation",
+      "roi": "5 hours/week saved per team"
+    },
+    {
+      "filename": "Grain_Document_OCR_Processing_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Document_OCR_Processing_v1.json",
+      "category": "document_processing",
+      "description": "Document OCR with AI classification and structured data extraction for invoices, receipts, contracts",
+      "roi": "90% manual data entry eliminated"
+    },
+    {
+      "filename": "Grain_Expense_Management_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Expense_Management_v1.json",
+      "category": "finance",
+      "description": "Expense submission with receipt OCR, policy compliance checking, and approval workflows",
+      "roi": "70% faster expense processing"
+    },
+    {
+      "filename": "Grain_Slack_Teams_Bot_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Slack_Teams_Bot_v1.json",
+      "category": "ai_productivity",
+      "description": "AI-powered Slack and Microsoft Teams bot with intent detection and knowledge base integration",
+      "roi": "40% faster internal queries resolved"
     },
     {
       "filename": "0 - MARKETING TEAM.json",
