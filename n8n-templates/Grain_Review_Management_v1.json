@@ -1,0 +1,315 @@
+{
+  "name": "Grain Review Management v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-c666onq1x",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "check-reviews",
+      "name": "Check Reviews",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        200,
+        400
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://mybusiness.googleapis.com/v4/accounts/{{ $env.GBP_ACCOUNT_ID }}/locations/{{ $env.GBP_LOCATION_ID }}/reviews",
+        "authentication": "oAuth2",
+        "options": {}
+      },
+      "id": "get-google-reviews",
+      "name": "Get Google Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        400,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const reviews = $input.item.json.reviews || [];\nconst oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);\n\nconst newReviews = reviews.filter(r => {\n  const reviewDate = new Date(r.createTime);\n  return reviewDate > oneDayAgo && !r.reviewReply;\n}).map(r => ({\n  review_id: r.reviewId,\n  reviewer_name: r.reviewer?.displayName || 'Misafir',\n  rating: r.starRating === 'FIVE' ? 5 : r.starRating === 'FOUR' ? 4 : r.starRating === 'THREE' ? 3 : r.starRating === 'TWO' ? 2 : 1,\n  comment: r.comment || '',\n  create_time: r.createTime,\n  is_negative: r.starRating === 'ONE' || r.starRating === 'TWO'\n}));\n\nreturn newReviews.map(r => ({ json: r }));"
+      },
+      "id": "filter-new",
+      "name": "Filter New Reviews",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        600,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "İşletme sahibi olarak yorumlara profesyonel ve samimi yanıtlar yaz.\n\nPozitif (4-5 yıldız): Teşekkür et, tekrar bekle\nNegatif (1-2 yıldız): Özür dile, sorunu çözmek için iletişim iste\nOrta (3 yıldız): Geri bildirim için teşekkür, iyileştirme sözü ver\n\nMax 150 kelime. İşletme adını kullanma, genel tut."
+            },
+            {
+              "role": "user",
+              "content": "=Reviewer: {{ $json.reviewer_name }}\nRating: {{ $json.rating }}/5\nComment: {{ $json.comment }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-response",
+      "name": "AI Generate Response",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        800,
+        400
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_negative }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "is-negative",
+      "name": "Is Negative?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1000,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#urgent-reviews",
+        "text": "=🚨 *Negatif Yorum Alındı!*\n\n⭐ Rating: {{ $json.rating }}/5\n👤 From: {{ $json.reviewer_name }}\n\n💬 Yorum:\n{{ $json.comment }}\n\n✍️ Önerilen Yanıt:\n{{ $('AI Generate Response').first().json.message.content }}\n\n_Lütfen 2 saat içinde yanıtlayın!_",
+        "otherOptions": {}
+      },
+      "id": "alert-negative",
+      "name": "Alert Negative",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1200,
+        300
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Review_Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "review_id": "={{ $json.review_id }}",
+            "reviewer": "={{ $json.reviewer_name }}",
+            "rating": "={{ $json.rating }}",
+            "comment": "={{ $json.comment }}",
+            "suggested_reply": "={{ $('AI Generate Response').first().json.message.content }}",
+            "status": "pending_approval",
+            "created_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "log-review",
+      "name": "Log Review",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        1200,
+        500
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "content": "## 🔄 Workflow Overview\nChecks Google reviews every 4 hours, generates AI responses, and alerts on negative reviews.",
+        "height": 100,
+        "width": 300,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        250
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        600,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Review Management Error\n\nNode: {{ $json.execution.lastNodeExecuted }}\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        800,
+        650
+      ]
+    }
+  ],
+  "connections": {
+    "Check Reviews": {
+      "main": [
+        [
+          {
+            "node": "Get Google Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Google Reviews": {
+      "main": [
+        [
+          {
+            "node": "Filter New Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Reviews": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Response": {
+      "main": [
+        [
+          {
+            "node": "Is Negative?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Negative?": {
+      "main": [
+        [
+          {
+            "node": "Alert Negative",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Negative": {
+      "main": [
+        [
+          {
+            "node": "Log Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "hospitality"
+    },
+    {
+      "name": "reviews"
+    },
+    {
+      "name": "reputation"
+    }
+  ]
+}

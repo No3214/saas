@@ -1,0 +1,146 @@
+{
+    "name": "Grain_Knowledge_RAG_v1",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "## 📚 Knowledge RAG System\nRetrieval-Augmented Generation using Vector Store (Qdrant).",
+                "height": 100,
+                "width": 450,
+                "color": 5
+            },
+            "id": "note-overview",
+            "name": "Note: Overview",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                180,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "values": {
+                    "string": [
+                        {
+                            "name": "tenant_id",
+                            "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+                        },
+                        {
+                            "name": "dry_run",
+                            "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+                        },
+                        {
+                            "name": "webhook_prefix",
+                            "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/grain-knowledge-rag-v1"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "grain-config",
+            "name": "GRAIN_CONFIG",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 2,
+            "position": [
+                180,
+                350
+            ],
+            "notesInFlow": true,
+            "notes": "🔧 Central Config"
+        },
+        {
+            "parameters": {
+                "collection": "grain_knowledge_base",
+                "topK": 5
+            },
+            "id": "vector-store",
+            "name": "Query Vectorstore",
+            "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+            "typeVersion": 1,
+            "position": [
+                450,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "model": "gpt-4o",
+                "prompt": "Answer the question using the context below.\nQuestion: {{ $json.query }}\nContext: {{ $json.context }}\n\nRules: Source citation required."
+            },
+            "id": "augmented-gen",
+            "name": "Augmented Generation",
+            "type": "@n8n/n8n-nodes-langchain.openAi",
+            "typeVersion": 1,
+            "position": [
+                700,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "workflow"
+            },
+            "type": "n8n-nodes-base.errorTrigger",
+            "typeVersion": 1,
+            "position": [
+                180,
+                550
+            ],
+            "id": "error-trigger",
+            "name": "Error Trigger"
+        },
+        {
+            "parameters": {
+                "workflowId": "Grain_Sub_Error_Handler"
+            },
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1,
+            "position": [
+                400,
+                550
+            ],
+            "id": "error-handler",
+            "name": "Error Handler"
+        }
+    ],
+    "connections": {
+        "GRAIN_CONFIG": {
+            "main": [
+                [
+                    {
+                        "node": "Query Vectorstore",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query Vectorstore": {
+            "main": [
+                [
+                    {
+                        "node": "Augmented Generation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Error Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Error Handler",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "meta": {
+        "templateId": "Grain_Knowledge_RAG_v1",
+        "category": "ai-automation",
+        "tier": "high"
+    }
+}

@@ -1,0 +1,201 @@
+{
+  "name": "Grain Voice AI Assistant v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-y0ii092ms",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-input",
+        "options": {}
+      },
+      "id": "webhook-voice",
+      "name": "Voice Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "voice-assistant"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENAI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $json.audio_file }}"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            }
+          ]
+        }
+      },
+      "id": "whisper-transcribe",
+      "name": "Whisper Transcribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a helpful voice assistant. Respond conversationally to the user's spoken request. Keep responses under 50 words for TTS."
+            },
+            {
+              "role": "user",
+              "content": "{{ $json.text }}"
+            }
+          ]
+        },
+        "jsonOutput": false
+      },
+      "id": "ai-respond",
+      "name": "AI Generate Response",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/speech",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENAI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"model\": \"tts-1\", \"input\": \"{{ $json.message.content }}\", \"voice\": \"nova\" }"
+      },
+      "id": "tts-generate",
+      "name": "Generate Speech (TTS)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {}
+      },
+      "id": "return-audio",
+      "name": "Return Audio",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Voice Input": {
+      "main": [
+        [
+          {
+            "node": "Whisper Transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Whisper Transcribe": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Response": {
+      "main": [
+        [
+          {
+            "node": "Generate Speech (TTS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Speech (TTS)": {
+      "main": [
+        [
+          {
+            "node": "Return Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

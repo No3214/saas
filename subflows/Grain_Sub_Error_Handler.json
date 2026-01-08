@@ -1,0 +1,115 @@
+{
+    "name": "Grain_Sub_Error_Handler",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "## 🛡️ Sub-workflow: Error Handler\nCentralized error logging and Slack/Email notifications.",
+                "height": 100,
+                "width": 350,
+                "color": 4
+            },
+            "id": "note-overview",
+            "name": "Note: Overview",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                180,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "rules": {
+                    "rules": [
+                        {
+                            "value2": "RATE_LIMIT",
+                            "output": 0
+                        },
+                        {
+                            "value2": "AUTH_ERROR",
+                            "output": 1
+                        },
+                        {
+                            "value2": "TIMEOUT",
+                            "output": 2
+                        },
+                        {
+                            "value2": "CRITICAL",
+                            "output": 3
+                        }
+                    ]
+                }
+            },
+            "id": "error-classifier",
+            "name": "Error Classifier",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3,
+            "position": [
+                250,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "amount": 60,
+                "unit": "seconds"
+            },
+            "id": "rate-limit-handler",
+            "name": "Rate Limit Wait",
+            "type": "n8n-nodes-base.wait",
+            "typeVersion": 1,
+            "position": [
+                500,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "channel": "={{ $env.SLACK_ALERTS_CHANNEL }}",
+                "text": "=🚨 *Grain Workflow Hatası*\n*Workflow:* {{ $json.workflow.name }}\n*Hata:* {{ $json.error.message }}\n*Zaman:* {{ $now.toISO() }}"
+            },
+            "id": "slack-alert",
+            "name": "Slack Alert",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                750,
+                400
+            ]
+        }
+    ],
+    "connections": {
+        "Error Classifier": {
+            "main": [
+                [
+                    {
+                        "node": "Rate Limit Wait",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Slack Alert",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Slack Alert",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Slack Alert",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

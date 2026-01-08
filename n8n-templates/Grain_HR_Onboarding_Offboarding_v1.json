@@ -1,0 +1,143 @@
+{
+  "name": "Grain HR Onboarding Offboarding v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-2svlkssna",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hr-onboard",
+        "options": {}
+      },
+      "id": "webhook-onboard",
+      "name": "New Hire",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "hr-onboarding"
+    },
+    {
+      "parameters": {
+        "channel": "it-requests",
+        "text": "=🆕 **New Hire Setup Required**\n\nName: {{ $json.name }}\nDepartment: {{ $json.department }}\nStart Date: {{ $json.start_date }}\n\n👉 Please provision:\n• Email account\n• Slack access\n• Relevant tool licenses",
+        "otherOptions": {}
+      },
+      "id": "it-request",
+      "name": "IT Setup Request",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Hoş Geldiniz! İlk Gününüze Hazırlık",
+        "message": "Merhaba {{ $json.name }},\n\nEkibimize hoş geldiniz!\n\nBaşlangıç Tarihi: {{ $json.start_date }}\nYöneticiniz: {{ $json.manager }}\n\nİlk günde yapılacaklar:\n1. IT'den hesap bilgilerinizi alın\n2. Ekip toplantısına katılın\n3. Onboarding dökümanlarını inceleyin",
+        "options": {}
+      },
+      "id": "welcome-email",
+      "name": "Welcome Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        500,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hr-offboard",
+        "options": {}
+      },
+      "id": "webhook-offboard",
+      "name": "Employee Exit",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        700
+      ],
+      "webhookId": "hr-offboarding"
+    },
+    {
+      "parameters": {
+        "channel": "it-requests",
+        "text": "=🚪 **Employee Exit - Account Deactivation Required**\n\nName: {{ $json.name }}\nLast Day: {{ $json.last_day }}\n\n⚠️ Please deactivate:\n• All accounts\n• Revoke Slack access\n• Remove from shared resources",
+        "otherOptions": {}
+      },
+      "id": "deactivation-request",
+      "name": "Deactivation Request",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        500,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "New Hire": {
+      "main": [
+        [
+          {
+            "node": "IT Setup Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Employee Exit": {
+      "main": [
+        [
+          {
+            "node": "Deactivation Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

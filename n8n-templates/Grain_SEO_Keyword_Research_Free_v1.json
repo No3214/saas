@@ -1,0 +1,318 @@
+{
+  "name": "Grain SEO Keyword Research Free v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-b9oinovqz",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🔍 SEO Keyword Research (Free)\nAI-powered keyword research using Serper API + GPT-4o. No SEMrush required!",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "keyword-research",
+        "options": {}
+      },
+      "id": "webhook-research",
+      "name": "Research Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        400
+      ],
+      "webhookId": "keyword-research"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "={{ $env.SERPER_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"q\": \"{{ $json.keyword }}\", \"gl\": \"{{ $json.country || 'us' }}\", \"num\": 20 }"
+      },
+      "id": "serper-search",
+      "name": "Serper SERP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "={{ $env.SERPER_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"q\": \"{{ $('Research Request').first().json.keyword }}\", \"type\": \"autocomplete\" }"
+      },
+      "id": "serper-autocomplete",
+      "name": "Related Keywords",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const serp = $('Serper SERP').first().json;\nconst autocomplete = $('Related Keywords').first().json;\nconst keyword = $('Research Request').first().json.keyword;\n\nconst competitors = (serp.organic || []).slice(0, 10).map(r => ({\n  position: r.position,\n  title: r.title,\n  url: r.link,\n  snippet: r.snippet\n}));\n\nconst relatedKeywords = (autocomplete.suggestions || []).slice(0, 10);\nconst peopleAlsoAsk = (serp.peopleAlsoAsk || []).map(p => p.question);\n\nreturn {\n  json: {\n    keyword: keyword,\n    serp_results: competitors.length,\n    top_competitors: competitors,\n    related_keywords: relatedKeywords,\n    people_also_ask: peopleAlsoAsk,\n    search_features: {\n      has_featured_snippet: !!serp.answerBox,\n      has_knowledge_graph: !!serp.knowledgeGraph,\n      has_local_pack: !!serp.localResults\n    }\n  }\n};"
+      },
+      "id": "combine-data",
+      "name": "Combine SERP Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an SEO expert. Analyze the SERP data and provide:\n\n1. Keyword difficulty estimate (Easy/Medium/Hard) based on competitor quality\n2. Content type recommendation (blog, product page, tool, etc.)\n3. Estimated monthly search volume range\n4. 5 long-tail keyword suggestions\n5. Content outline for ranking\n\nReturn JSON format."
+            },
+            {
+              "role": "user",
+              "content": "Keyword: {{ $json.keyword }}\n\nTop 10 SERP Results:\n{{ JSON.stringify($json.top_competitors, null, 2) }}\n\nRelated Keywords: {{ $json.related_keywords.join(', ') }}\n\nPeople Also Ask: {{ $json.people_also_ask.join(', ') }}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "ai-analyze",
+      "name": "AI SEO Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Keyword_Research"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "keyword": "={{ $('Research Request').first().json.keyword }}",
+            "difficulty": "={{ $json.difficulty }}",
+            "volume_range": "={{ $json.volume_estimate }}",
+            "content_type": "={{ $json.content_type }}",
+            "longtail_keywords": "={{ $json.long_tail_keywords?.join('; ') }}",
+            "researched_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "save-research",
+      "name": "Save Research",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1250,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        500
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        750,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#seo-alerts",
+        "text": "=🚨 Keyword Research Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        750
+      ]
+    }
+  ],
+  "connections": {
+    "Research Request": {
+      "main": [
+        [
+          {
+            "node": "Serper SERP",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Related Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serper SERP": {
+      "main": [
+        [
+          {
+            "node": "Combine SERP Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Related Keywords": {
+      "main": [
+        [
+          {
+            "node": "Combine SERP Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine SERP Data": {
+      "main": [
+        [
+          {
+            "node": "AI SEO Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI SEO Analysis": {
+      "main": [
+        [
+          {
+            "node": "Save Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Research": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

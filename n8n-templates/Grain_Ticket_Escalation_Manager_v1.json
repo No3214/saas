@@ -1,0 +1,312 @@
+{
+  "name": "Grain Ticket Escalation Manager v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-0lvboj0tk",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🎫 Ticket Escalation Manager\nMonitors support tickets and auto-escalates based on SLA breaches and priority.",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "check-trigger",
+      "name": "Check Every 15 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Support_Tickets"
+        }
+      },
+      "id": "get-tickets",
+      "name": "Get Open Tickets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticket = $input.item.json;\nconst createdAt = new Date(ticket.created_at);\nconst now = new Date();\nconst hoursOpen = (now - createdAt) / (1000 * 60 * 60);\n\n// SLA thresholds by priority\nconst slaHours = {\n  'critical': 2,\n  'high': 4,\n  'medium': 8,\n  'low': 24\n};\n\nconst priority = ticket.priority || 'medium';\nconst slaBreached = hoursOpen > slaHours[priority];\nconst slaPercentage = Math.round((hoursOpen / slaHours[priority]) * 100);\n\nlet escalationLevel = 'none';\nif (slaPercentage >= 150) escalationLevel = 'manager';\nelse if (slaPercentage >= 100) escalationLevel = 'senior';\nelse if (slaPercentage >= 80) escalationLevel = 'warning';\n\nreturn {\n  json: {\n    ...ticket,\n    hours_open: Math.round(hoursOpen * 10) / 10,\n    sla_hours: slaHours[priority],\n    sla_breached: slaBreached,\n    sla_percentage: slaPercentage,\n    escalation_level: escalationLevel,\n    needs_escalation: escalationLevel !== 'none'\n  }\n};"
+      },
+      "id": "calc-sla",
+      "name": "Calculate SLA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.needs_escalation }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "needs-escalation",
+      "name": "Needs Escalation?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.escalation_level }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "manager",
+              "output": 0
+            },
+            {
+              "value2": "senior",
+              "output": 1
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "id": "route-escalation",
+      "name": "Route Escalation",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#support-managers",
+        "text": "=🚨 **CRITICAL ESCALATION**\n\n🎫 Ticket: {{ $json.ticket_id }}\n⏱️ Open: {{ $json.hours_open }} hours (SLA: {{ $json.sla_hours }}h)\n📊 SLA: {{ $json.sla_percentage }}%\n\nSubject: {{ $json.subject }}\nCustomer: {{ $json.customer_name }}\n\n_Immediate action required!_",
+        "otherOptions": {}
+      },
+      "id": "notify-manager",
+      "name": "Notify Manager",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#support-escalations",
+        "text": "=⚠️ **Ticket Escalated to Senior**\n\n🎫 Ticket: {{ $json.ticket_id }}\n⏱️ SLA: {{ $json.sla_percentage }}%\nSubject: {{ $json.subject }}",
+        "otherOptions": {}
+      },
+      "id": "notify-senior",
+      "name": "Notify Senior",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#support",
+        "text": "=⚡ **SLA Warning**\n\nTicket {{ $json.ticket_id }} at {{ $json.sla_percentage }}% of SLA",
+        "otherOptions": {}
+      },
+      "id": "notify-warning",
+      "name": "SLA Warning",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        600
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        750,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Ticket Escalation Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        650
+      ]
+    }
+  ],
+  "connections": {
+    "Check Every 15 Min": {
+      "main": [
+        [
+          {
+            "node": "Get Open Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Open Tickets": {
+      "main": [
+        [
+          {
+            "node": "Calculate SLA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate SLA": {
+      "main": [
+        [
+          {
+            "node": "Needs Escalation?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Escalation?": {
+      "main": [
+        [
+          {
+            "node": "Route Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Escalation": {
+      "main": [
+        [
+          {
+            "node": "Notify Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Senior",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SLA Warning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

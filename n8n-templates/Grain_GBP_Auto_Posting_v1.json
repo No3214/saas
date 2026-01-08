@@ -1,0 +1,349 @@
+{
+  "name": "Grain GBP Auto Posting v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-o86djvbau",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 1,3,5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-post",
+      "name": "Schedule Post",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        200,
+        400
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {},
+      "id": "webhook-post",
+      "name": "Manual Post",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        600
+      ],
+      "webhookId": "gbp-post"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GBP_Content_Calendar"
+        },
+        "options": {}
+      },
+      "id": "get-content",
+      "name": "Get Content",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        400,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "scheduled",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.scheduled_date }}",
+              "rightValue": "={{ $now.format('YYYY-MM-DD') }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-today",
+      "name": "Filter Today",
+      "type": "n8n-nodes-base.filter",
+      "position": [
+        600,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Google Business Profile postu yaz. Local SEO için optimize et.\n\nKurallar:\n- Max 1500 karakter\n- CTA ekle (Rezervasyon yap, Ara, Ziyaret et)\n- Emoji kullan ama abartma\n- Konum bazlı kelimeler ekle\n\nJSON: {\"summary\": \"post metni\", \"cta_type\": \"BOOK/CALL/LEARN_MORE\"}"
+            },
+            {
+              "role": "user",
+              "content": "=Business: {{ $json.business_name }}\nTopic: {{ $json.topic }}\nType: {{ $json.post_type }}\nLocation: {{ $json.location }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-generate",
+      "name": "AI Generate",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        800,
+        400
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mybusiness.googleapis.com/v4/accounts/{{ $env.GBP_ACCOUNT_ID }}/locations/{{ $env.GBP_LOCATION_ID }}/localPosts",
+        "authentication": "oAuth2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"languageCode\": \"tr\",\n  \"summary\": \"{{ $('AI Generate').first().json.message.content.summary }}\",\n  \"callToAction\": {\n    \"actionType\": \"{{ $('AI Generate').first().json.message.content.cta_type }}\",\n    \"url\": \"{{ $json.cta_url || $env.BUSINESS_WEBSITE }}\"\n  },\n  \"topicType\": \"STANDARD\"\n}"
+      },
+      "id": "post-to-gbp",
+      "name": "Post to GBP",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1000,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GBP_Content_Calendar"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "published",
+            "published_at": "={{ $now.toISO() }}",
+            "post_id": "={{ $('Post to GBP').first().json.name }}"
+          }
+        }
+      },
+      "id": "update-status",
+      "name": "Update Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        1200,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "channel": "#local-seo",
+        "text": "=✅ *GBP Post Yayınlandı*\n\n📍 {{ $json.business_name }}\n📝 {{ $json.topic }}\n\n_Google Maps'te görünür oldu._",
+        "otherOptions": {}
+      },
+      "id": "notify",
+      "name": "Notify",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1200,
+        600
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "content": "## 📍 Local SEO Automation\nPosts to Google Business Profile on Mon/Wed/Fri at 10 AM. AI generates optimized content.",
+        "height": 100,
+        "width": 300,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        250
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        600,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 GBP Posting Error\n\nNode: {{ $json.execution.lastNodeExecuted }}\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        800,
+        750
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Post": {
+      "main": [
+        [
+          {
+            "node": "Get Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Post": {
+      "main": [
+        [
+          {
+            "node": "Get Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Content": {
+      "main": [
+        [
+          {
+            "node": "Filter Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Today": {
+      "main": [
+        [
+          {
+            "node": "AI Generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate": {
+      "main": [
+        [
+          {
+            "node": "Post to GBP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to GBP": {
+      "main": [
+        [
+          {
+            "node": "Update Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status": {
+      "main": [
+        [
+          {
+            "node": "Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "local-seo"
+    },
+    {
+      "name": "gbp"
+    },
+    {
+      "name": "hospitality"
+    }
+  ]
+}

@@ -1,0 +1,378 @@
+{
+  "name": "Grain Competitor Monitoring Hub v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-670g9elpu",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🔍 Competitor Monitoring Hub\nTracks competitor pricing, features, content, and market positioning.",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-check",
+      "name": "Weekly Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Competitors"
+        }
+      },
+      "id": "get-competitors",
+      "name": "Get Competitors",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"q\": \"{{ $json.competitor_name }} pricing features news\", \"gl\": \"tr\", \"num\": 10 }"
+      },
+      "id": "search-competitor",
+      "name": "Search Competitor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        750,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Analyze competitor search results and extract:\n\n1. Recent news/announcements\n2. Pricing changes detected\n3. New features mentioned\n4. Market positioning shifts\n5. Sentiment (positive/negative/neutral)\n\nReturn JSON:\n{\n  \"competitor\": \"...\",\n  \"news\": [],\n  \"pricing_changes\": [],\n  \"new_features\": [],\n  \"sentiment\": \"...\",\n  \"threat_level\": \"low/medium/high\",\n  \"recommended_actions\": []\n}"
+            },
+            {
+              "role": "user",
+              "content": "Competitor: {{ $json.competitor_name }}\n\nSearch Results:\n{{ JSON.stringify($json.organic?.slice(0, 5)) }}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "ai-analyze",
+      "name": "AI Analyze",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.threat_level }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "is-high-threat",
+      "name": "High Threat?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#competitive-intel",
+        "text": "=🚨 **High Threat Competitor Alert**\n\n🏢 Competitor: {{ $json.competitor }}\n⚠️ Threat Level: HIGH\n\n📰 News:\n{{ $json.news.slice(0, 3).map(n => '• ' + n).join('\\n') }}\n\n🆕 New Features:\n{{ $json.new_features.map(f => '• ' + f).join('\\n') }}\n\n💡 Recommended Actions:\n{{ $json.recommended_actions.map(a => '• ' + a).join('\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "alert-high-threat",
+      "name": "Alert High Threat",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Competitor_Intel"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "competitor": "={{ $json.competitor }}",
+            "threat_level": "={{ $json.threat_level }}",
+            "sentiment": "={{ $json.sentiment }}",
+            "news_summary": "={{ $json.news.slice(0, 3).join('; ') }}",
+            "new_features": "={{ $json.new_features.join('; ') }}",
+            "checked_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "save-intel",
+      "name": "Save Intel",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "add-competitor",
+        "options": {}
+      },
+      "id": "webhook-add",
+      "name": "Add Competitor",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        650
+      ],
+      "webhookId": "add-competitor"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Competitors"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "competitor_name": "={{ $json.competitor_name }}",
+            "website": "={{ $json.website }}",
+            "category": "={{ $json.category }}",
+            "added_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "save-competitor",
+      "name": "Save Competitor",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        650
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        750,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Competitor Monitoring Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        800
+      ]
+    }
+  ],
+  "connections": {
+    "Weekly Check": {
+      "main": [
+        [
+          {
+            "node": "Get Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Competitors": {
+      "main": [
+        [
+          {
+            "node": "Search Competitor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Competitor": {
+      "main": [
+        [
+          {
+            "node": "AI Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analyze": {
+      "main": [
+        [
+          {
+            "node": "High Threat?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Threat?": {
+      "main": [
+        [
+          {
+            "node": "Alert High Threat",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Intel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Intel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Competitor": {
+      "main": [
+        [
+          {
+            "node": "Save Competitor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

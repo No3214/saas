@@ -1,0 +1,323 @@
+{
+  "name": "Grain Keyword Gap Analysis v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-0j0lkaneo",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {},
+      "id": "webhook-gap",
+      "name": "Gap Analysis Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        400
+      ],
+      "webhookId": "keyword-gap"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.item.json;\nreturn {\n  json: {\n    our_domain: input.our_domain,\n    competitors: input.competitors || [],\n    target_keywords: input.keywords || [],\n    country: input.country || 'tr'\n  }\n};"
+      },
+      "id": "normalize",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        400,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent('sc-domain:' + $json.our_domain) }}/searchAnalytics/query",
+        "authentication": "oAuth2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"startDate\": \"{{ $now.minus({days: 30}).format('YYYY-MM-DD') }}\",\n  \"endDate\": \"{{ $now.format('YYYY-MM-DD') }}\",\n  \"dimensions\": [\"query\"],\n  \"rowLimit\": 500\n}"
+      },
+      "id": "gsc-our-keywords",
+      "name": "GSC Our Keywords",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        600,
+        300
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"q\": \"site:{{ $json.competitors[0] }}\", \"gl\": \"{{ $json.country }}\", \"num\": 100}"
+      },
+      "id": "competitor-keywords",
+      "name": "Competitor Keywords",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        600,
+        500
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const ourKeywords = $('GSC Our Keywords').first()?.json?.rows?.map(r => r.keys[0].toLowerCase()) || [];\nconst competitorResults = $('Competitor Keywords').first()?.json?.organic || [];\n\n// Extract keywords from competitor titles/snippets\nconst competitorKeywords = new Set();\ncompetitorResults.forEach(r => {\n  const words = (r.title + ' ' + r.snippet).toLowerCase().split(/\\s+/);\n  words.filter(w => w.length > 3).forEach(w => competitorKeywords.add(w));\n});\n\n// Find gap (competitor has, we don't)\nconst ourSet = new Set(ourKeywords);\nconst gaps = [...competitorKeywords].filter(k => !ourSet.has(k)).slice(0, 50);\n\nreturn {\n  json: {\n    our_keyword_count: ourKeywords.length,\n    competitor_keyword_count: competitorKeywords.size,\n    keyword_gaps: gaps,\n    gap_count: gaps.length\n  }\n};"
+      },
+      "id": "find-gaps",
+      "name": "Find Gaps",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        800,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "SEO uzmanısın. Keyword gap listesini analiz et ve önceliklendir.\n\nJSON döndür:\n{\n  \"high_priority\": [{\"keyword\": \"\", \"reason\": \"\", \"content_type\": \"blog/page/category\"}],\n  \"medium_priority\": [],\n  \"quick_wins\": [],\n  \"content_plan\": [{\"title\": \"\", \"target_keyword\": \"\", \"word_count\": 0}]\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Keyword Gaps Found: {{ $json.gap_count }}\n\nTop Gaps:\n{{ $json.keyword_gaps.slice(0, 30).join(', ') }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-prioritize",
+      "name": "AI Prioritize",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        1000,
+        400
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Keyword_Gap_Analysis"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "analyzed_at": "={{ $now.toISO() }}",
+            "our_keywords": "={{ $json.our_keyword_count }}",
+            "gaps_found": "={{ $json.gap_count }}",
+            "top_gaps": "={{ $json.keyword_gaps.slice(0, 20).join(', ') }}"
+          }
+        }
+      },
+      "id": "save-analysis",
+      "name": "Save Analysis",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        1200,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "channel": "#seo-opportunities",
+        "text": "=🎯 *Keyword Gap Analizi Tamamlandı*\n\n📊 Bizim Keyword: {{ $json.our_keyword_count }}\n🔍 Bulunan Açık: {{ $json.gap_count }}\n\n*En Önemli Fırsatlar:*\n{{ $json.keyword_gaps.slice(0, 10).map((k, i) => (i+1) + '. ' + k).join('\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "notify",
+      "name": "Notify",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1200,
+        600
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "content": "## 🎯 Keyword Gap Analysis\nCompares your GSC keywords vs competitor rankings to find content opportunities.",
+        "height": 100,
+        "width": 300,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        250
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        600,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Keyword Gap Error\n\nNode: {{ $json.execution.lastNodeExecuted }}\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        800,
+        750
+      ]
+    }
+  ],
+  "connections": {
+    "Gap Analysis Request": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "GSC Our Keywords",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Competitor Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GSC Our Keywords": {
+      "main": [
+        [
+          {
+            "node": "Find Gaps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Competitor Keywords": {
+      "main": [
+        [
+          {
+            "node": "Find Gaps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Gaps": {
+      "main": [
+        [
+          {
+            "node": "AI Prioritize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Prioritize": {
+      "main": [
+        [
+          {
+            "node": "Save Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Analysis": {
+      "main": [
+        [
+          {
+            "node": "Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "seo"
+    },
+    {
+      "name": "competitor"
+    },
+    {
+      "name": "keywords"
+    }
+  ]
+}

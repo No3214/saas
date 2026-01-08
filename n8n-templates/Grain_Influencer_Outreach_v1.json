@@ -1,0 +1,166 @@
+{
+  "name": "Grain Influencer Outreach v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-mhuyholvd",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "influencer-campaign",
+        "options": {}
+      },
+      "id": "webhook-campaign",
+      "name": "New Campaign",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "influencer-outreach"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Influencer_List"
+        }
+      },
+      "id": "get-influencers",
+      "name": "Get Influencer List",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Write a personalized influencer outreach DM for {{ $json.influencer_name }}. Keep it casual, friendly, under 150 chars. Mention their niche: {{ $json.niche }}."
+            },
+            {
+              "role": "user",
+              "content": "Campaign: {{ $json.campaign_name }}\nProduct: {{ $json.product }}"
+            }
+          ]
+        },
+        "jsonOutput": false
+      },
+      "id": "ai-dm",
+      "name": "Generate DM",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Influencer_List"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "outreach_sent",
+            "last_contacted": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "update-status",
+      "name": "Update Status",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "New Campaign": {
+      "main": [
+        [
+          {
+            "node": "Get Influencer List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Influencer List": {
+      "main": [
+        [
+          {
+            "node": "Generate DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate DM": {
+      "main": [
+        [
+          {
+            "node": "Update Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

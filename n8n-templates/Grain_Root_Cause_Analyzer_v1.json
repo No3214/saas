@@ -1,0 +1,171 @@
+{
+    "name": "Grain_Root_Cause_Analyzer_v1",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "## 🕵️ Root Cause Analyzer\nAutomated deep-dive analysis into metrics changes.",
+                "height": 100,
+                "width": 450,
+                "color": 5
+            },
+            "id": "note-overview",
+            "name": "Note: Overview",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                180,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "values": {
+                    "string": [
+                        {
+                            "name": "tenant_id",
+                            "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+                        },
+                        {
+                            "name": "dry_run",
+                            "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+                        },
+                        {
+                            "name": "webhook_prefix",
+                            "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/grain-root-cause-analyzer-v1"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "grain-config",
+            "name": "GRAIN_CONFIG",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 2,
+            "position": [
+                180,
+                350
+            ],
+            "notesInFlow": true,
+            "notes": "🔧 Central Config"
+        },
+        {
+            "parameters": {
+                "mode": "multiplex"
+            },
+            "id": "merge-data",
+            "name": "Collect Multi Source Data",
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 2,
+            "position": [
+                450,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "model": "gpt-4o",
+                "prompt": "Analyze root cause for the following metrics change.\nData: {{ JSON.stringify($input.all()) }}\n\nOutput JSON with root_causes[], correlations[], and recommendations[]. "
+            },
+            "id": "ai-analysis",
+            "name": "AI Root Cause Analysis",
+            "type": "@n8n/n8n-nodes-langchain.openAi",
+            "typeVersion": 1,
+            "position": [
+                700,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "page",
+                "title": "Root Cause Analysis - {{ $now.toFormat('yyyy-MM-dd') }}",
+                "content": "={{ $json.response }}"
+            },
+            "id": "notion-report",
+            "name": "Generate Notion Report",
+            "type": "n8n-nodes-base.notion",
+            "typeVersion": 2,
+            "position": [
+                950,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "workflow"
+            },
+            "type": "n8n-nodes-base.errorTrigger",
+            "typeVersion": 1,
+            "position": [
+                180,
+                550
+            ],
+            "id": "error-trigger",
+            "name": "Error Trigger"
+        },
+        {
+            "parameters": {
+                "workflowId": "Grain_Sub_Error_Handler"
+            },
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1,
+            "position": [
+                400,
+                550
+            ],
+            "id": "error-handler",
+            "name": "Error Handler"
+        }
+    ],
+    "connections": {
+        "GRAIN_CONFIG": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Merge Data": {
+            "main": [
+                [
+                    {
+                        "node": "AI Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Analysis": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Notion Report",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Error Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Error Handler",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "meta": {
+        "templateId": "Grain_Root_Cause_Analyzer_v1",
+        "category": "ai-automation",
+        "tier": "high"
+    }
+}

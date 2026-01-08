@@ -1,0 +1,284 @@
+{
+  "name": "Grain Contract Review Compliance v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-ukjgx4vqm",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 📄 Contract Review & Compliance\nAI-powered contract analysis for risk detection, clause extraction, and compliance checks.",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "contract-review",
+        "options": {}
+      },
+      "id": "webhook-contract",
+      "name": "Contract Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        400
+      ],
+      "webhookId": "contract-review"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.item.json;\nlet contractText = input.contract_text || '';\n\n// If PDF/DOCX, extract would happen here\nif (input.file_url) {\n  contractText = `[Document from: ${input.file_url}]`;\n}\n\nreturn {\n  json: {\n    contract_id: input.contract_id || `CON-${Date.now()}`,\n    contract_text: contractText,\n    contract_type: input.contract_type || 'general',\n    review_depth: input.review_depth || 'standard'\n  }\n};"
+      },
+      "id": "extract-text",
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a legal contract analyst. Analyze the contract and return a structured JSON report:\n\n{\n  \"risk_score\": 0-100,\n  \"risk_level\": \"LOW/MEDIUM/HIGH/CRITICAL\",\n  \"key_clauses\": [\n    {\"clause\": \"...\", \"type\": \"liability/termination/payment/ip\", \"risk\": \"low/medium/high\"}\n  ],\n  \"compliance_issues\": [],\n  \"missing_clauses\": [],\n  \"recommendations\": [],\n  \"summary\": \"2-3 sentence summary\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "Contract Type: {{ $json.contract_type }}\nReview Depth: {{ $json.review_depth }}\n\nContract Text:\n{{ $json.contract_text.substring(0, 10000) }}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "ai-analyze",
+      "name": "AI Analyze Contract",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        750,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.risk_level }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "CRITICAL",
+              "output": 0
+            },
+            {
+              "value2": "HIGH",
+              "output": 1
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "id": "risk-router",
+      "name": "Risk Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#legal-alerts",
+        "text": "=🚨 **Critical Contract Risk Detected**\n\nContract: {{ $json.contract_id }}\nRisk Score: {{ $json.risk_score }}/100\n\n⚠️ Issues:\n{{ $json.compliance_issues.join('\\n') }}\n\n_Immediate legal review required!_",
+        "otherOptions": {}
+      },
+      "id": "critical-alert",
+      "name": "Critical Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Contract_Reviews"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "contract_id": "={{ $json.contract_id }}",
+            "risk_score": "={{ $json.risk_score }}",
+            "risk_level": "={{ $json.risk_level }}",
+            "summary": "={{ $json.summary }}",
+            "reviewed_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "save-review",
+      "name": "Save Review",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1250,
+        500
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        750,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Contract Review Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        650
+      ]
+    }
+  ],
+  "connections": {
+    "Contract Upload": {
+      "main": [
+        [
+          {
+            "node": "Extract Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text": {
+      "main": [
+        [
+          {
+            "node": "AI Analyze Contract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analyze Contract": {
+      "main": [
+        [
+          {
+            "node": "Risk Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Router": {
+      "main": [
+        [
+          {
+            "node": "Critical Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

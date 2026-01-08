@@ -1,0 +1,717 @@
+{
+  "name": "Grain Customer Onboarding Automation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-g6xqlpyka",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {},
+      "id": "webhook-new-customer",
+      "name": "New Customer Signup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        400
+      ],
+      "webhookId": "customer-signup"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.STRIPE_API_URL }}/v1/subscriptions/{{ $json.subscription_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "get-subscription",
+      "name": "Get Subscription Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        400,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.item.json;\nconst subscription = $('Get Subscription Details').first()?.json || {};\n\nconst customer = {\n  customer_id: input.customer_id || input.id,\n  email: input.email,\n  name: input.name || input.company_name,\n  company: input.company_name || input.name,\n  plan: subscription.plan?.nickname || input.plan || 'basic',\n  industry: input.industry || 'general',\n  team_size: input.team_size || '1-10',\n  role: input.role || 'user',\n  signup_date: new Date().toISOString(),\n  mrr: (subscription.plan?.amount || 0) / 100,\n  onboarding_stage: 'welcome',\n  onboarding_progress: 0,\n  milestones: {\n    welcome_email: false,\n    account_setup: false,\n    first_login: false,\n    first_action: false,\n    team_invited: false,\n    integration_connected: false,\n    first_workflow_created: false\n  }\n};\n\n// Determine onboarding path based on plan and industry\nlet onboardingPath = 'standard';\nif (customer.plan === 'enterprise') onboardingPath = 'enterprise';\nelse if (customer.industry === 'agency') onboardingPath = 'agency';\nelse if (customer.industry === 'ecommerce') onboardingPath = 'ecommerce';\nelse if (customer.industry === 'hospitality') onboardingPath = 'hospitality';\n\ncustomer.onboarding_path = onboardingPath;\n\nreturn { json: customer };"
+      },
+      "id": "create-customer-profile",
+      "name": "Create Customer Profile",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        600,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Customer_Onboarding"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customer_id": "={{ $json.customer_id }}",
+            "email": "={{ $json.email }}",
+            "name": "={{ $json.name }}",
+            "company": "={{ $json.company }}",
+            "plan": "={{ $json.plan }}",
+            "industry": "={{ $json.industry }}",
+            "onboarding_path": "={{ $json.onboarding_path }}",
+            "onboarding_stage": "={{ $json.onboarding_stage }}",
+            "onboarding_progress": "={{ $json.onboarding_progress }}",
+            "signup_date": "={{ $json.signup_date }}",
+            "mrr": "={{ $json.mrr }}"
+          }
+        }
+      },
+      "id": "save-to-sheet",
+      "name": "Save to Onboarding Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        800,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a customer success specialist creating personalized welcome messages. Generate a warm, engaging welcome email that:\n1. Addresses the customer by name\n2. References their industry/use case\n3. Highlights 3 key features relevant to them\n4. Provides clear next steps\n5. Sets expectations for the onboarding journey\n\nReturn JSON with:\n- subject: Email subject line\n- greeting: Personalized greeting\n- intro: 2-3 sentences welcoming them\n- features: Array of 3 relevant features with descriptions\n- next_steps: Array of 3 action items\n- closing: Warm closing with support info"
+            },
+            {
+              "role": "user",
+              "content": "=Create a welcome email for:\nName: {{ $json.name }}\nCompany: {{ $json.company }}\nPlan: {{ $json.plan }}\nIndustry: {{ $json.industry }}\nTeam Size: {{ $json.team_size }}\nRole: {{ $json.role }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-welcome-email",
+      "name": "AI Generate Welcome Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        1000,
+        400
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "jsCode": "const customer = $('Create Customer Profile').first().json;\nconst aiResponse = $input.item.json.message?.content;\n\nlet emailContent;\ntry {\n  emailContent = JSON.parse(aiResponse);\n} catch (e) {\n  emailContent = {\n    subject: `Welcome to Grain, ${customer.name}! 🎉`,\n    greeting: `Hi ${customer.name},`,\n    intro: `Welcome to Grain! We're thrilled to have ${customer.company} on board. Your journey to automation excellence starts now.`,\n    features: [\n      { title: 'Multi-Platform Publishing', description: 'Publish content across 9+ platforms simultaneously' },\n      { title: 'AI Content Generation', description: 'Create stunning visuals and copy with AI' },\n      { title: 'Analytics Dashboard', description: 'Track performance across all channels' }\n    ],\n    next_steps: [\n      'Complete your profile setup',\n      'Connect your first social account',\n      'Create your first automated workflow'\n    ],\n    closing: 'Need help? Reply to this email or chat with us anytime.'\n  };\n}\n\nreturn {\n  json: {\n    ...customer,\n    email_content: emailContent\n  }\n};"
+      },
+      "id": "parse-email",
+      "name": "Parse Email Content",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1200,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.email_content.subject }}",
+        "message": "={{ $json.email_content.greeting }}\n\n{{ $json.email_content.intro }}\n\n🚀 Key Features for You:\n\n{{ $json.email_content.features.map((f, i) => '• ' + f.title + ': ' + f.description).join('\\n') }}\n\n📋 Your Next Steps:\n\n{{ $json.email_content.next_steps.map((s, i) => (i+1) + '. ' + s).join('\\n') }}\n\n{{ $json.email_content.closing }}\n\nBest,\nThe Grain Team",
+        "options": {}
+      },
+      "id": "send-welcome-email",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        1400,
+        400
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "firstName": "={{ $json.name.split(' ')[0] }}",
+          "lastName": "={{ $json.name.split(' ').slice(1).join(' ') }}",
+          "company": "={{ $json.company }}",
+          "jobTitle": "={{ $json.role }}",
+          "lifecycleStage": "customer"
+        },
+        "options": {}
+      },
+      "id": "hubspot-create",
+      "name": "Create HubSpot Contact",
+      "type": "n8n-nodes-base.hubspot",
+      "position": [
+        1600,
+        300
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#new-customers",
+        "text": "=🎉 *New Customer Signed Up!*\n\n👤 *Name:* {{ $json.name }}\n🏢 *Company:* {{ $json.company }}\n💼 *Plan:* {{ $json.plan }}\n🏭 *Industry:* {{ $json.industry }}\n💰 *MRR:* ${{ $json.mrr }}\n\n📍 *Onboarding Path:* {{ $json.onboarding_path }}\n\n_Welcome email sent. Onboarding sequence started._",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1600,
+        500
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "daily-check",
+      "name": "Daily Progress Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        200,
+        700
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Customer_Onboarding"
+        },
+        "options": {
+          "range": "A:Z"
+        }
+      },
+      "id": "get-onboarding",
+      "name": "Get Onboarding Customers",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        400,
+        700
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.onboarding_progress }}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ]
+        }
+      },
+      "id": "filter-incomplete",
+      "name": "Filter Incomplete Onboarding",
+      "type": "n8n-nodes-base.filter",
+      "position": [
+        600,
+        700
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const customer = $input.item.json;\nconst signupDate = new Date(customer.signup_date);\nconst now = new Date();\nconst daysSinceSignup = Math.floor((now - signupDate) / (1000 * 60 * 60 * 24));\n\n// Determine which email to send based on progress and days\nlet emailType = null;\nlet shouldSend = false;\n\nif (daysSinceSignup === 1 && customer.onboarding_progress < 20) {\n  emailType = 'day1_reminder';\n  shouldSend = true;\n} else if (daysSinceSignup === 3 && customer.onboarding_progress < 40) {\n  emailType = 'day3_tips';\n  shouldSend = true;\n} else if (daysSinceSignup === 5 && customer.onboarding_progress < 60) {\n  emailType = 'day5_help';\n  shouldSend = true;\n} else if (daysSinceSignup === 7 && customer.onboarding_progress < 80) {\n  emailType = 'day7_checkin';\n  shouldSend = true;\n} else if (daysSinceSignup === 14 && customer.onboarding_progress < 100) {\n  emailType = 'day14_final';\n  shouldSend = true;\n}\n\nreturn {\n  json: {\n    ...customer,\n    days_since_signup: daysSinceSignup,\n    email_type: emailType,\n    should_send: shouldSend\n  }\n};"
+      },
+      "id": "determine-sequence",
+      "name": "Determine Sequence Step",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        800,
+        700
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.should_send }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-should-send",
+      "name": "Should Send Email?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1000,
+        700
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Generate a follow-up onboarding email based on the email type:\n\n- day1_reminder: Friendly reminder to complete setup, offer quick tip\n- day3_tips: Share 3 power user tips, highlight a feature\n- day5_help: Offer personal assistance, share success story\n- day7_checkin: Check in, ask for feedback, offer call\n- day14_final: Final nudge, show what they're missing, offer discount on upgrade\n\nReturn JSON: {subject, body, cta_text, cta_link}"
+            },
+            {
+              "role": "user",
+              "content": "=Email Type: {{ $json.email_type }}\nName: {{ $json.name }}\nCompany: {{ $json.company }}\nProgress: {{ $json.onboarding_progress }}%\nPlan: {{ $json.plan }}\nDays Since Signup: {{ $json.days_since_signup }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-sequence-email",
+      "name": "AI Generate Sequence Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        1200,
+        700
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "jsCode": "const customer = $input.item.json;\nconst aiResponse = $('AI Generate Sequence Email').first()?.json?.message?.content;\n\nlet emailContent;\ntry {\n  emailContent = JSON.parse(aiResponse);\n} catch (e) {\n  const templates = {\n    day1_reminder: {\n      subject: `${customer.name}, ready to get started?`,\n      body: `Hi ${customer.name},\\n\\nWe noticed you haven't completed your setup yet. It only takes 5 minutes!\\n\\nQuick tip: Start by connecting your first social account to unlock all features.`,\n      cta_text: 'Complete Setup',\n      cta_link: 'https://app.grain.com/onboarding'\n    },\n    day3_tips: {\n      subject: '3 tips to supercharge your workflow',\n      body: `Hey ${customer.name},\\n\\nHere are 3 tips our power users swear by:\\n\\n1. Use AI to generate captions in bulk\\n2. Schedule posts for optimal engagement times\\n3. Track competitors to stay ahead\\n\\nTry them today!`,\n      cta_text: 'Try Now',\n      cta_link: 'https://app.grain.com/dashboard'\n    },\n    day5_help: {\n      subject: 'Need a hand?',\n      body: `Hi ${customer.name},\\n\\nWe're here to help! Many customers like ${customer.company} have seen amazing results.\\n\\nWant to schedule a quick 15-min call to get you up and running?`,\n      cta_text: 'Schedule Call',\n      cta_link: 'https://calendly.com/grain-success'\n    },\n    day7_checkin: {\n      subject: `How's it going, ${customer.name}?`,\n      body: `Hey ${customer.name},\\n\\nIt's been a week! How's everything going?\\n\\nWe'd love to hear your feedback or answer any questions.`,\n      cta_text: 'Share Feedback',\n      cta_link: 'https://grain.com/feedback'\n    },\n    day14_final: {\n      subject: 'You're missing out on these features',\n      body: `Hi ${customer.name},\\n\\nYour ${customer.plan} plan includes powerful features you haven't tried yet.\\n\\nLet us show you what you're missing - and here's 20% off your next month to explore!`,\n      cta_text: 'Unlock Features',\n      cta_link: 'https://app.grain.com/upgrade'\n    }\n  };\n  emailContent = templates[customer.email_type] || templates.day1_reminder;\n}\n\nreturn {\n  json: {\n    ...customer,\n    sequence_email: emailContent\n  }\n};"
+      },
+      "id": "parse-sequence-email",
+      "name": "Parse Sequence Email",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1400,
+        700
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.sequence_email.subject }}",
+        "message": "={{ $json.sequence_email.body }}\n\n[{{ $json.sequence_email.cta_text }}]({{ $json.sequence_email.cta_link }})\n\nBest,\nThe Grain Team",
+        "options": {}
+      },
+      "id": "send-sequence-email",
+      "name": "Send Sequence Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        1600,
+        700
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {},
+      "id": "webhook-milestone",
+      "name": "Milestone Completed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        1000
+      ],
+      "webhookId": "onboarding-milestone"
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $input.item.json;\n\nconst milestonePoints = {\n  account_setup: 15,\n  first_login: 10,\n  first_action: 20,\n  team_invited: 15,\n  integration_connected: 20,\n  first_workflow_created: 20\n};\n\nconst milestone = event.milestone;\nconst points = milestonePoints[milestone] || 0;\n\nreturn {\n  json: {\n    customer_id: event.customer_id,\n    email: event.email,\n    milestone: milestone,\n    points_earned: points,\n    completed_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "process-milestone",
+      "name": "Process Milestone",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        400,
+        1000
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Customer_Onboarding"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "onboarding_progress": "={{ $json.points_earned }}",
+            "last_milestone": "={{ $json.milestone }}",
+            "last_milestone_at": "={{ $json.completed_at }}"
+          }
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "update-progress",
+      "name": "Update Progress",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        600,
+        1000
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.milestone }}",
+              "rightValue": "first_workflow_created",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-completed",
+      "name": "Onboarding Complete?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        800,
+        1000
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "🎉 Congratulations! You're all set up!",
+        "message": "You did it!\n\nYou've completed all onboarding milestones. You're now a certified Grain power user!\n\n🏆 Achievement Unlocked: Onboarding Champion\n\nHere's what you can do next:\n• Explore advanced features\n• Join our community\n• Check out success stories\n\nWe're excited to see what you'll create!\n\nBest,\nThe Grain Team",
+        "options": {}
+      },
+      "id": "send-completion-email",
+      "name": "Send Completion Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        1000,
+        900
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "channel": "#customer-success",
+        "text": "=🏆 *Onboarding Complete!*\n\n{{ $json.email }} has completed all milestones!\n\n_Time to celebrate another successful onboarding!_",
+        "otherOptions": {}
+      },
+      "id": "slack-completion",
+      "name": "Celebrate Completion",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1000,
+        1100
+      ],
+      "typeVersion": 2.1
+    }
+  ],
+  "connections": {
+    "New Customer Signup": {
+      "main": [
+        [
+          {
+            "node": "Get Subscription Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Subscription Details": {
+      "main": [
+        [
+          {
+            "node": "Create Customer Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Customer Profile": {
+      "main": [
+        [
+          {
+            "node": "Save to Onboarding Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Onboarding Sheet": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Email Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email Content": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Create HubSpot Contact",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Progress Check": {
+      "main": [
+        [
+          {
+            "node": "Get Onboarding Customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Onboarding Customers": {
+      "main": [
+        [
+          {
+            "node": "Filter Incomplete Onboarding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Incomplete Onboarding": {
+      "main": [
+        [
+          {
+            "node": "Determine Sequence Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Sequence Step": {
+      "main": [
+        [
+          {
+            "node": "Should Send Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send Email?": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Sequence Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Sequence Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Sequence Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Sequence Email": {
+      "main": [
+        [
+          {
+            "node": "Send Sequence Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Milestone Completed": {
+      "main": [
+        [
+          {
+            "node": "Process Milestone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Milestone": {
+      "main": [
+        [
+          {
+            "node": "Update Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Progress": {
+      "main": [
+        [
+          {
+            "node": "Onboarding Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Onboarding Complete?": {
+      "main": [
+        [
+          {
+            "node": "Send Completion Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Celebrate Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "onboarding"
+    },
+    {
+      "name": "customer-success"
+    },
+    {
+      "name": "activation"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+    "name": "Grain_Sub_Notification_Hub",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "## 📢 Sub-workflow: Notification Hub\nMulti-channel router for Slack, Email, WhatsApp, Discord.",
+                "height": 100,
+                "width": 350,
+                "color": 4
+            },
+            "id": "note-overview",
+            "name": "Note: Overview",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                180,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "rules": {
+                    "rules": [
+                        {
+                            "value2": "slack",
+                            "output": 0
+                        },
+                        {
+                            "value2": "email",
+                            "output": 1
+                        },
+                        {
+                            "value2": "whatsapp",
+                            "output": 2
+                        },
+                        {
+                            "value2": "sms",
+                            "output": 3
+                        },
+                        {
+                            "value2": "discord",
+                            "output": 4
+                        }
+                    ]
+                }
+            },
+            "id": "channel-router",
+            "name": "Channel Router",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3,
+            "position": [
+                250,
+                400
+            ]
+        }
+    ],
+    "connections": {}
+}

@@ -1,0 +1,328 @@
+{
+  "name": "Grain Restaurant Reservation v2 (Optimized)",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-o2zt8jtmg",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🟢 Trigger & Schedule\nReceives new reservations via Webhook and checks daily for reminders.",
+        "height": 160,
+        "width": 240,
+        "color": 4
+      },
+      "id": "note-trigger",
+      "name": "Note: Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reservation",
+        "options": {}
+      },
+      "id": "webhook-reservation",
+      "name": "New Reservation",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        400
+      ],
+      "webhookId": "restaurant-reservation"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-reminder",
+      "name": "Daily Reminders",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const res = $input.item.json;\nconst resDate = new Date(res.reservation_date + 'T' + res.reservation_time);\nconst now = new Date();\nconst hoursUntil = (resDate - now) / (1000 * 60 * 60);\n\nreturn {\n  json: {\n    ...res,\n    reservation_datetime: resDate.toISOString(),\n    hours_until: Math.round(hoursUntil),\n    should_confirm: hoursUntil > 20 && hoursUntil < 28,\n    should_remind: hoursUntil > 1 && hoursUntil < 4\n  }\n};"
+      },
+      "id": "calc-timing",
+      "name": "Calculate Timing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🧠 Logic Core\nCalculates time difference to determine if a Confirmation or Reminder message is needed.",
+        "height": 160,
+        "width": 240,
+        "color": 5
+      },
+      "id": "note-logic",
+      "name": "Note: Logic",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WHATSAPP_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $json.phone }}\",\n  \"type\": \"interactive\",\n  \"interactive\": {\n    \"type\": \"button\",\n    \"body\": { \"text\": \"{{ $json.guest_name }} Bey/Hanım, yarın saat {{ $json.reservation_time }} için rezervasyonunuzu onaylıyor musunuz?\" },\n    \"action\": {\n      \"buttons\": [\n        { \"type\": \"reply\", \"reply\": { \"id\": \"confirm_yes\", \"title\": \"✅ Evet\" } },\n        { \"type\": \"reply\", \"reply\": { \"id\": \"confirm_no\", \"title\": \"❌ İptal\" } }\n      ]\n    }\n  }\n}"
+      },
+      "id": "send-confirmation",
+      "name": "Send Confirmation (WA)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "calendarId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "={{ $env.CALENDAR_ID }}"
+        },
+        "start": "={{ $json.reservation_datetime }}",
+        "end": "={{ new Date(new Date($json.reservation_datetime).getTime() + 7200000).toISOString() }}",
+        "additionalFields": {
+          "summary": "=Rezervasyon: {{ $json.guest_name }}",
+          "description": "=Tel: {{ $json.phone }}"
+        }
+      },
+      "id": "google-calendar",
+      "name": "Add to Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 3,
+      "position": [
+        1050,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Reservations"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $json.guest_name }}",
+            "time": "={{ $json.reservation_datetime }}",
+            "status": "Confirmed"
+          }
+        }
+      },
+      "id": "google-sheets",
+      "name": "Save to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "reservations",
+        "text": "=🎉 **New Booking**\nGuest: {{ $json.guest_name }}\nTime: {{ $json.reservation_time }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1450,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        800,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "system-alerts",
+        "text": "=🚨 **Workflow Error**\nWorkflow: Restaurant Reservation\nNode: {{ $json.execution.lastNodeExecuted }}\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-alert",
+      "name": "Alert Dev Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔴 Error Handling\nAny failure in the workflow triggers this section to notify the dev team immediately.",
+        "height": 160,
+        "width": 240,
+        "color": 7
+      },
+      "id": "note-error",
+      "name": "Note: Error",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        760,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "New Reservation": {
+      "main": [
+        [
+          {
+            "node": "Calculate Timing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Reminders": {
+      "main": [
+        [
+          {
+            "node": "Calculate Timing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Timing": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation (WA)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Add to Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Calendar": {
+      "main": [
+        [
+          {
+            "node": "Save to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Sheets": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Alert Dev Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

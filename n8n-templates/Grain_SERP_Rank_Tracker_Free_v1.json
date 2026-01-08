@@ -1,0 +1,312 @@
+{
+  "name": "Grain SERP Rank Tracker Free v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-8x348wqpn",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 📈 SERP Rank Tracker (Free)\nTrack your keyword rankings using Serper API. No Ahrefs required!",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-check",
+      "name": "Daily Rank Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Keywords_to_Track"
+        }
+      },
+      "id": "get-keywords",
+      "name": "Get Keywords",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "={{ $env.SERPER_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"q\": \"{{ $json.keyword }}\", \"gl\": \"{{ $json.country || 'us' }}\", \"num\": 100 }"
+      },
+      "id": "check-serp",
+      "name": "Check SERP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        750,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const serp = $input.item.json;\nconst keyword = $('Get Keywords').first().json.keyword;\nconst targetDomain = $env.TARGET_DOMAIN;\nconst previousPosition = parseInt($('Get Keywords').first().json.last_position) || 0;\n\nconst organic = serp.organic || [];\nlet currentPosition = 0;\nlet rankingUrl = '';\n\nfor (let i = 0; i < organic.length; i++) {\n  if (organic[i].link.includes(targetDomain)) {\n    currentPosition = i + 1;\n    rankingUrl = organic[i].link;\n    break;\n  }\n}\n\nconst change = previousPosition > 0 ? previousPosition - currentPosition : 0;\nconst status = currentPosition === 0 ? 'not_ranking' : change > 0 ? 'improved' : change < 0 ? 'dropped' : 'stable';\n\nreturn {\n  json: {\n    keyword: keyword,\n    current_position: currentPosition,\n    previous_position: previousPosition,\n    change: change,\n    status: status,\n    ranking_url: rankingUrl,\n    checked_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "find-position",
+      "name": "Find Position",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ Math.abs($json.change) }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ]
+        }
+      },
+      "id": "significant-change",
+      "name": "Big Change?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#seo-rankings",
+        "text": "={{ $json.change > 0 ? '📈' : '📉' }} **Rank Change Alert**\n\nKeyword: {{ $json.keyword }}\nPosition: {{ $json.previous_position }} → {{ $json.current_position }} ({{ $json.change > 0 ? '+' : '' }}{{ $json.change }})\nURL: {{ $json.ranking_url }}",
+        "otherOptions": {}
+      },
+      "id": "alert-change",
+      "name": "Alert Change",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Rank_History"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "keyword": "={{ $json.keyword }}",
+            "position": "={{ $json.current_position }}",
+            "change": "={{ $json.change }}",
+            "status": "={{ $json.status }}",
+            "checked_at": "={{ $json.checked_at }}"
+          }
+        }
+      },
+      "id": "save-history",
+      "name": "Save History",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        500
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        750,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#seo-alerts",
+        "text": "=🚨 Rank Tracker Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        600
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Rank Check": {
+      "main": [
+        [
+          {
+            "node": "Get Keywords",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Keywords": {
+      "main": [
+        [
+          {
+            "node": "Check SERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check SERP": {
+      "main": [
+        [
+          {
+            "node": "Find Position",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Position": {
+      "main": [
+        [
+          {
+            "node": "Big Change?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Big Change?": {
+      "main": [
+        [
+          {
+            "node": "Alert Change",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save History",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

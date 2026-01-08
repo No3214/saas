@@ -1,0 +1,210 @@
+{
+    "name": "Grain_Autonomous_Decision_Engine_v1",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "## 🤖 Autonomous Decision Engine\nRules-based AI decision maker with Human-in-the-Loop approval.",
+                "height": 100,
+                "width": 450,
+                "color": 5
+            },
+            "id": "note-overview",
+            "name": "Note: Overview",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                180,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "values": {
+                    "string": [
+                        {
+                            "name": "tenant_id",
+                            "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+                        },
+                        {
+                            "name": "dry_run",
+                            "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+                        },
+                        {
+                            "name": "webhook_prefix",
+                            "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/grain-autonomous-decision-engine-v1"
+                        },
+                        {
+                            "name": "max_discount_percent",
+                            "value": "20"
+                        },
+                        {
+                            "name": "auto_escalate_threshold",
+                            "value": "8"
+                        },
+                        {
+                            "name": "require_human_approval_above",
+                            "value": "1000"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "grain-config",
+            "name": "GRAIN_CONFIG",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 2,
+            "position": [
+                180,
+                350
+            ],
+            "notesInFlow": true,
+            "notes": "🔧 Central Config"
+        },
+        {
+            "parameters": {
+                "systemMessage": "You are a customer service decision support system.\n\nRULES:\n1. If customer churn score > {{ $json.auto_escalate_threshold }}, escalate automatically.\n2. Can offer max {{ $json.max_discount_percent }}% discount.\n3. Require approval if value > {{ $json.require_human_approval_above }} currency units.\n\nDECISION FORMAT:\n{\n  \"action\": \"apply_discount|escalate|request_approval|auto_resolve\",\n  \"discount_percent\": number,\n  \"reason\": \"string\",\n  \"confidence\": number\n}",
+                "tools": {}
+            },
+            "id": "ai-decision-maker",
+            "name": "AI Decision Maker",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1,
+            "position": [
+                450,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ $json.action === 'request_approval' }}",
+                            "value2": true
+                        }
+                    ]
+                }
+            },
+            "id": "human-check",
+            "name": "Human In Loop Check",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                800,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "channel": "#approvals",
+                "text": "🔔 *Approval Needed*\nAction: {{ $json.action }}\nReason: {{ $json.reason }}\nConfidence: {{ $json.confidence }}%",
+                "attachments": []
+            },
+            "id": "slack-approval",
+            "name": "Request Human Approval",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.1,
+            "position": [
+                1050,
+                250
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Auto execute action logic here..."
+            },
+            "id": "auto-execute",
+            "name": "Auto Execute",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1050,
+                450
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "workflow"
+            },
+            "type": "n8n-nodes-base.errorTrigger",
+            "typeVersion": 1,
+            "position": [
+                180,
+                550
+            ],
+            "id": "error-trigger",
+            "name": "Error Trigger"
+        },
+        {
+            "parameters": {
+                "workflowId": "Grain_Sub_Error_Handler"
+            },
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1,
+            "position": [
+                400,
+                550
+            ],
+            "id": "error-handler",
+            "name": "Error Handler"
+        }
+    ],
+    "connections": {
+        "GRAIN_CONFIG": {
+            "main": [
+                [
+                    {
+                        "node": "AI Decision Maker",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Decision Maker": {
+            "main": [
+                [
+                    {
+                        "node": "Human In Loop Check",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Human In Loop Check": {
+            "main": [
+                [
+                    {
+                        "node": "Request Human Approval",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Auto Execute",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Error Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Error Handler",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "meta": {
+        "templateId": "Grain_Autonomous_Decision_Engine_v1",
+        "category": "ai-automation",
+        "tier": "critical"
+    }
+}

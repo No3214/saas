@@ -1,0 +1,160 @@
+{
+  "name": "Grain Proposal Contract Generator v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-egilytudg",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-proposal",
+        "options": {}
+      },
+      "id": "webhook-proposal",
+      "name": "Proposal Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "proposal-generator"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Generate a professional business proposal with sections:\n1. Executive Summary\n2. Scope of Work\n3. Deliverables\n4. Timeline\n5. Pricing\n6. Terms & Conditions\n\nOutput in Markdown format."
+            },
+            {
+              "role": "user",
+              "content": "Client: {{ $json.client_name }}\nProject: {{ $json.project_description }}\nBudget: {{ $json.budget }}\nTimeline: {{ $json.timeline }}"
+            }
+          ]
+        },
+        "jsonOutput": false
+      },
+      "id": "ai-proposal",
+      "name": "AI Generate Proposal",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Proposals"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client": "={{ $json.client_name }}",
+            "project": "={{ $json.project_description }}",
+            "status": "draft",
+            "created_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "save-proposal",
+      "name": "Save Proposal",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"proposal_markdown\": \"{{ $json.message.content }}\", \"status\": \"generated\" }",
+        "options": {}
+      },
+      "id": "return-proposal",
+      "name": "Return Proposal",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Proposal Request": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Proposal": {
+      "main": [
+        [
+          {
+            "node": "Save Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Proposal": {
+      "main": [
+        [
+          {
+            "node": "Return Proposal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

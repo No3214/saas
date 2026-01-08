@@ -1,0 +1,375 @@
+{
+  "name": "Grain Subscription Lifecycle Manager v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-lr59jolwy",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🔄 Subscription Lifecycle Manager\nManages SaaS subscription states: trial → active → renewal → churn prevention.",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "check-subscriptions",
+      "name": "Check Subscriptions",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Subscriptions"
+        }
+      },
+      "id": "get-subs",
+      "name": "Get Subscriptions",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sub = $input.item.json;\nconst now = new Date();\nconst endDate = new Date(sub.end_date);\nconst trialEnd = sub.trial_end ? new Date(sub.trial_end) : null;\nconst daysUntilEnd = Math.floor((endDate - now) / (1000 * 60 * 60 * 24));\nconst daysUntilTrialEnd = trialEnd ? Math.floor((trialEnd - now) / (1000 * 60 * 60 * 24)) : null;\n\nlet lifecycle_stage = sub.status;\nlet action_needed = null;\n\nif (sub.status === 'trial' && daysUntilTrialEnd !== null) {\n  if (daysUntilTrialEnd === 3) action_needed = 'trial_ending_soon';\n  else if (daysUntilTrialEnd === 0) action_needed = 'trial_expired';\n} else if (sub.status === 'active') {\n  if (daysUntilEnd === 30) action_needed = 'renewal_reminder_30d';\n  else if (daysUntilEnd === 7) action_needed = 'renewal_reminder_7d';\n  else if (daysUntilEnd === 1) action_needed = 'renewal_urgent';\n  else if (daysUntilEnd <= 0) action_needed = 'expired';\n}\n\nreturn {\n  json: {\n    ...sub,\n    days_until_end: daysUntilEnd,\n    days_until_trial_end: daysUntilTrialEnd,\n    lifecycle_stage: lifecycle_stage,\n    action_needed: action_needed,\n    needs_action: action_needed !== null\n  }\n};"
+      },
+      "id": "calc-lifecycle",
+      "name": "Calculate Lifecycle",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.needs_action }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "filter-action",
+      "name": "Needs Action?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.action_needed }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "trial_ending_soon",
+              "output": 0
+            },
+            {
+              "value2": "trial_expired",
+              "output": 1
+            },
+            {
+              "value2": "renewal_reminder_30d",
+              "output": 2
+            },
+            {
+              "value2": "renewal_reminder_7d",
+              "output": 2
+            },
+            {
+              "value2": "renewal_urgent",
+              "output": 3
+            },
+            {
+              "value2": "expired",
+              "output": 4
+            }
+          ]
+        },
+        "fallbackOutput": 5
+      },
+      "id": "route-action",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Deneme süreniz bitiyor - {{ $json.days_until_trial_end }} gün kaldı!",
+        "message": "=Merhaba {{ $json.customer_name }},\n\nDeneme sürenizin bitmesine {{ $json.days_until_trial_end }} gün kaldı.\n\nŞimdi planınızı yükseltin ve tüm özelliklere erişin:\n{{ $env.UPGRADE_URL }}",
+        "options": {}
+      },
+      "id": "email-trial-ending",
+      "name": "Trial Ending Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Deneme süreniz doldu - Özel teklif!",
+        "message": "=Merhaba {{ $json.customer_name }},\n\nDeneme süreniz sona erdi. Sizi kaybetmek istemiyoruz!\n\n🎁 Özel Teklif: İlk ay %50 indirim\n{{ $env.SPECIAL_OFFER_URL }}",
+        "options": {}
+      },
+      "id": "email-trial-expired",
+      "name": "Trial Expired Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Aboneliğiniz yenileniyor - {{ $json.days_until_end }} gün",
+        "message": "=Merhaba {{ $json.customer_name }},\n\nAboneliğiniz {{ $json.days_until_end }} gün içinde yenilenecek.\n\nPlan: {{ $json.plan }}\nTutar: {{ $json.amount }} {{ $json.currency }}",
+        "options": {}
+      },
+      "id": "email-renewal",
+      "name": "Renewal Reminder",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#sales-urgent",
+        "text": "=🚨 **Urgent Renewal**\n\nCustomer: {{ $json.customer_name }}\nPlan: {{ $json.plan }}\nExpires: Tomorrow!\n\n👉 Immediate outreach required",
+        "otherOptions": {}
+      },
+      "id": "slack-urgent",
+      "name": "Urgent Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#churn-alerts",
+        "text": "=❌ **Subscription Expired**\n\nCustomer: {{ $json.customer_name }}\nPlan: {{ $json.plan }}\nMRR Lost: {{ $json.amount }} {{ $json.currency }}",
+        "otherOptions": {}
+      },
+      "id": "slack-expired",
+      "name": "Churn Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        800
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        750,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Subscription Lifecycle Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        650
+      ]
+    }
+  ],
+  "connections": {
+    "Check Subscriptions": {
+      "main": [
+        [
+          {
+            "node": "Get Subscriptions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Subscriptions": {
+      "main": [
+        [
+          {
+            "node": "Calculate Lifecycle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Lifecycle": {
+      "main": [
+        [
+          {
+            "node": "Needs Action?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Action?": {
+      "main": [
+        [
+          {
+            "node": "Route Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Action": {
+      "main": [
+        [
+          {
+            "node": "Trial Ending Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trial Expired Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Renewal Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Urgent Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Churn Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

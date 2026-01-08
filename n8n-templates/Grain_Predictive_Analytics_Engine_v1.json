@@ -1,0 +1,224 @@
+{
+    "name": "Grain_Predictive_Analytics_Engine_v1",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "## 🔮 Predictive Analytics Engine\nAI-powered forecasting for Churn, Lead Scoring, and Revenue.",
+                "height": 100,
+                "width": 450,
+                "color": 5
+            },
+            "id": "note-overview",
+            "name": "Note: Overview",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                180,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "values": {
+                    "string": [
+                        {
+                            "name": "tenant_id",
+                            "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+                        },
+                        {
+                            "name": "dry_run",
+                            "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+                        },
+                        {
+                            "name": "webhook_prefix",
+                            "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/grain-predictive-analytics-engine-v1"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "grain-config",
+            "name": "GRAIN_CONFIG",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 2,
+            "position": [
+                180,
+                350
+            ],
+            "notesInFlow": true,
+            "notes": "🔧 Central Config"
+        },
+        {
+            "parameters": {
+                "rules": {
+                    "rules": [
+                        {
+                            "value2": "churn_prediction",
+                            "output": 0
+                        },
+                        {
+                            "value2": "lead_scoring",
+                            "output": 1
+                        },
+                        {
+                            "value2": "revenue_forecast",
+                            "output": 2
+                        }
+                    ]
+                }
+            },
+            "id": "prediction-type-switch",
+            "name": "Prediction Type Switch",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3,
+            "position": [
+                450,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const data = $input.all();\nconst aggregated = {\n  total_records: data.length,\n  avg_engagement: data.reduce((a, b) => a + (b.json.engagement || 0), 0) / (data.length || 1),\n  trend: 'stable' // Simplified trend logic\n};\nreturn [{ json: aggregated, prediction_type: 'churn_prediction' }];"
+            },
+            "id": "aggregator-code",
+            "name": "Data Aggregator",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                700,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "model": "gpt-4o",
+                "prompt": "Analyze the following data and provide a prediction.\nData: {{ JSON.stringify($json) }}\nType: {{ $json.prediction_type }}\n\nReturn JSON: { \"prediction\": number, \"confidence\": number, \"reasoning\": string[] }"
+            },
+            "id": "ai-prediction",
+            "name": "AI Prediction",
+            "type": "@n8n/n8n-nodes-langchain.openAi",
+            "typeVersion": 1,
+            "position": [
+                950,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "insert",
+                "table": "grain_predictions",
+                "columns": "prediction_type,prediction_value,confidence,reasoning,created_at"
+            },
+            "id": "save-prediction",
+            "name": "Save Prediction",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.4,
+            "position": [
+                1200,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "workflow"
+            },
+            "type": "n8n-nodes-base.errorTrigger",
+            "typeVersion": 1,
+            "position": [
+                180,
+                550
+            ],
+            "id": "error-trigger",
+            "name": "Error Trigger"
+        },
+        {
+            "parameters": {
+                "workflowId": "Grain_Sub_Error_Handler"
+            },
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1,
+            "position": [
+                400,
+                550
+            ],
+            "id": "error-handler",
+            "name": "Error Handler"
+        }
+    ],
+    "connections": {
+        "GRAIN_CONFIG": {
+            "main": [
+                [
+                    {
+                        "node": "Prediction Type Switch",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prediction Type Switch": {
+            "main": [
+                [
+                    {
+                        "node": "Data Aggregator",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "AI Prediction",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "AI Prediction",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Data Aggregator": {
+            "main": [
+                [
+                    {
+                        "node": "AI Prediction",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Prediction": {
+            "main": [
+                [
+                    {
+                        "node": "Save Prediction",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Error Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Error Handler",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "meta": {
+        "templateId": "Grain_Predictive_Analytics_Engine_v1",
+        "category": "ai-automation",
+        "tier": "critical"
+    }
+}

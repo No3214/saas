@@ -1,0 +1,188 @@
+{
+  "name": "Grain Referral Affiliate Program v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-y24ehpwzw",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "referral-signup",
+        "options": {}
+      },
+      "id": "webhook-referral",
+      "name": "Referral Signup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "referral-program"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ref = $input.item.json;\nconst code = `REF-${ref.user_id.slice(0,4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;\nreturn { json: { ...ref, referral_code: code, commission_rate: 0.2 } };"
+      },
+      "id": "gen-code",
+      "name": "Generate Referral Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Affiliates"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $json.user_id }}",
+            "email": "={{ $json.email }}",
+            "referral_code": "={{ $json.referral_code }}",
+            "commission_rate": "={{ $json.commission_rate }}",
+            "total_earnings": "0"
+          }
+        }
+      },
+      "id": "save-affiliate",
+      "name": "Save Affiliate",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "referral-conversion",
+        "options": {}
+      },
+      "id": "webhook-conversion",
+      "name": "Conversion Event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        550
+      ],
+      "webhookId": "referral-conversion"
+    },
+    {
+      "parameters": {
+        "jsCode": "const conv = $input.item.json;\nconst commission = conv.order_value * 0.2;\nreturn { json: { ...conv, commission_earned: commission } };"
+      },
+      "id": "calc-commission",
+      "name": "Calculate Commission",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        550
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "affiliate-wins",
+        "text": "=💰 **Referral Conversion!**\n\nAffiliate: {{ $json.referrer_email }}\nOrder Value: ${{ $json.order_value }}\nCommission: ${{ $json.commission_earned }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Conversion",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        750,
+        550
+      ]
+    }
+  ],
+  "connections": {
+    "Referral Signup": {
+      "main": [
+        [
+          {
+            "node": "Generate Referral Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Referral Code": {
+      "main": [
+        [
+          {
+            "node": "Save Affiliate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversion Event": {
+      "main": [
+        [
+          {
+            "node": "Calculate Commission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Commission": {
+      "main": [
+        [
+          {
+            "node": "Notify Conversion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

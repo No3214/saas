@@ -1,0 +1,291 @@
+{
+  "name": "Grain Content Repurposing Engine v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-a6ozrl409",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {},
+      "id": "webhook-content",
+      "name": "Content Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        400
+      ],
+      "webhookId": "repurpose-content"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.item.json;\nlet content = input.content || '';\nlet sourceType = input.source_type || 'text';\n\nif (input.youtube_url) {\n  sourceType = 'youtube';\n  content = input.youtube_url;\n}\n\nreturn {\n  json: {\n    content: content,\n    source_type: sourceType,\n    target_platforms: input.platforms || ['linkedin', 'twitter', 'instagram', 'blog'],\n    brand_voice: input.brand_voice || 'professional',\n    language: input.language || 'tr'\n  }\n};"
+      },
+      "id": "normalize-input",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        400,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "file",
+              "value": "={{ $json.audio_file }}"
+            }
+          ]
+        }
+      },
+      "id": "transcribe-audio",
+      "name": "Transcribe Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        600,
+        300
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen içerik dönüştürme uzmanısın. Verilen uzun içeriği farklı platformlar için yeniden formatla.\n\nJSON döndür:\n{\n  \"linkedin\": { \"post\": \"500 karakter\", \"hashtags\": [] },\n  \"twitter_thread\": [\"tweet1\", \"tweet2\", \"tweet3\"],\n  \"instagram\": { \"caption\": \"2000 karakter\", \"hashtags\": [] },\n  \"blog_outline\": { \"title\": \"\", \"sections\": [] },\n  \"key_quotes\": []\n}"
+            },
+            {
+              "role": "user",
+              "content": "=Content to repurpose:\n{{ $json.content.substring(0, 4000) }}\n\nBrand Voice: {{ $json.brand_voice }}\nLanguage: {{ $json.language }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-repurpose",
+      "name": "AI Repurpose",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        800,
+        400
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.item.json;\nconst aiResponse = $('AI Repurpose').first()?.json?.message?.content;\n\nlet repurposed;\ntry {\n  repurposed = JSON.parse(aiResponse);\n} catch (e) {\n  repurposed = { error: 'Parse failed', raw: aiResponse };\n}\n\nreturn {\n  json: {\n    original_content: input.content?.substring(0, 500) + '...',\n    repurposed: repurposed,\n    platforms_generated: Object.keys(repurposed).filter(k => k !== 'error'),\n    created_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "parse-output",
+      "name": "Parse Output",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1000,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Repurposed_Content"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "original_preview": "={{ $json.original_content }}",
+            "linkedin_post": "={{ $json.repurposed.linkedin?.post }}",
+            "twitter_thread": "={{ JSON.stringify($json.repurposed.twitter_thread) }}",
+            "instagram_caption": "={{ $json.repurposed.instagram?.caption }}",
+            "blog_title": "={{ $json.repurposed.blog_outline?.title }}",
+            "created_at": "={{ $json.created_at }}"
+          }
+        }
+      },
+      "id": "save-content",
+      "name": "Save Content",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        1200,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "channel": "#content-ready",
+        "text": "=📝 *İçerik Dönüştürüldü!*\n\n✅ Platformlar: {{ $json.platforms_generated.join(', ') }}\n\n*LinkedIn:*\n{{ $json.repurposed.linkedin?.post?.substring(0, 200) }}...\n\n*Twitter Thread:*\n{{ $json.repurposed.twitter_thread?.[0] }}\n\n_Tüm içerikler Sheets'te mevcut._",
+        "otherOptions": {}
+      },
+      "id": "notify-ready",
+      "name": "Notify Ready",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1200,
+        600
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "content": "## ♻️ Content Repurposing\nTransforms long-form content into LinkedIn, Twitter, Instagram, and blog formats.",
+        "height": 100,
+        "width": 300,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        250
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        600,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Content Repurposing Error\n\nNode: {{ $json.execution.lastNodeExecuted }}\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        800,
+        750
+      ]
+    }
+  ],
+  "connections": {
+    "Content Input": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "AI Repurpose",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Repurpose": {
+      "main": [
+        [
+          {
+            "node": "Parse Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Output": {
+      "main": [
+        [
+          {
+            "node": "Save Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Content": {
+      "main": [
+        [
+          {
+            "node": "Notify Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "content"
+    },
+    {
+      "name": "agency"
+    },
+    {
+      "name": "repurposing"
+    }
+  ]
+}
