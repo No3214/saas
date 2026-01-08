@@ -1,5 +1,5 @@
 {
-  "count": 94,
+  "count": 95,
   "lastUpdated": "2026-01-08",
   "enterprise_ready": true,
   "mcp_enabled": true,
@@ -144,6 +144,9 @@
     "video": [
       "Viral_Video_Ad_Factory.json",
       "AI_SERP_Brand_Monitor.json"
+    ],
+    "real_estate": [
+      "Grain_Real_Estate_Land_Showcase_v1.json"
     ]
   },
   "files": [
@@ -817,6 +820,14 @@
       "category": "video",
       "description": "Monitor brand visibility in AI-powered search results and SERP positions",
       "roi": "Brand visibility insights"
+    },
+    {
+      "filename": "Grain_Real_Estate_Land_Showcase_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Real_Estate_Land_Showcase_v1.json",
+      "category": "real_estate",
+      "description": "Emlakçılar için arazi tanıtım otomasyonu - uydu görüntüsü, harita linkleri, KML ve AI pazarlama metni",
+      "roi": "Yerinde ziyaret gerektirmeden profesyonel arazi sunumu",
+      "features": ["Mapbox Satellite", "GPT-4 Marketing", "Google Earth KML", "Multi-platform Maps", "TKGM Integration"]
     }
   ]
 }
