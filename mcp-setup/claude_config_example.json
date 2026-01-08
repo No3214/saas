@@ -1,0 +1,72 @@
+{
+    "mcpServers": {
+        "grain-n8n-templates": {
+            "command": "node",
+            "args": [
+                "C:\\Users\\HP Pavilion\\.gemini\\antigravity\\scratch\\saas\\n8n-templates\\mcp-setup\\node_modules\\@modelcontextprotocol\\server-filesystem\\dist\\index.js",
+                "C:\\Users\\HP Pavilion\\.gemini\\antigravity\\scratch\\saas\\n8n-templates"
+            ]
+        }
+    },
+    "tools": [
+        {
+            "name": "list_workflows",
+            "description": "Tüm Grain n8n workflow'larını kategorilere göre listeler",
+            "command": "node bin/cli.js list"
+        },
+        {
+            "name": "search_workflow",
+            "description": "Belirli bir workflow'u ismine veya kategorisine göre arar",
+            "parameters": {
+                "query": "Arama terimi"
+            }
+        },
+        {
+            "name": "get_workflow_info",
+            "description": "Belirli bir workflow'un detaylı bilgilerini getirir",
+            "parameters": {
+                "name": "Workflow dosya adı"
+            }
+        },
+        {
+            "name": "trigger_n8n_workflow",
+            "description": "n8n API üzerinden bir workflow'u tetikler",
+            "parameters": {
+                "workflow_id": "n8n workflow ID",
+                "data": "Gönderilecek JSON verisi"
+            },
+            "env_required": [
+                "N8N_API_URL",
+                "N8N_API_KEY"
+            ]
+        }
+    ],
+    "capabilities": {
+        "workflow_management": true,
+        "review_monitoring": true,
+        "listing_sync": true,
+        "real_estate_automation": true
+    },
+    "available_workflows": {
+        "local_seo": [
+            "Grain_Local_Business_Listing_Manager_v1.json"
+        ],
+        "real_estate": [
+            "Grain_Real_Estate_Land_Showcase_v1.json"
+        ],
+        "ai_automation": [
+            "Grain_Agentic_AI_Orchestrator_v1.json",
+            "Grain_AI_Visual_Content_Generator_v1.json"
+        ],
+        "core": [
+            "Grain_Master_Orchestrator_v1.json",
+            "Grain_MCP_Client_Connector_v1.json"
+        ]
+    },
+    "setup_instructions": {
+        "step1": "Bu dosyayı %APPDATA%\\Claude\\claude_desktop_config.json olarak kaydedin",
+        "step2": "mcp-setup klasöründe 'npm install' çalıştırın",
+        "step3": "Claude Desktop'ı yeniden başlatın",
+        "step4": "Claude'da 'Grain workflow'ları listele' diyerek test edin"
+    }
+}

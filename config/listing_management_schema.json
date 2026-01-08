@@ -1,0 +1,462 @@
+{
+    "listing_management_system": {
+        "version": "2.0",
+        "system_name": "Grain Local Business Listing Manager",
+        "business_profile": {
+            "basic_info": {
+                "business_id": "BIZ_001",
+                "business_name": "",
+                "business_name_local": "",
+                "legal_name": "",
+                "slogan": "",
+                "description": {
+                    "short": "",
+                    "long": "",
+                    "seo_optimized": ""
+                },
+                "year_established": null,
+                "employee_count": "",
+                "languages_spoken": [
+                    "Türkçe"
+                ]
+            },
+            "contact_info": {
+                "primary_phone": "",
+                "secondary_phone": "",
+                "whatsapp": "",
+                "fax": "",
+                "email": "",
+                "website": "",
+                "booking_url": "",
+                "menu_url": "",
+                "order_url": ""
+            },
+            "location": {
+                "address": {
+                    "street": "",
+                    "street2": "",
+                    "district": "",
+                    "city": "",
+                    "state": "",
+                    "postal_code": "",
+                    "country": "Türkiye",
+                    "country_code": "TR"
+                },
+                "coordinates": {
+                    "latitude": null,
+                    "longitude": null
+                },
+                "service_area": {
+                    "type": "radius",
+                    "radius_km": 25,
+                    "areas": []
+                },
+                "is_service_area_business": false,
+                "hide_address": false
+            },
+            "categories": {
+                "primary_category": {
+                    "id": "",
+                    "name": "",
+                    "google_category_id": ""
+                },
+                "secondary_categories": [],
+                "additional_categories": []
+            },
+            "business_hours": {
+                "regular_hours": {
+                    "monday": {
+                        "open": "09:00",
+                        "close": "18:00",
+                        "is_closed": false
+                    },
+                    "tuesday": {
+                        "open": "09:00",
+                        "close": "18:00",
+                        "is_closed": false
+                    },
+                    "wednesday": {
+                        "open": "09:00",
+                        "close": "18:00",
+                        "is_closed": false
+                    },
+                    "thursday": {
+                        "open": "09:00",
+                        "close": "18:00",
+                        "is_closed": false
+                    },
+                    "friday": {
+                        "open": "09:00",
+                        "close": "18:00",
+                        "is_closed": false
+                    },
+                    "saturday": {
+                        "open": "10:00",
+                        "close": "16:00",
+                        "is_closed": false
+                    },
+                    "sunday": {
+                        "open": "",
+                        "close": "",
+                        "is_closed": true
+                    }
+                },
+                "special_hours": [],
+                "more_hours": {},
+                "timezone": "Europe/Istanbul"
+            },
+            "attributes": {
+                "accessibility": {
+                    "wheelchair_accessible_entrance": false,
+                    "wheelchair_accessible_seating": false,
+                    "wheelchair_accessible_restroom": false,
+                    "wheelchair_accessible_parking": false
+                },
+                "amenities": {
+                    "wifi": false,
+                    "wifi_free": false,
+                    "restroom": false,
+                    "parking": {
+                        "available": false,
+                        "type": [],
+                        "details": ""
+                    }
+                },
+                "payments": {
+                    "cash": true,
+                    "credit_cards": true,
+                    "debit_cards": true,
+                    "contactless": false,
+                    "mobile_payments": []
+                }
+            },
+            "media": {
+                "logo": {
+                    "url": "",
+                    "alt_text": ""
+                },
+                "cover_photo": {
+                    "url": "",
+                    "alt_text": ""
+                },
+                "photos": [],
+                "videos": [],
+                "virtual_tour": {
+                    "enabled": false,
+                    "url": ""
+                }
+            },
+            "social_profiles": {
+                "facebook": {
+                    "url": "",
+                    "verified": false
+                },
+                "instagram": {
+                    "url": "",
+                    "verified": false
+                },
+                "twitter": {
+                    "url": ""
+                },
+                "linkedin": {
+                    "url": ""
+                },
+                "youtube": {
+                    "url": ""
+                },
+                "tiktok": {
+                    "url": ""
+                }
+            }
+        },
+        "directory_listings": {
+            "sync_settings": {
+                "auto_sync_enabled": true,
+                "sync_frequency": "realtime",
+                "sync_all_on_update": true
+            },
+            "platforms": {
+                "google_business_profile": {
+                    "platform_id": "gbp",
+                    "platform_name": "Google Business Profile",
+                    "importance": "critical",
+                    "enabled": true,
+                    "status": "not_configured"
+                },
+                "apple_maps": {
+                    "platform_id": "apple_maps",
+                    "platform_name": "Apple Maps",
+                    "importance": "high",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "bing_places": {
+                    "platform_id": "bing_places",
+                    "platform_name": "Bing Places",
+                    "importance": "high",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "tripadvisor": {
+                    "platform_id": "tripadvisor",
+                    "platform_name": "TripAdvisor",
+                    "importance": "critical",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "yelp": {
+                    "platform_id": "yelp",
+                    "platform_name": "Yelp",
+                    "importance": "high",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "facebook": {
+                    "platform_id": "facebook",
+                    "platform_name": "Facebook Business",
+                    "importance": "high",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "yandex_maps": {
+                    "platform_id": "yandex_maps",
+                    "platform_name": "Yandex Maps",
+                    "importance": "medium",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "foursquare": {
+                    "platform_id": "foursquare",
+                    "platform_name": "Foursquare",
+                    "importance": "medium",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "waze": {
+                    "platform_id": "waze",
+                    "platform_name": "Waze",
+                    "importance": "medium",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "here_maps": {
+                    "platform_id": "here_maps",
+                    "platform_name": "HERE Maps",
+                    "importance": "medium",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "tomtom": {
+                    "platform_id": "tomtom",
+                    "platform_name": "TomTom",
+                    "importance": "low",
+                    "enabled": false,
+                    "status": "not_configured"
+                },
+                "yemeksepeti": {
+                    "platform_id": "yemeksepeti",
+                    "platform_name": "Yemeksepeti",
+                    "importance": "critical",
+                    "enabled": false,
+                    "status": "not_configured",
+                    "category_specific": "restaurant"
+                },
+                "getir_yemek": {
+                    "platform_id": "getir_yemek",
+                    "platform_name": "Getir Yemek",
+                    "importance": "high",
+                    "enabled": false,
+                    "status": "not_configured",
+                    "category_specific": "restaurant"
+                },
+                "trendyol_yemek": {
+                    "platform_id": "trendyol_yemek",
+                    "platform_name": "Trendyol Yemek",
+                    "importance": "high",
+                    "enabled": false,
+                    "status": "not_configured",
+                    "category_specific": "restaurant"
+                }
+            },
+            "listing_health": {
+                "overall_score": 0,
+                "nap_consistency_score": 0,
+                "completeness_score": 0,
+                "visibility_score": 0,
+                "issues": [],
+                "duplicates_found": []
+            }
+        },
+        "review_management": {
+            "settings": {
+                "monitoring_enabled": true,
+                "auto_response_enabled": true,
+                "notification_settings": {
+                    "email_notifications": true,
+                    "push_notifications": true,
+                    "sms_notifications": false,
+                    "notify_on_new_review": true,
+                    "notify_on_negative_review": true,
+                    "negative_threshold": 3
+                },
+                "response_time_goal_hours": 24
+            },
+            "platforms_monitored": [],
+            "aggregate_stats": {
+                "total_reviews_all_platforms": 0,
+                "average_rating_all_platforms": 0,
+                "reviews_last_30_days": 0,
+                "response_rate": 0,
+                "average_response_time_hours": 0,
+                "sentiment_breakdown": {
+                    "positive": 0,
+                    "neutral": 0,
+                    "negative": 0
+                }
+            }
+        },
+        "ai_automation": {
+            "enabled": true,
+            "ai_provider": "openai",
+            "model": "gpt-4o",
+            "review_response_ai": {
+                "enabled": true,
+                "settings": {
+                    "auto_respond_positive": true,
+                    "auto_respond_neutral": true,
+                    "auto_respond_negative": false,
+                    "require_approval_for_negative": true,
+                    "min_rating_for_auto_response": 4,
+                    "max_response_delay_minutes": 30,
+                    "languages": [
+                        "tr",
+                        "en"
+                    ],
+                    "detect_language_automatically": true
+                },
+                "response_personality": {
+                    "tone": "professional_friendly",
+                    "formality": "semi_formal",
+                    "emoji_usage": "moderate",
+                    "signature": "İşletme Ekibi",
+                    "custom_instructions": "Her zaman müşteriye ismiyle hitap et. Türk misafirperverliğini yansıt."
+                },
+                "blacklist_responses_containing": [
+                    "indirim",
+                    "ücretsiz",
+                    "tazminat",
+                    "yasal",
+                    "dava"
+                ]
+            },
+            "gbp_ai_agent": {
+                "enabled": true,
+                "features": {
+                    "auto_post_creation": {
+                        "enabled": false,
+                        "frequency": "weekly"
+                    },
+                    "q_and_a_management": {
+                        "enabled": true,
+                        "auto_answer": true,
+                        "confidence_threshold": 0.85
+                    },
+                    "messaging_assistant": {
+                        "enabled": true,
+                        "auto_reply": true
+                    }
+                }
+            }
+        },
+        "map_ranking_tracking": {
+            "enabled": false,
+            "tracking_settings": {
+                "check_frequency": "daily",
+                "time_of_check": "09:00",
+                "timezone": "Europe/Istanbul",
+                "track_competitors": false,
+                "track_keywords": true
+            },
+            "tracking_grids": [],
+            "tracked_keywords": [],
+            "competitors": []
+        },
+        "notifications": {
+            "channels": {
+                "email": {
+                    "enabled": true,
+                    "recipients": [],
+                    "frequency": "immediate"
+                },
+                "sms": {
+                    "enabled": false,
+                    "recipients": [],
+                    "only_critical": true
+                },
+                "slack": {
+                    "enabled": false,
+                    "webhook_url": "",
+                    "channel": "#reviews"
+                }
+            },
+            "triggers": {
+                "new_review": {
+                    "enabled": true,
+                    "channels": [
+                        "email"
+                    ]
+                },
+                "negative_review": {
+                    "enabled": true,
+                    "channels": [
+                        "email",
+                        "sms"
+                    ]
+                },
+                "listing_issue": {
+                    "enabled": true,
+                    "channels": [
+                        "email"
+                    ]
+                },
+                "ranking_change": {
+                    "enabled": false,
+                    "threshold": 3,
+                    "channels": []
+                },
+                "weekly_report": {
+                    "enabled": true,
+                    "day": "monday",
+                    "time": "09:00",
+                    "channels": [
+                        "email"
+                    ]
+                }
+            }
+        },
+        "integrations": {
+            "crm": {
+                "provider": "",
+                "enabled": false
+            },
+            "pos": {
+                "provider": "",
+                "enabled": false
+            },
+            "reservation": {
+                "provider": "",
+                "enabled": false
+            },
+            "analytics": {
+                "google_analytics": {
+                    "enabled": false,
+                    "tracking_id": ""
+                },
+                "facebook_pixel": {
+                    "enabled": false,
+                    "pixel_id": ""
+                }
+            }
+        }
+    }
+}
