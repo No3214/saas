@@ -1,0 +1,52 @@
+{
+  "plugins": {
+    "recommended": [
+      "code-simplifier",
+      "frontend-design",
+      "commit-commands",
+      "security-guidance",
+      "feature-dev"
+    ],
+    "install_commands": [
+      "/plugin marketplace add anthropics/claude-code",
+      "/plugin install code-simplifier",
+      "/plugin install frontend-design@claude-code-plugins"
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Read(n8n-templates/**)",
+      "Read(index.json)",
+      "Read(.claude/**)",
+      "Glob(**/*.json)",
+      "Grep(**)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(jq:*)"
+    ],
+    "ask": [
+      "Write(n8n-templates/**)",
+      "Edit(n8n-templates/**)",
+      "Edit(index.json)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ],
+    "deny": [
+      "Read(.env*)",
+      "Read(**/credentials*)",
+      "Read(**/secrets*)",
+      "Bash(rm -rf:*)",
+      "Bash(curl:*POST*)",
+      "Bash(wget:*)"
+    ]
+  },
+  "preferences": {
+    "output_style": "explanatory",
+    "language": "turkish",
+    "commit_style": "conventional"
+  }
+}
