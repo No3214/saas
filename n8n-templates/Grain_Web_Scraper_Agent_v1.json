@@ -1,0 +1,504 @@
+{
+  "name": "Grain Web Scraper Agent v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grain-web-scraper",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "scraper-webhook-001",
+      "name": "Scraper Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [-400, 300],
+      "webhookId": "grain-web-scraper-webhook",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-url",
+              "name": "target_url",
+              "value": "={{ $json.body.url }}",
+              "type": "string"
+            },
+            {
+              "id": "set-extract-type",
+              "name": "extract_type",
+              "value": "={{ $json.body.extract_type || 'full' }}",
+              "type": "string"
+            },
+            {
+              "id": "set-selectors",
+              "name": "custom_selectors",
+              "value": "={{ $json.body.selectors || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "set-ai-analysis",
+              "name": "ai_analysis_enabled",
+              "value": "={{ $json.body.ai_analysis !== false }}",
+              "type": "boolean"
+            },
+            {
+              "id": "set-output-format",
+              "name": "output_format",
+              "value": "={{ $json.body.output_format || 'json' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-params-001",
+      "name": "Extract Request Parameters",
+      "type": "n8n-nodes-base.set",
+      "position": [-180, 300],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.target_url }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "fetch-page-001",
+      "name": "Fetch Web Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [40, 300],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const cheerio = require('cheerio');\nconst inputData = $input.first().json;\nconst html = inputData.body || inputData.data || '';\nconst extractType = $('Extract Request Parameters').first().json.extract_type;\nconst customSelectors = $('Extract Request Parameters').first().json.custom_selectors;\n\nconst $ = cheerio.load(html);\n\n// Remove unwanted elements\n$('script, style, nav, footer, header, aside, .advertisement, .ads, #cookie-banner').remove();\n\nlet result = {\n  url: $('Extract Request Parameters').first().json.target_url,\n  timestamp: new Date().toISOString(),\n  extracted_data: {}\n};\n\n// Extract meta information\nresult.meta = {\n  title: $('title').text().trim(),\n  description: $('meta[name=\"description\"]').attr('content') || '',\n  keywords: $('meta[name=\"keywords\"]').attr('content') || '',\n  og_title: $('meta[property=\"og:title\"]').attr('content') || '',\n  og_description: $('meta[property=\"og:description\"]').attr('content') || '',\n  og_image: $('meta[property=\"og:image\"]').attr('content') || '',\n  canonical: $('link[rel=\"canonical\"]').attr('href') || ''\n};\n\n// Extract based on type\nswitch(extractType) {\n  case 'articles':\n    result.extracted_data.articles = [];\n    $('article, .article, .post, .blog-post, .entry').each((i, el) => {\n      result.extracted_data.articles.push({\n        title: $(el).find('h1, h2, h3, .title').first().text().trim(),\n        content: $(el).find('p').text().trim().substring(0, 500),\n        link: $(el).find('a').first().attr('href') || '',\n        date: $(el).find('time, .date, .published').first().text().trim()\n      });\n    });\n    break;\n    \n  case 'products':\n    result.extracted_data.products = [];\n    $('.product, .product-item, [data-product], .woocommerce-loop-product__title').closest('.product, [class*=\"product\"]').each((i, el) => {\n      result.extracted_data.products.push({\n        name: $(el).find('.product-title, .woocommerce-loop-product__title, h2, h3').first().text().trim(),\n        price: $(el).find('.price, .product-price, [class*=\"price\"]').first().text().trim(),\n        image: $(el).find('img').first().attr('src') || '',\n        link: $(el).find('a').first().attr('href') || ''\n      });\n    });\n    break;\n    \n  case 'contacts':\n    // Extract emails\n    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/g;\n    const emails = html.match(emailRegex) || [];\n    result.extracted_data.emails = [...new Set(emails)];\n    \n    // Extract phone numbers (TR format support)\n    const phoneRegex = /(\\+90|0)?[\\s.-]?(5[0-9]{2})[\\s.-]?([0-9]{3})[\\s.-]?([0-9]{2})[\\s.-]?([0-9]{2})/g;\n    const phones = html.match(phoneRegex) || [];\n    result.extracted_data.phones = [...new Set(phones)];\n    \n    // Extract addresses\n    result.extracted_data.addresses = [];\n    $('address, .address, [itemprop=\"address\"]').each((i, el) => {\n      result.extracted_data.addresses.push($(el).text().trim());\n    });\n    break;\n    \n  case 'links':\n    result.extracted_data.links = [];\n    $('a[href]').each((i, el) => {\n      const href = $(el).attr('href');\n      const text = $(el).text().trim();\n      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {\n        result.extracted_data.links.push({ text, href });\n      }\n    });\n    break;\n    \n  case 'tables':\n    result.extracted_data.tables = [];\n    $('table').each((tableIndex, table) => {\n      const tableData = { headers: [], rows: [] };\n      $(table).find('th').each((i, th) => {\n        tableData.headers.push($(th).text().trim());\n      });\n      $(table).find('tbody tr, tr').each((i, tr) => {\n        const row = [];\n        $(tr).find('td').each((j, td) => {\n          row.push($(td).text().trim());\n        });\n        if (row.length > 0) tableData.rows.push(row);\n      });\n      result.extracted_data.tables.push(tableData);\n    });\n    break;\n    \n  case 'custom':\n    if (customSelectors) {\n      const selectors = customSelectors.split(',').map(s => s.trim());\n      selectors.forEach(selector => {\n        result.extracted_data[selector] = [];\n        $(selector).each((i, el) => {\n          result.extracted_data[selector].push({\n            text: $(el).text().trim(),\n            html: $(el).html(),\n            attributes: el.attribs\n          });\n        });\n      });\n    }\n    break;\n    \n  default: // full\n    result.extracted_data.headings = {\n      h1: $('h1').map((i, el) => $(el).text().trim()).get(),\n      h2: $('h2').map((i, el) => $(el).text().trim()).get(),\n      h3: $('h3').map((i, el) => $(el).text().trim()).get()\n    };\n    result.extracted_data.paragraphs = $('p').map((i, el) => $(el).text().trim()).get().filter(p => p.length > 50);\n    result.extracted_data.images = $('img').map((i, el) => ({\n      src: $(el).attr('src'),\n      alt: $(el).attr('alt') || ''\n    })).get();\n    result.extracted_data.main_content = $('main, .content, .main-content, article, #content').first().text().trim().substring(0, 5000);\n}\n\nresult.extraction_stats = {\n  extract_type: extractType,\n  items_found: Object.values(result.extracted_data).flat().length\n};\n\nreturn result;"
+      },
+      "id": "parse-html-001",
+      "name": "Parse & Extract Content",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-ai-enabled",
+              "leftValue": "={{ $('Extract Request Parameters').item.json.ai_analysis_enabled }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-ai-001",
+      "name": "AI Analysis Enabled?",
+      "type": "n8n-nodes-base.if",
+      "position": [480, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Analyze the following scraped web content and provide insights:\n\n## Page Meta\nTitle: {{ $json.meta.title }}\nDescription: {{ $json.meta.description }}\n\n## Extracted Content\n{{ JSON.stringify($json.extracted_data, null, 2) }}\n\n## Analysis Required:\n1. **Content Summary**: Brief summary of what this page is about\n2. **Key Information**: Most important data points extracted\n3. **Content Quality**: Assessment of the extracted data quality\n4. **Recommendations**: Suggestions for better data extraction if applicable\n5. **Language**: Detect the primary language of the content\n\nProvide your analysis in JSON format:\n{\n  \"summary\": \"\",\n  \"key_information\": [],\n  \"quality_score\": 1-10,\n  \"primary_language\": \"\",\n  \"content_category\": \"\",\n  \"recommendations\": []\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "maxTokens": 1000
+        }
+      },
+      "id": "ai-analysis-001",
+      "name": "AI Content Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [700, 200],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "jsCode": "const extractedData = $('Parse & Extract Content').first().json;\nconst aiAnalysis = $input.first().json;\n\nlet analysis = {};\ntry {\n  analysis = JSON.parse(aiAnalysis.message?.content || aiAnalysis.choices?.[0]?.message?.content || '{}');\n} catch(e) {\n  analysis = { error: 'Failed to parse AI response' };\n}\n\nreturn {\n  ...extractedData,\n  ai_analysis: analysis,\n  processing_complete: true\n};"
+      },
+      "id": "merge-ai-001",
+      "name": "Merge AI Analysis",
+      "type": "n8n-nodes-base.code",
+      "position": [920, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "pass-through",
+              "name": "result",
+              "value": "={{ $json }}",
+              "type": "object"
+            },
+            {
+              "id": "no-ai",
+              "name": "ai_analysis",
+              "value": "={{ { skipped: true, reason: 'AI analysis disabled' } }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "skip-ai-001",
+      "name": "Skip AI Analysis",
+      "type": "n8n-nodes-base.set",
+      "position": [700, 400],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-results-001",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "position": [1140, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-csv-format",
+              "leftValue": "={{ $('Extract Request Parameters').item.json.output_format }}",
+              "rightValue": "csv",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-csv-001",
+      "name": "Output as CSV?",
+      "type": "n8n-nodes-base.if",
+      "position": [1360, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst extractedData = data.extracted_data || data.result?.extracted_data || {};\n\n// Flatten data for CSV\nlet csvRows = [];\nlet headers = ['type', 'key', 'value'];\n\nObject.entries(extractedData).forEach(([type, items]) => {\n  if (Array.isArray(items)) {\n    items.forEach((item, idx) => {\n      if (typeof item === 'object') {\n        Object.entries(item).forEach(([key, val]) => {\n          csvRows.push({ type: `${type}_${idx}`, key, value: String(val).substring(0, 500) });\n        });\n      } else {\n        csvRows.push({ type, key: idx.toString(), value: String(item).substring(0, 500) });\n      }\n    });\n  } else if (typeof items === 'object') {\n    Object.entries(items).forEach(([key, val]) => {\n      csvRows.push({ type, key, value: String(val).substring(0, 500) });\n    });\n  } else {\n    csvRows.push({ type, key: 'value', value: String(items).substring(0, 500) });\n  }\n});\n\nreturn csvRows;"
+      },
+      "id": "convert-csv-001",
+      "name": "Convert to CSV Format",
+      "type": "n8n-nodes-base.code",
+      "position": [1580, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {}
+      },
+      "id": "csv-output-001",
+      "name": "Generate CSV",
+      "type": "n8n-nodes-base.convertToFile",
+      "position": [1800, 200],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, data: $json, format: 'json' }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-json-001",
+      "name": "Respond JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1580, 400],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/csv"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "attachment; filename=\"scraped_data.csv\""
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-csv-001",
+      "name": "Respond CSV",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [2020, 200],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "resource": "spreadsheet",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "save-sheets-001",
+      "name": "Save to Google Sheets (Optional)",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2020, 400],
+      "disabled": true,
+      "typeVersion": 4.5
+    }
+  ],
+  "connections": {
+    "Scraper Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Request Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Request Parameters": {
+      "main": [
+        [
+          {
+            "node": "Fetch Web Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Web Page": {
+      "main": [
+        [
+          {
+            "node": "Parse & Extract Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Extract Content": {
+      "main": [
+        [
+          {
+            "node": "AI Analysis Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analysis Enabled?": {
+      "main": [
+        [
+          {
+            "node": "AI Content Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip AI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Content Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge AI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge AI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip AI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Output as CSV?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output as CSV?": {
+      "main": [
+        [
+          {
+            "node": "Convert to CSV Format",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to CSV Format": {
+      "main": [
+        [
+          {
+            "node": "Generate CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate CSV": {
+      "main": [
+        [
+          {
+            "node": "Respond CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond JSON": {
+      "main": [
+        [
+          {
+            "node": "Save to Google Sheets (Optional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Scraping",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Data Extraction",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-09T00:00:00.000Z",
+  "versionId": "grain-web-scraper-v1"
+}

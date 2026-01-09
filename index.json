@@ -311,13 +311,69 @@
                 "Professional HTML report with QR code",
                 "TKGM Parsel integration"
             ]
+        },
+        {
+            "name": "AI Chatbot with Web Search v1",
+            "file": "n8n-templates/Grain_AI_Chatbot_Web_Search_v1.json",
+            "category": "AI",
+            "tier": "Critical",
+            "features": [
+                "Intelligent query analysis for search needs",
+                "SerpAPI web search integration",
+                "GPT-4o response generation",
+                "Turkish language support",
+                "Session management",
+                "Webhook API endpoint"
+            ]
+        },
+        {
+            "name": "Web Scraper Agent v1",
+            "file": "n8n-templates/Grain_Web_Scraper_Agent_v1.json",
+            "category": "Data Extraction",
+            "tier": "High",
+            "features": [
+                "Multiple extraction modes (articles, products, contacts, links, tables)",
+                "AI-powered content analysis",
+                "Custom CSS selector support",
+                "JSON and CSV output formats",
+                "Turkish phone/email extraction",
+                "Meta information parsing"
+            ]
+        },
+        {
+            "name": "Turkish Local Business Manager v1",
+            "file": "n8n-templates/Grain_Turkish_Local_Business_Manager_v1.json",
+            "category": "Local SEO",
+            "tier": "Critical",
+            "features": [
+                "Multi-platform review aggregation (Google, Yelp)",
+                "AI-powered Turkish review responses",
+                "Business health score calculation",
+                "Slack alerts for urgent reviews",
+                "Turkish holiday awareness",
+                "Actionable recommendations in Turkish"
+            ]
+        },
+        {
+            "name": "Turkish GBP Optimizer v1",
+            "file": "n8n-templates/Grain_Turkish_GBP_Optimizer_v1.json",
+            "category": "Local SEO",
+            "tier": "High",
+            "features": [
+                "Automated GBP post generation in Turkish",
+                "Seasonal content themes for Turkish market",
+                "SEO profile analysis",
+                "Weekly content calendar",
+                "Local keyword optimization",
+                "Multi-city support (Istanbul, Ankara, Izmir, Antalya)"
+            ]
         }
     ],
     "statistics": {
-        "critical_tier": 25,
-        "high_tier": 16,
+        "critical_tier": 28,
+        "high_tier": 18,
         "medium_tier": 3,
-        "total": 44,
+        "total": 49,
         "chains": 4
     }
 }
