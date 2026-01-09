@@ -19,6 +19,14 @@
     }
   },
   "external_skills": {
+    "anthropic-official": {
+      "skills_repo": "github:anthropics/skills",
+      "plugins_repo": "github:anthropics/claude-plugins-official",
+      "skill_count": 16,
+      "plugin_count": 25,
+      "install_skills": "/plugin install document-skills@anthropic-agent-skills",
+      "install_plugins": "/plugin install [name]@claude-plugin-directory"
+    },
     "vibeship-spawner": {
       "repo": "github:vibeforge1111/vibeship-spawner-skills",
       "install": "npx github:vibeforge1111/vibeship-spawner-skills install --mcp",
@@ -34,15 +42,31 @@
   "plugins": {
     "recommended": [
       "code-simplifier",
+      "code-review",
       "frontend-design",
       "commit-commands",
       "security-guidance",
-      "feature-dev"
+      "feature-dev",
+      "pr-review-toolkit",
+      "explanatory-output-style"
+    ],
+    "document_skills": [
+      "pdf",
+      "docx",
+      "pptx",
+      "xlsx"
+    ],
+    "lsp_plugins": [
+      "typescript-lsp",
+      "pyright-lsp"
     ],
     "install_commands": [
-      "/plugin marketplace add anthropics/claude-code",
-      "/plugin install code-simplifier",
-      "/plugin install frontend-design@claude-code-plugins"
+      "/plugin install code-simplifier@claude-plugin-directory",
+      "/plugin install code-review@claude-plugin-directory",
+      "/plugin install frontend-design@claude-plugin-directory",
+      "/plugin install commit-commands@claude-plugin-directory",
+      "/plugin install security-guidance@claude-plugin-directory",
+      "/plugin install document-skills@anthropic-agent-skills"
     ]
   },
   "permissions": {
