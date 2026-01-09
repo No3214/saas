@@ -1,12 +1,20 @@
 {
   "mcp_servers": {
-    "n8n-local": {
-      "url": "http://localhost:5678/mcp-server/http",
-      "description": "n8n workflow automation MCP server",
-      "capabilities": ["workflow_execute", "workflow_list", "node_info"]
+    "n8n-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supergateway",
+        "--streamableHttp",
+        "http://localhost:5678/mcp-server/http",
+        "--header",
+        "authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5MWQ3OTM1OC04M2FkLTQ3NGQtYWI3OC1lODM1NjQwY2ZkZTciLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6IjlmMmM1MTFhLTIxZWItNGFlNS1iODYwLTRlYTg5ZWY1YWNjZSIsImlhdCI6MTc2Nzk3ODg4OX0.hDzxJosGd5rnSsWQF5kbu5DGEjF-nZLVDbrUVJuUNnE"
+      ],
+      "description": "n8n workflow automation MCP server with JWT auth"
     },
     "spawner-skills": {
-      "command": "npx github:vibeforge1111/vibeship-spawner-skills serve",
+      "command": "npx",
+      "args": ["-y", "github:vibeforge1111/vibeship-spawner-skills", "serve"],
       "description": "462 production-grade skills MCP server"
     }
   },

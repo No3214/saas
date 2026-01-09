@@ -15,29 +15,38 @@ gibi kaynaklara erişebilir.
 
 ## Yapılandırılmış MCP Server'lar
 
-### 1. n8n Local MCP Server
+### 1. n8n MCP Server (JWT Auth)
 
 ```json
 {
-  "n8n-local": {
-    "url": "http://localhost:5678/mcp-server/http",
-    "capabilities": ["workflow_execute", "workflow_list", "node_info"]
+  "n8n-mcp": {
+    "command": "npx",
+    "args": [
+      "-y",
+      "supergateway",
+      "--streamableHttp",
+      "http://localhost:5678/mcp-server/http",
+      "--header",
+      "authorization:Bearer YOUR_JWT_TOKEN"
+    ]
   }
 }
 ```
 
-**Bağlantı:**
+**n8n'den Token Alma:**
+```
+n8n Settings → MCP Server → Enable → Copy Access Token
+```
+
+**Supergateway Nedir?**
+- HTTP MCP endpoint'lerini stdio'ya çevirir
+- JWT authentication destekler
+- Claude Code ile n8n arasında köprü görevi görür
+
+**Kurulum:**
 ```bash
-# Claude Code CLI'da
-claude mcp add n8n-local http://localhost:5678/mcp-server/http
-
-# veya settings ile
-# .claude/settings.json → mcp_servers
-```
-
-**n8n Tarafında Aktifleştirme:**
-```
-n8n Settings → MCP Server → Enable HTTP endpoint
+# Supergateway otomatik indirilir (npx -y ile)
+# Token'ı .claude/settings.json'a ekle
 ```
 
 **Kullanım:**
