@@ -1,379 +1,392 @@
 {
     "suite": "Grain SaaS Automation Suite",
-    "version": "4.1.0",
-    "last_updated": "2026-01-07T19:07:00Z",
-    "total_workflows": 42,
+    "version": "5.0.0",
+    "last_updated": "2026-01-09T08:00:00Z",
+    "total_workflows": 53,
     "enterprise_ready": true,
     "mcp_enabled": true,
-    "rag_enabled": true,
-    "self_healing_enabled": true,
-    "chain_orchestration": true,
+    "architecture": {
+        "core_system": "Master Orchestrator + MCP + Self-Healing",
+        "data_layer": "Intelligent CDP + RAG",
+        "ai_engine": "Agentic AI v2 Pro"
+    },
     "verticals": [
         "General SaaS",
         "E-commerce",
-        "HR Tech",
         "Hospitality",
-        "Real Estate"
+        "Real Estate",
+        "Local Business (Turkey)"
     ],
-    "workflow_chains": {
-        "customer_lifecycle": [
-            "NPS Feedback → Churn Prediction → Email Recovery"
-        ],
-        "lead_to_revenue": [
-            "Lead Capture → AI Scoring → RevOps → Proposal"
-        ],
-        "hr_pipeline": [
-            "Recruitment Agent → Onboarding → Slack Notify"
-        ],
-        "ecommerce_funnel": [
-            "Cart Abandoned → AI Email → Inventory Sync"
-        ]
-    },
-    "workflows": [
-        {
-            "name": "Master Orchestrator v1",
-            "file": "Grain_Master_Orchestrator_v1.json",
-            "category": "Core",
-            "tier": "Critical",
-            "role": "Chain Controller"
-        },
-        {
-            "name": "MCP Client Connector v1",
-            "file": "Grain_MCP_Client_Connector_v1.json",
-            "category": "Infrastructure",
-            "tier": "Critical"
-        },
-        {
-            "name": "Contract Review Compliance v1",
-            "file": "Grain_Contract_Review_Compliance_v1.json",
-            "category": "Legal",
-            "tier": "Critical"
-        },
-        {
-            "name": "NPS Feedback Collection v1",
-            "file": "Grain_NPS_Feedback_Collection_v1.json",
-            "category": "Customer Success",
-            "tier": "Critical",
-            "chains_to": "Churn Prediction"
-        },
-        {
-            "name": "Ticket Escalation Manager v1",
-            "file": "Grain_Ticket_Escalation_Manager_v1.json",
-            "category": "Support",
-            "tier": "Critical"
-        },
-        {
-            "name": "Knowledge Base AI Search v1",
-            "file": "Grain_Knowledge_Base_AI_Search_v1.json",
-            "category": "AI",
-            "tier": "Critical"
-        },
-        {
-            "name": "Subscription Lifecycle Manager v1",
-            "file": "Grain_Subscription_Lifecycle_Manager_v1.json",
-            "category": "Customer Success",
-            "tier": "Critical"
-        },
-        {
-            "name": "Competitor Monitoring Hub v1",
-            "file": "Grain_Competitor_Monitoring_Hub_v1.json",
-            "category": "Intelligence",
-            "tier": "High"
-        },
-        {
-            "name": "Recruitment AI Agent v1",
-            "file": "Grain_Recruitment_AI_Agent_v1.json",
-            "category": "HR",
-            "tier": "Critical",
-            "chains_to": "HR Onboarding"
-        },
-        {
-            "name": "Ecommerce Orchestrator v1",
-            "file": "Grain_Ecommerce_Orchestrator_v1.json",
-            "category": "E-commerce",
-            "tier": "Critical"
-        },
-        {
-            "name": "Self Healing Pipeline v1",
-            "file": "Grain_Self_Healing_Pipeline_v1.json",
-            "category": "Infrastructure",
-            "tier": "Critical"
-        },
-        {
-            "name": "Multi-Platform Publisher v2",
-            "file": "Grain_Multi_Platform_Publisher_v2.json",
-            "category": "Marketing",
-            "tier": "Critical"
-        },
-        {
-            "name": "RevOps Hub v1",
-            "file": "Grain_RevOps_Hub_v1.json",
-            "category": "Sales",
-            "tier": "Critical"
-        },
-        {
-            "name": "Lead Conversion Funnel v1",
-            "file": "Grain_Lead_Conversion_Funnel_v1.json",
-            "category": "Sales",
-            "tier": "Critical"
-        },
-        {
-            "name": "Prompt Engineering Studio v1",
-            "file": "Grain_Prompt_Engineering_Studio_v1.json",
-            "category": "AI",
-            "tier": "High"
-        },
-        {
-            "name": "AI Visual Content Generator v1",
-            "file": "Grain_AI_Visual_Content_Generator_v1.json",
-            "category": "AI",
-            "tier": "High"
-        },
-        {
-            "name": "Agentic AI Orchestrator v1",
-            "file": "Grain_Agentic_AI_Orchestrator_v1.json",
-            "category": "AI",
-            "tier": "Critical"
-        },
-        {
-            "name": "Intelligent CDP v1",
-            "file": "Grain_Intelligent_CDP_v1.json",
-            "category": "Customer Data",
-            "tier": "Critical"
-        },
-        {
-            "name": "Unified Analytics Dashboard v1",
-            "file": "Grain_Unified_Analytics_Dashboard_v1.json",
-            "category": "Reporting",
-            "tier": "High"
-        },
-        {
-            "name": "A/B Testing Engine v1",
-            "file": "Grain_AB_Testing_Engine_v1.json",
-            "category": "Optimization",
-            "tier": "High"
-        },
-        {
-            "name": "Landing Page CRO Hub v1",
-            "file": "Grain_Landing_Page_CRO_Hub_v1.json",
-            "category": "Conversion",
-            "tier": "High"
-        },
-        {
-            "name": "Email Marketing Automation v1",
-            "file": "Grain_Email_Marketing_Automation_v1.json",
-            "category": "Marketing",
-            "tier": "Critical"
-        },
-        {
-            "name": "Webinar Event Automation v1",
-            "file": "Grain_Webinar_Event_Automation_v1.json",
-            "category": "Marketing",
-            "tier": "High"
-        },
-        {
-            "name": "Referral Affiliate Program v1",
-            "file": "Grain_Referral_Affiliate_Program_v1.json",
-            "category": "Growth",
-            "tier": "High"
-        },
-        {
-            "name": "Meeting Intelligence Hub v1",
-            "file": "Grain_Meeting_Intelligence_Hub_v1.json",
-            "category": "Sales",
-            "tier": "High"
-        },
-        {
-            "name": "HR Onboarding Offboarding v1",
-            "file": "Grain_HR_Onboarding_Offboarding_v1.json",
-            "category": "Operations",
-            "tier": "Medium"
-        },
-        {
-            "name": "Social Inbox Manager v1",
-            "file": "Grain_Social_Inbox_Manager_v1.json",
-            "category": "Support",
-            "tier": "High"
-        },
-        {
-            "name": "Influencer Outreach v1",
-            "file": "Grain_Influencer_Outreach_v1.json",
-            "category": "Marketing",
-            "tier": "Medium"
-        },
-        {
-            "name": "Proposal Contract Generator v1",
-            "file": "Grain_Proposal_Contract_Generator_v1.json",
-            "category": "Sales",
-            "tier": "High"
-        },
-        {
-            "name": "Voice AI Assistant v1",
-            "file": "Grain_Voice_AI_Assistant_v1.json",
-            "category": "AI",
-            "tier": "Critical"
-        },
-        {
-            "name": "Booking Channel Sync v1",
-            "file": "Grain_Booking_Channel_Sync_v1.json",
-            "category": "Hospitality",
-            "tier": "Critical"
-        },
-        {
-            "name": "Churn Prediction Prevention v1",
-            "file": "Grain_Churn_Prediction_Prevention_v1.json",
-            "category": "Customer Success",
-            "tier": "Critical"
-        },
-        {
-            "name": "Client Reporting Dashboard v1",
-            "file": "Grain_Client_Reporting_Dashboard_v1.json",
-            "category": "Reporting",
-            "tier": "High"
-        },
-        {
-            "name": "Content Repurposing Engine v1",
-            "file": "Grain_Content_Repurposing_Engine_v1.json",
-            "category": "Marketing",
-            "tier": "High"
-        },
-        {
-            "name": "Customer Onboarding Automation v1",
-            "file": "Grain_Customer_Onboarding_Automation_v1.json",
-            "category": "Customer Success",
-            "tier": "Critical"
-        },
-        {
-            "name": "GBP Auto Posting v1",
-            "file": "Grain_GBP_Auto_Posting_v1.json",
-            "category": "Local SEO",
-            "tier": "High"
-        },
-        {
-            "name": "Guest Communication Journey v1",
-            "file": "Grain_Guest_Communication_Journey_v1.json",
-            "category": "Hospitality",
-            "tier": "Critical"
-        },
-        {
-            "name": "Invoice Billing Automation v1",
-            "file": "Grain_Invoice_Billing_Automation_v1.json",
-            "category": "Finance",
-            "tier": "High"
-        },
-        {
-            "name": "Keyword Gap Analysis v1",
-            "file": "Grain_Keyword_Gap_Analysis_v1.json",
-            "category": "SEO",
-            "tier": "High"
-        },
-        {
-            "name": "Restaurant Reservation v2",
-            "file": "Grain_Restaurant_Reservation_v1.json",
-            "category": "Hospitality",
-            "tier": "Critical"
-        },
-        {
-            "name": "Review Management v1",
-            "file": "Grain_Review_Management_v1.json",
-            "category": "Hospitality",
-            "tier": "Critical"
-        },
-        {
-            "name": "SEO Engine v1",
-            "file": "Grain_SEO_Engine_v1.json",
-            "category": "SEO",
-            "tier": "High"
-        },
-        {
-            "name": "Local Business Listing Manager v1",
-            "file": "templates/local-seo/Grain_Local_Business_Listing_Manager_v1.json",
-            "category": "Local SEO",
-            "tier": "Critical",
-            "features": [
-                "Multi-platform review monitoring (Google, TripAdvisor, Yelp, Facebook)",
-                "AI-powered review responses with GPT-4o",
-                "11+ directory listing sync",
-                "Health score analytics",
-                "Slack approval for negative reviews"
+    "modules": {
+        "core": {
+            "description": "System infrastructure and orchestration",
+            "workflows": [
+                {
+                    "name": "Master Orchestrator v1",
+                    "file": "Grain_Master_Orchestrator_v1.json",
+                    "tier": "Critical",
+                    "role": "Central workflow coordinator"
+                },
+                {
+                    "name": "MCP Client Connector v1",
+                    "file": "Grain_MCP_Client_Connector_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "MCP Workflow Monitor v1",
+                    "file": "Grain_MCP_Workflow_Monitor_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Self Healing Pipeline v1",
+                    "file": "Grain_Self_Healing_Pipeline_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Workflow Backup System v1",
+                    "file": "Grain_Workflow_Backup_System_v1.json",
+                    "tier": "High"
+                }
             ]
         },
-        {
-            "name": "Real Estate Land Showcase v1",
-            "file": "templates/real-estate/Grain_Real_Estate_Land_Showcase_v1.json",
-            "category": "Real Estate",
-            "tier": "Critical",
-            "features": [
-                "Mapbox satellite imagery (3 zoom levels)",
-                "GPT-4o marketing text generation",
-                "Google Earth KML export",
-                "Multi-platform map links",
-                "Professional HTML report with QR code",
-                "TKGM Parsel integration"
+        "ai_engine": {
+            "description": "AI-powered automation and intelligence",
+            "workflows": [
+                {
+                    "name": "Agentic AI Orchestrator v2 Pro",
+                    "file": "Grain_Agentic_AI_Orchestrator_v2_Pro.json",
+                    "tier": "Critical",
+                    "role": "Multi-agent AI coordinator"
+                },
+                {
+                    "name": "AI Chatbot with Web Search v1",
+                    "file": "Grain_AI_Chatbot_Web_Search_v1.json",
+                    "tier": "Critical",
+                    "features": ["SerpAPI", "GPT-4o", "Turkish support"]
+                },
+                {
+                    "name": "RAG Company Chatbot v1",
+                    "file": "Grain_RAG_Company_Chatbot_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Knowledge Base AI Search v1",
+                    "file": "Grain_Knowledge_Base_AI_Search_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "AI Copywriting Studio v1",
+                    "file": "Grain_AI_Copywriting_Studio_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "AI Visual Content Generator v1",
+                    "file": "Grain_AI_Visual_Content_Generator_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "AI Meeting Notes v1",
+                    "file": "Grain_AI_Meeting_Notes_v1.json",
+                    "tier": "Medium"
+                },
+                {
+                    "name": "AI Token Cost Tracker v1",
+                    "file": "Grain_AI_Token_Cost_Tracker_v1.json",
+                    "tier": "Medium"
+                }
             ]
         },
-        {
-            "name": "AI Chatbot with Web Search v1",
-            "file": "n8n-templates/Grain_AI_Chatbot_Web_Search_v1.json",
-            "category": "AI",
-            "tier": "Critical",
-            "features": [
-                "Intelligent query analysis for search needs",
-                "SerpAPI web search integration",
-                "GPT-4o response generation",
-                "Turkish language support",
-                "Session management",
-                "Webhook API endpoint"
+        "data_intelligence": {
+            "description": "Data processing and analytics",
+            "workflows": [
+                {
+                    "name": "Intelligent CDP v1",
+                    "file": "Grain_Intelligent_CDP_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Web Scraper Agent v1",
+                    "file": "Grain_Web_Scraper_Agent_v1.json",
+                    "tier": "High",
+                    "features": ["Multi-mode extraction", "AI analysis", "Turkish support"]
+                },
+                {
+                    "name": "Unified Analytics Dashboard v1",
+                    "file": "Grain_Unified_Analytics_Dashboard_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Document OCR Processing v1",
+                    "file": "Grain_Document_OCR_Processing_v1.json",
+                    "tier": "Medium"
+                },
+                {
+                    "name": "Multi Language Translation v1",
+                    "file": "Grain_Multi_Language_Translation_v1.json",
+                    "tier": "Medium"
+                }
             ]
         },
-        {
-            "name": "Web Scraper Agent v1",
-            "file": "n8n-templates/Grain_Web_Scraper_Agent_v1.json",
-            "category": "Data Extraction",
-            "tier": "High",
-            "features": [
-                "Multiple extraction modes (articles, products, contacts, links, tables)",
-                "AI-powered content analysis",
-                "Custom CSS selector support",
-                "JSON and CSV output formats",
-                "Turkish phone/email extraction",
-                "Meta information parsing"
+        "customer_success": {
+            "description": "Customer lifecycle and support",
+            "workflows": [
+                {
+                    "name": "Customer Onboarding Automation v1",
+                    "file": "Grain_Customer_Onboarding_Automation_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Customer Support Automation v1",
+                    "file": "Grain_Customer_Support_Automation_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Churn Prediction Prevention v1",
+                    "file": "Grain_Churn_Prediction_Prevention_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "NPS Feedback Collection v1",
+                    "file": "Grain_NPS_Feedback_Collection_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Ticket Escalation Manager v1",
+                    "file": "Grain_Ticket_Escalation_Manager_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Subscription Lifecycle Manager v1",
+                    "file": "Grain_Subscription_Lifecycle_Manager_v1.json",
+                    "tier": "High"
+                }
             ]
         },
-        {
-            "name": "Turkish Local Business Manager v1",
-            "file": "n8n-templates/Grain_Turkish_Local_Business_Manager_v1.json",
-            "category": "Local SEO",
-            "tier": "Critical",
-            "features": [
-                "Multi-platform review aggregation (Google, Yelp)",
-                "AI-powered Turkish review responses",
-                "Business health score calculation",
-                "Slack alerts for urgent reviews",
-                "Turkish holiday awareness",
-                "Actionable recommendations in Turkish"
+        "sales_revenue": {
+            "description": "Sales pipeline and revenue operations",
+            "workflows": [
+                {
+                    "name": "RevOps Hub v1",
+                    "file": "Grain_RevOps_Hub_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Lead Conversion Funnel v1",
+                    "file": "Grain_Lead_Conversion_Funnel_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Dynamic Pricing Engine v1",
+                    "file": "Grain_Dynamic_Pricing_Engine_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Contract Review Compliance v1",
+                    "file": "Grain_Contract_Review_Compliance_v1.json",
+                    "tier": "High"
+                }
             ]
         },
-        {
-            "name": "Turkish GBP Optimizer v1",
-            "file": "n8n-templates/Grain_Turkish_GBP_Optimizer_v1.json",
-            "category": "Local SEO",
-            "tier": "High",
-            "features": [
-                "Automated GBP post generation in Turkish",
-                "Seasonal content themes for Turkish market",
-                "SEO profile analysis",
-                "Weekly content calendar",
-                "Local keyword optimization",
-                "Multi-city support (Istanbul, Ankara, Izmir, Antalya)"
+        "marketing": {
+            "description": "Marketing automation and content",
+            "workflows": [
+                {
+                    "name": "Multi Platform Publisher v2",
+                    "file": "Grain_Multi_Platform_Publisher_v2.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Email Marketing Automation v1",
+                    "file": "Grain_Email_Marketing_Automation_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Content Repurposing Engine v1",
+                    "file": "Grain_Content_Repurposing_Engine_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Campaign Performance Monitor v1",
+                    "file": "Grain_Campaign_Performance_Monitor_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "AB Testing Engine v1",
+                    "file": "Grain_AB_Testing_Engine_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Podcast Production Pipeline v1",
+                    "file": "Grain_Podcast_Production_Pipeline_v1.json",
+                    "tier": "Medium"
+                }
+            ]
+        },
+        "seo": {
+            "description": "Search engine optimization",
+            "workflows": [
+                {
+                    "name": "SEO Engine v1",
+                    "file": "Grain_SEO_Engine_v1.json",
+                    "tier": "Critical",
+                    "role": "Master SEO coordinator"
+                },
+                {
+                    "name": "SEO Site Audit v1",
+                    "file": "Grain_SEO_Site_Audit_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "GSC Hub v1",
+                    "file": "Grain_GSC_Hub_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Competitive Intelligence v1",
+                    "file": "Grain_Competitive_Intelligence_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "local_seo_turkey": {
+            "description": "Turkish market local business automation",
+            "workflows": [
+                {
+                    "name": "Turkish Local Business Manager v1",
+                    "file": "Grain_Turkish_Local_Business_Manager_v1.json",
+                    "tier": "Critical",
+                    "features": ["Multi-platform reviews", "AI Turkish responses", "Health score"]
+                },
+                {
+                    "name": "Turkish GBP Optimizer v1",
+                    "file": "Grain_Turkish_GBP_Optimizer_v1.json",
+                    "tier": "High",
+                    "features": ["Auto post generation", "Seasonal themes", "Multi-city"]
+                },
+                {
+                    "name": "Local Business Listing Manager v1",
+                    "file": "Grain_Local_Business_Listing_Manager_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Review Management AI v1",
+                    "file": "Grain_Review_Management_AI_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "hospitality": {
+            "description": "Hotel and restaurant operations",
+            "workflows": [
+                {
+                    "name": "Restaurant Reservation v1",
+                    "file": "Grain_Restaurant_Reservation_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Guest Communication Journey v1",
+                    "file": "Grain_Guest_Communication_Journey_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Housekeeping Operations v1",
+                    "file": "Grain_Housekeeping_Operations_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "real_estate": {
+            "description": "Property and land management",
+            "workflows": [
+                {
+                    "name": "Real Estate Land Showcase v1",
+                    "file": "Grain_Real_Estate_Land_Showcase_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Mapbox satellite imagery (3 zoom levels)",
+                        "GPT-4o marketing text generation",
+                        "Google Earth KML export",
+                        "Multi-platform map links",
+                        "Professional HTML report with QR code",
+                        "TKGM Parsel integration"
+                    ]
+                }
+            ]
+        },
+        "ecommerce": {
+            "description": "E-commerce operations",
+            "workflows": [
+                {
+                    "name": "Ecommerce Orchestrator v1",
+                    "file": "Grain_Ecommerce_Orchestrator_v1.json",
+                    "tier": "Critical"
+                }
+            ]
+        },
+        "hr_operations": {
+            "description": "Human resources",
+            "workflows": [
+                {
+                    "name": "Recruitment AI Agent v1",
+                    "file": "Grain_Recruitment_AI_Agent_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "finance": {
+            "description": "Financial operations",
+            "workflows": [
+                {
+                    "name": "Invoice Billing Automation v1",
+                    "file": "Grain_Invoice_Billing_Automation_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Expense Management v1",
+                    "file": "Grain_Expense_Management_v1.json",
+                    "tier": "Medium"
+                }
+            ]
+        },
+        "communication": {
+            "description": "Team communication and reporting",
+            "workflows": [
+                {
+                    "name": "Slack Teams Bot v1",
+                    "file": "Grain_Slack_Teams_Bot_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Social Inbox Manager v1",
+                    "file": "Grain_Social_Inbox_Manager_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Client Reporting Dashboard v1",
+                    "file": "Grain_Client_Reporting_Dashboard_v1.json",
+                    "tier": "High"
+                }
             ]
         }
-    ],
+    },
     "statistics": {
-        "critical_tier": 28,
-        "high_tier": 18,
-        "medium_tier": 3,
-        "total": 49,
-        "chains": 4
+        "total_workflows": 53,
+        "critical_tier": 18,
+        "high_tier": 28,
+        "medium_tier": 7,
+        "modules": 14
+    },
+    "changelog": {
+        "v5.0.0": {
+            "date": "2026-01-09",
+            "changes": [
+                "Major cleanup: Removed 69 redundant/legacy files",
+                "Reorganized into 14 logical modules",
+                "Removed all Turkish-named legacy files",
+                "Removed all placeholder/skeleton files",
+                "Consolidated duplicate v1/v2 versions",
+                "Preserved Real Estate Land Showcase (Parsel/Earth/Mapbox)"
+            ]
+        }
     }
 }
