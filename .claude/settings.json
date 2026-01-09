@@ -1,4 +1,23 @@
 {
+  "mcp_servers": {
+    "n8n-local": {
+      "url": "http://localhost:5678/mcp-server/http",
+      "description": "n8n workflow automation MCP server",
+      "capabilities": ["workflow_execute", "workflow_list", "node_info"]
+    },
+    "spawner-skills": {
+      "command": "npx github:vibeforge1111/vibeship-spawner-skills serve",
+      "description": "462 production-grade skills MCP server"
+    }
+  },
+  "external_skills": {
+    "vibeship-spawner": {
+      "repo": "github:vibeforge1111/vibeship-spawner-skills",
+      "install": "npx github:vibeforge1111/vibeship-spawner-skills install --mcp",
+      "skill_count": 462,
+      "categories": 35
+    }
+  },
   "hooks": {
     "session_start": ".claude/hooks/session-start.sh",
     "pre_commit": null,
