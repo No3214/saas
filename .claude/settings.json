@@ -1,4 +1,9 @@
 {
+  "hooks": {
+    "session_start": ".claude/hooks/session-start.sh",
+    "pre_commit": null,
+    "post_commit": null
+  },
   "plugins": {
     "recommended": [
       "code-simplifier",
