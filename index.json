@@ -1,8 +1,8 @@
 {
     "suite": "Grain SaaS Automation Suite",
-    "version": "5.0.0",
-    "last_updated": "2026-01-09T08:00:00Z",
-    "total_workflows": 53,
+    "version": "5.1.0",
+    "last_updated": "2026-01-09T12:00:00Z",
+    "total_workflows": 57,
     "enterprise_ready": true,
     "mcp_enabled": true,
     "architecture": {
@@ -323,6 +323,68 @@
                 }
             ]
         },
+        "voice_ai": {
+            "description": "AI Voice agents and conversational AI",
+            "workflows": [
+                {
+                    "name": "ElevenLabs WhatsApp Voice Agent v1",
+                    "file": "Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "ElevenLabs Conversational AI",
+                        "WhatsApp Business integration",
+                        "Voice message responses",
+                        "Multi-intent detection",
+                        "Turkish language support",
+                        "Real-time voice synthesis"
+                    ]
+                }
+            ]
+        },
+        "agency_tools": {
+            "description": "White-label agency and client management",
+            "workflows": [
+                {
+                    "name": "WhiteLabel Agency Dashboard v1",
+                    "file": "Grain_WhiteLabel_Agency_Dashboard_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Multi-client reporting",
+                        "Custom branding (logo, colors, domain)",
+                        "Google Analytics integration",
+                        "Search Console data",
+                        "Instagram insights",
+                        "AI-powered recommendations"
+                    ]
+                },
+                {
+                    "name": "AI Appointment Booking v1",
+                    "file": "Grain_AI_Appointment_Booking_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Smart availability checking",
+                        "Multi-staff scheduling",
+                        "WhatsApp confirmations",
+                        "Automated reminders",
+                        "Service catalog management",
+                        "Turkish language templates"
+                    ]
+                },
+                {
+                    "name": "Reputation Management Suite v1",
+                    "file": "Grain_Reputation_Management_Suite_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Multi-platform review monitoring",
+                        "AI response generation",
+                        "Review request campaigns",
+                        "Reputation health scoring",
+                        "Sentiment analysis",
+                        "Urgent alert system"
+                    ]
+                }
+            ]
+        },
         "hr_operations": {
             "description": "Human resources",
             "workflows": [
@@ -370,13 +432,24 @@
         }
     },
     "statistics": {
-        "total_workflows": 53,
-        "critical_tier": 18,
+        "total_workflows": 57,
+        "critical_tier": 22,
         "high_tier": 28,
         "medium_tier": 7,
-        "modules": 14
+        "modules": 16
     },
     "changelog": {
+        "v5.1.0": {
+            "date": "2026-01-09",
+            "changes": [
+                "NEW: ElevenLabs WhatsApp Voice Agent - AI voice conversations via WhatsApp",
+                "NEW: White-Label Agency Dashboard - Multi-client reporting with custom branding",
+                "NEW: AI Appointment Booking System - Smart scheduling with WhatsApp notifications",
+                "NEW: Reputation Management Suite - Multi-platform review monitoring and AI responses",
+                "Added 2 new modules: voice_ai, agency_tools",
+                "4 new Critical-tier workflows added"
+            ]
+        },
         "v5.0.0": {
             "date": "2026-01-09",
             "changes": [

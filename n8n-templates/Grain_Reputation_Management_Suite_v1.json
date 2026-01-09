@@ -1,0 +1,295 @@
+{
+  "name": "Grain Reputation Management Suite v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 2 }]
+        }
+      },
+      "id": "review-monitor-trigger",
+      "name": "Review Monitor (Every 2 Hours)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [-600, 300],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reputation/request-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "review-request-webhook",
+      "name": "Review Request API",
+      "type": "n8n-nodes-base.webhook",
+      "position": [-600, 600],
+      "webhookId": "review-request-api",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reputation Management Configuration\nconst config = {\n  business: {\n    id: $vars.BUSINESS_ID || 'biz_001',\n    name: $vars.BUSINESS_NAME || 'Örnek İşletme',\n    google_place_id: $vars.GOOGLE_PLACE_ID || '',\n    facebook_page_id: $vars.FACEBOOK_PAGE_ID || '',\n    tripadvisor_id: $vars.TRIPADVISOR_ID || '',\n    yelp_id: $vars.YELP_ID || '',\n    google_review_link: $vars.GOOGLE_REVIEW_LINK || 'https://g.page/r/XXXXX/review'\n  },\n  \n  monitoring: {\n    platforms: ['google', 'facebook', 'tripadvisor', 'yelp', 'sikayetvar'],\n    alert_threshold: 3, // Alert for reviews <= 3 stars\n    check_interval_hours: 2\n  },\n  \n  response_settings: {\n    auto_respond_positive: true, // 4-5 stars\n    auto_respond_negative: false, // Manual approval for 1-3 stars\n    response_delay_minutes: 30,\n    personalize_responses: true\n  },\n  \n  review_request: {\n    send_after_days: 1, // Days after service to request review\n    max_requests_per_customer: 2,\n    request_channels: ['whatsapp', 'sms', 'email'],\n    incentive_enabled: false\n  },\n  \n  notifications: {\n    slack_channel: '#reviews',\n    email_alerts: true,\n    alert_emails: ['owner@business.com']\n  },\n  \n  response_templates: {\n    positive_tr: [\n      \"Değerli yorumunuz için çok teşekkür ederiz, {customer_name}! Sizi ağırlamaktan mutluluk duyduk. Tekrar görüşmek üzere! 🙏\",\n      \"Harika geri bildiriminiz için minnettarız! Sizin gibi müşterilerimiz bizi motive ediyor. ⭐\",\n      \"Güzel sözleriniz için teşekkürler {customer_name}! Hizmetimizden memnun kaldığınızı duymak bizi çok sevindirdi.\"\n    ],\n    negative_tr: [\n      \"Değerli geri bildiriminiz için teşekkür ederiz {customer_name}. Yaşadığınız olumsuz deneyim için özür dileriz. Size daha iyi hizmet verebilmek için {phone} numarasından bizimle iletişime geçmenizi rica ederiz.\",\n      \"Yorumunuz için teşekkürler. Müşteri memnuniyeti bizim için çok önemli. Sorununuzu çözmek için sizinle görüşmek istiyoruz.\"\n    ]\n  }\n};\n\nreturn config;"
+      },
+      "id": "load-reputation-config",
+      "name": "Load Reputation Configuration",
+      "type": "n8n-nodes-base.code",
+      "position": [-380, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/place/details/json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "place_id", "value": "={{ $json.business.google_place_id }}" },
+            { "name": "fields", "value": "name,rating,user_ratings_total,reviews" },
+            { "name": "language", "value": "tr" },
+            { "name": "reviews_sort", "value": "newest" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-google-reviews",
+      "name": "Fetch Google Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [-160, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.business.facebook_page_id }}/ratings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "recommendation_type,review_text,reviewer,created_time,rating" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-facebook-reviews",
+      "name": "Fetch Facebook Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [-160, 400],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate and process reviews from all platforms\nconst config = $('Load Reputation Configuration').first().json;\nconst googleData = $('Fetch Google Reviews').first().json || {};\nconst facebookData = $('Fetch Facebook Reviews').first().json || {};\n\n// Process Google reviews\nconst googleReviews = (googleData.result?.reviews || []).map(r => ({\n  platform: 'google',\n  author: r.author_name,\n  rating: r.rating,\n  text: r.text,\n  time: new Date(r.time * 1000).toISOString(),\n  relative_time: r.relative_time_description,\n  profile_photo: r.profile_photo_url,\n  language: r.language || 'tr',\n  replied: !!r.author_reply,\n  reply_text: r.author_reply?.text || null\n}));\n\n// Process Facebook reviews\nconst facebookReviews = (facebookData.data || []).map(r => ({\n  platform: 'facebook',\n  author: r.reviewer?.name || 'Anonim',\n  rating: r.rating || (r.recommendation_type === 'positive' ? 5 : 2),\n  text: r.review_text || '',\n  time: r.created_time,\n  replied: false,\n  language: 'tr'\n}));\n\n// Combine all reviews\nconst allReviews = [...googleReviews, ...facebookReviews]\n  .sort((a, b) => new Date(b.time) - new Date(a.time));\n\n// Categorize reviews\nconst categorized = {\n  positive: allReviews.filter(r => r.rating >= 4),\n  neutral: allReviews.filter(r => r.rating === 3),\n  negative: allReviews.filter(r => r.rating <= 2),\n  needs_response: allReviews.filter(r => !r.replied),\n  urgent: allReviews.filter(r => r.rating <= config.monitoring.alert_threshold && !r.replied)\n};\n\n// Calculate metrics\nconst metrics = {\n  total_reviews: allReviews.length,\n  average_rating: allReviews.length > 0 \n    ? (allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length).toFixed(2)\n    : 0,\n  google_rating: googleData.result?.rating || 0,\n  google_total: googleData.result?.user_ratings_total || 0,\n  response_rate: allReviews.length > 0\n    ? ((allReviews.filter(r => r.replied).length / allReviews.length) * 100).toFixed(1)\n    : 0,\n  pending_responses: categorized.needs_response.length,\n  urgent_reviews: categorized.urgent.length\n};\n\nreturn {\n  config,\n  reviews: allReviews,\n  categorized,\n  metrics,\n  processed_at: new Date().toISOString()\n};"
+      },
+      "id": "aggregate-reviews",
+      "name": "Aggregate All Reviews",
+      "type": "n8n-nodes-base.code",
+      "position": [60, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "has-urgent",
+              "leftValue": "={{ $json.metrics.urgent_reviews }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-urgent-reviews",
+      "name": "Has Urgent Reviews?",
+      "type": "n8n-nodes-base.if",
+      "position": [280, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Sen profesyonel bir müşteri ilişkileri uzmanısın. Aşağıdaki olumsuz müşteri yorumlarına Türkçe olarak empatik, profesyonel ve çözüm odaklı yanıtlar oluştur.\n\nİşletme: {{ $json.config.business.name }}\n\nOlumsuz Yorumlar:\n{{ JSON.stringify($json.categorized.urgent.slice(0, 5), null, 2) }}\n\nYanıt Kuralları:\n1. Müşterinin adını kullan (varsa)\n2. Yaşanan sorun için samimi özür dile\n3. Empati göster\n4. Somut çözüm öner veya iletişim bilgisi paylaş\n5. Olumlu bir notla bitir\n6. Maximum 100 kelime\n7. Profesyonel ama samimi ol\n8. Savunmacı olma\n\nHer yorum için JSON formatında yanıt:\n{\n  \"responses\": [\n    {\n      \"review_author\": \"yazar adı\",\n      \"review_platform\": \"platform\",\n      \"review_rating\": 0,\n      \"response_text\": \"Türkçe yanıt\",\n      \"sentiment_detected\": \"angry|disappointed|frustrated|confused\",\n      \"priority\": \"high|medium\",\n      \"suggested_action\": \"contact_customer|offer_refund|apologize|investigate\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "maxTokens": 2000,
+          "temperature": 0.6
+        }
+      },
+      "id": "generate-responses",
+      "name": "Generate AI Responses",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [500, 200],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.config.notifications.slack_channel }}",
+        "text": "=🚨 *Acil Yorum Bildirimi*\n\n*İşletme:* {{ $json.config.business.name }}\n*Bekleyen Olumsuz Yorum:* {{ $json.metrics.urgent_reviews }}\n\n*Özet:*\n• Toplam Yorum: {{ $json.metrics.total_reviews }}\n• Ortalama Puan: {{ $json.metrics.average_rating }}/5\n• Yanıt Oranı: %{{ $json.metrics.response_rate }}\n• Google Puanı: {{ $json.metrics.google_rating }}/5 ({{ $json.metrics.google_total }} yorum)\n\n*En Acil Yorum:*\n⭐ {{ $json.categorized.urgent[0]?.rating }}/5 - {{ $json.categorized.urgent[0]?.author }}\n_\"{{ $json.categorized.urgent[0]?.text?.substring(0, 200) }}...\"_\n\n<{{ $json.config.business.google_review_link }}|Yorumları Görüntüle>",
+        "otherOptions": {}
+      },
+      "id": "slack-urgent-alert",
+      "name": "Send Urgent Alert to Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [500, 400],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare review request campaign\nconst requestData = $input.first().json.body || $input.first().json;\nconst config = $('Load Reputation Configuration').first().json;\n\nconst campaign = {\n  customer: {\n    name: requestData.customer_name,\n    phone: requestData.customer_phone,\n    email: requestData.customer_email\n  },\n  service_date: requestData.service_date || new Date().toISOString().split('T')[0],\n  review_link: config.business.google_review_link,\n  \n  message_tr: `Merhaba ${requestData.customer_name}! 👋\\n\\n${config.business.name}'ı tercih ettiğiniz için teşekkür ederiz.\\n\\nDeneyiminizi Google'da paylaşır mısınız? Görüşleriniz bizim için çok değerli! 🙏\\n\\n${config.business.google_review_link}\\n\\nTeşekkürler!`,\n  \n  channels: config.review_request.request_channels,\n  created_at: new Date().toISOString()\n};\n\nreturn campaign;"
+      },
+      "id": "prepare-review-request",
+      "name": "Prepare Review Request",
+      "type": "n8n-nodes-base.code",
+      "position": [-160, 600],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $vars.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $vars.WHATSAPP_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $json.customer.phone }}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"body\": \"{{ $json.message_tr }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-review-request-whatsapp",
+      "name": "Send Review Request (WhatsApp)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [60, 600],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.BUSINESS_EMAIL }}",
+        "toEmail": "={{ $json.customer.email }}",
+        "subject": "=⭐ Deneyiminizi Paylaşır mısınız?",
+        "emailType": "html",
+        "message": "=<div style=\"max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;\">\n  <h2 style=\"color: #1e40af;\">Merhaba {{ $json.customer.name }}!</h2>\n  <p>{{ $('Load Reputation Configuration').item.json.business.name }}'ı tercih ettiğiniz için teşekkür ederiz.</p>\n  <p>Deneyiminizi Google'da paylaşarak bize destek olabilir misiniz? Yorumunuz, diğer müşterilerimize rehberlik edecek ve hizmetimizi geliştirmemize yardımcı olacaktır.</p>\n  <div style=\"text-align: center; margin: 30px 0;\">\n    <a href=\"{{ $json.review_link }}\" style=\"background: #fbbf24; color: #1e293b; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;\">⭐ Yorum Yap</a>\n  </div>\n  <p>Teşekkür ederiz! 🙏</p>\n</div>",
+        "options": {}
+      },
+      "id": "send-review-request-email",
+      "name": "Send Review Request (Email)",
+      "type": "n8n-nodes-base.gmail",
+      "position": [60, 800],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Yorum isteği gönderildi\",\n  \"channels\": {{ JSON.stringify($json.channels) }}\n}",
+        "options": {}
+      },
+      "id": "review-request-response",
+      "name": "Review Request Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [280, 700],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate reputation health report\nconst data = $('Aggregate All Reviews').first().json;\nconst aiResponses = $('Generate AI Responses').first().json || {};\n\nlet responses = [];\ntry {\n  responses = JSON.parse(aiResponses.message?.content || '{}').responses || [];\n} catch(e) {}\n\nconst report = {\n  report_id: `rep_${Date.now()}`,\n  generated_at: new Date().toISOString(),\n  business: data.config.business.name,\n  \n  summary: {\n    health_score: calculateHealthScore(data.metrics),\n    total_reviews: data.metrics.total_reviews,\n    average_rating: data.metrics.average_rating,\n    response_rate: data.metrics.response_rate + '%',\n    pending_responses: data.metrics.pending_responses,\n    urgent_reviews: data.metrics.urgent_reviews\n  },\n  \n  breakdown: {\n    positive: data.categorized.positive.length,\n    neutral: data.categorized.neutral.length,\n    negative: data.categorized.negative.length\n  },\n  \n  platform_scores: {\n    google: data.metrics.google_rating\n  },\n  \n  ai_responses_generated: responses.length,\n  \n  recommendations: generateRecommendations(data.metrics)\n};\n\nfunction calculateHealthScore(metrics) {\n  let score = 0;\n  // Rating component (40 points)\n  score += (parseFloat(metrics.average_rating) / 5) * 40;\n  // Response rate component (30 points)\n  score += (parseFloat(metrics.response_rate) / 100) * 30;\n  // Volume component (20 points)\n  const volumeScore = Math.min(metrics.total_reviews / 100, 1) * 20;\n  score += volumeScore;\n  // No urgent reviews bonus (10 points)\n  if (metrics.urgent_reviews === 0) score += 10;\n  return Math.round(score);\n}\n\nfunction generateRecommendations(metrics) {\n  const recs = [];\n  if (parseFloat(metrics.response_rate) < 80) {\n    recs.push({ priority: 'high', action: 'Yanıt oranını artırın - hedef %80+' });\n  }\n  if (metrics.urgent_reviews > 0) {\n    recs.push({ priority: 'urgent', action: `${metrics.urgent_reviews} olumsuz yoruma acil yanıt verin` });\n  }\n  if (parseFloat(metrics.average_rating) < 4.5) {\n    recs.push({ priority: 'medium', action: 'Hizmet kalitesini artırarak ortalama puanı yükseltin' });\n  }\n  return recs;\n}\n\nreturn report;"
+      },
+      "id": "generate-report",
+      "name": "Generate Reputation Report",
+      "type": "n8n-nodes-base.code",
+      "position": [720, 300],
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Review Monitor (Every 2 Hours)": {
+      "main": [[{ "node": "Load Reputation Configuration", "type": "main", "index": 0 }]]
+    },
+    "Review Request API": {
+      "main": [[{ "node": "Load Reputation Configuration", "type": "main", "index": 0 }]]
+    },
+    "Load Reputation Configuration": {
+      "main": [
+        [
+          { "node": "Fetch Google Reviews", "type": "main", "index": 0 },
+          { "node": "Fetch Facebook Reviews", "type": "main", "index": 0 },
+          { "node": "Prepare Review Request", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Google Reviews": {
+      "main": [[{ "node": "Aggregate All Reviews", "type": "main", "index": 0 }]]
+    },
+    "Fetch Facebook Reviews": {
+      "main": [[{ "node": "Aggregate All Reviews", "type": "main", "index": 0 }]]
+    },
+    "Aggregate All Reviews": {
+      "main": [[{ "node": "Check Urgent Reviews?", "type": "main", "index": 0 }]]
+    },
+    "Check Urgent Reviews?": {
+      "main": [
+        [
+          { "node": "Generate AI Responses", "type": "main", "index": 0 },
+          { "node": "Send Urgent Alert to Slack", "type": "main", "index": 0 }
+        ],
+        [{ "node": "Generate Reputation Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate AI Responses": {
+      "main": [[{ "node": "Generate Reputation Report", "type": "main", "index": 0 }]]
+    },
+    "Send Urgent Alert to Slack": {
+      "main": [[{ "node": "Generate Reputation Report", "type": "main", "index": 0 }]]
+    },
+    "Prepare Review Request": {
+      "main": [
+        [
+          { "node": "Send Review Request (WhatsApp)", "type": "main", "index": 0 },
+          { "node": "Send Review Request (Email)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Review Request (WhatsApp)": {
+      "main": [[{ "node": "Review Request Response", "type": "main", "index": 0 }]]
+    },
+    "Send Review Request (Email)": {
+      "main": [[{ "node": "Review Request Response", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "Reputation" },
+    { "name": "Reviews" },
+    { "name": "Google" },
+    { "name": "AI" },
+    { "name": "Turkish" },
+    { "name": "Grain" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-09T00:00:00.000Z",
+  "versionId": "grain-reputation-management-v1"
+}

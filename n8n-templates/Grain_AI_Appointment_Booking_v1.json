@@ -1,0 +1,291 @@
+{
+  "name": "Grain AI Appointment Booking System v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "appointments/book",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "booking-webhook",
+      "name": "Booking API Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "position": [-500, 300],
+      "webhookId": "appointment-booking-api",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "appointments/availability/{{ $parameter.staff_id }}",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "availability-webhook",
+      "name": "Availability Check Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "position": [-500, 500],
+      "webhookId": "availability-check-api",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Business Configuration\nconst config = {\n  business: {\n    id: $vars.BUSINESS_ID || 'biz_001',\n    name: $vars.BUSINESS_NAME || 'Örnek İşletme',\n    timezone: 'Europe/Istanbul',\n    currency: 'TRY',\n    booking_buffer_minutes: 15,\n    max_advance_booking_days: 30,\n    min_advance_booking_hours: 2,\n    cancellation_policy_hours: 24\n  },\n  \n  working_hours: {\n    monday: { open: '09:00', close: '18:00', breaks: [{ start: '12:00', end: '13:00' }] },\n    tuesday: { open: '09:00', close: '18:00', breaks: [{ start: '12:00', end: '13:00' }] },\n    wednesday: { open: '09:00', close: '18:00', breaks: [{ start: '12:00', end: '13:00' }] },\n    thursday: { open: '09:00', close: '18:00', breaks: [{ start: '12:00', end: '13:00' }] },\n    friday: { open: '09:00', close: '18:00', breaks: [{ start: '12:00', end: '13:00' }] },\n    saturday: { open: '10:00', close: '16:00', breaks: [] },\n    sunday: { open: null, close: null, breaks: [] } // Kapalı\n  },\n  \n  services: [\n    { id: 'srv_001', name: 'Standart Randevu', duration_minutes: 30, price: 200, category: 'general' },\n    { id: 'srv_002', name: 'Uzun Görüşme', duration_minutes: 60, price: 350, category: 'general' },\n    { id: 'srv_003', name: 'Danışmanlık', duration_minutes: 45, price: 500, category: 'premium' },\n    { id: 'srv_004', name: 'Online Görüşme', duration_minutes: 30, price: 150, category: 'online', is_online: true }\n  ],\n  \n  staff: [\n    { id: 'staff_001', name: 'Ahmet Yılmaz', services: ['srv_001', 'srv_002', 'srv_003'], color: '#3b82f6' },\n    { id: 'staff_002', name: 'Ayşe Kaya', services: ['srv_001', 'srv_004'], color: '#10b981' }\n  ],\n  \n  notifications: {\n    confirmation: { sms: true, email: true, whatsapp: true },\n    reminder_24h: { sms: true, email: true, whatsapp: true },\n    reminder_2h: { sms: true, whatsapp: true },\n    cancellation: { sms: true, email: true }\n  }\n};\n\nreturn config;"
+      },
+      "id": "load-booking-config",
+      "name": "Load Booking Configuration",
+      "type": "n8n-nodes-base.code",
+      "position": [-280, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse booking request\nconst request = $input.first().json.body || $input.first().json;\nconst config = $('Load Booking Configuration').first().json;\n\nconst bookingRequest = {\n  // Customer info\n  customer: {\n    name: request.customer_name || request.name,\n    phone: request.customer_phone || request.phone,\n    email: request.customer_email || request.email,\n    notes: request.notes || ''\n  },\n  \n  // Booking details\n  service_id: request.service_id,\n  staff_id: request.staff_id,\n  requested_date: request.date,\n  requested_time: request.time,\n  \n  // Get service details\n  service: config.services.find(s => s.id === request.service_id),\n  staff: config.staff.find(s => s.id === request.staff_id),\n  \n  // Source tracking\n  source: request.source || 'web', // web, whatsapp, phone, widget\n  \n  // Timestamps\n  requested_at: new Date().toISOString()\n};\n\n// Validate required fields\nbookingRequest.validation = {\n  has_customer: !!bookingRequest.customer.name && !!bookingRequest.customer.phone,\n  has_service: !!bookingRequest.service,\n  has_datetime: !!bookingRequest.requested_date && !!bookingRequest.requested_time,\n  is_valid: false\n};\n\nbookingRequest.validation.is_valid = \n  bookingRequest.validation.has_customer && \n  bookingRequest.validation.has_service && \n  bookingRequest.validation.has_datetime;\n\nreturn bookingRequest;"
+      },
+      "id": "parse-booking-request",
+      "name": "Parse Booking Request",
+      "type": "n8n-nodes-base.code",
+      "position": [-60, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-valid",
+              "leftValue": "={{ $json.validation.is_valid }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "validate-request",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.if",
+      "position": [160, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check availability for requested slot\nconst booking = $('Parse Booking Request').first().json;\nconst config = $('Load Booking Configuration').first().json;\n\nconst requestedDate = new Date(booking.requested_date + 'T' + booking.requested_time);\nconst dayOfWeek = requestedDate.toLocaleDateString('en-US', { weekday: 'lowercase' });\nconst workingHours = config.working_hours[dayOfWeek];\n\nlet availability = {\n  is_available: false,\n  reason: null,\n  alternative_slots: []\n};\n\n// Check if business is open on this day\nif (!workingHours.open) {\n  availability.reason = 'İşletme bu gün kapalıdır';\n  return { booking, availability };\n}\n\n// Check if time is within working hours\nconst requestedTime = booking.requested_time;\nif (requestedTime < workingHours.open || requestedTime >= workingHours.close) {\n  availability.reason = `Çalışma saatleri: ${workingHours.open} - ${workingHours.close}`;\n  return { booking, availability };\n}\n\n// Check breaks\nfor (const breakTime of workingHours.breaks) {\n  if (requestedTime >= breakTime.start && requestedTime < breakTime.end) {\n    availability.reason = `Bu saat mola saatine denk geliyor (${breakTime.start} - ${breakTime.end})`;\n    return { booking, availability };\n  }\n}\n\n// Check advance booking limits\nconst now = new Date();\nconst hoursUntilAppointment = (requestedDate - now) / (1000 * 60 * 60);\n\nif (hoursUntilAppointment < config.business.min_advance_booking_hours) {\n  availability.reason = `En az ${config.business.min_advance_booking_hours} saat önceden randevu alınmalıdır`;\n  return { booking, availability };\n}\n\nconst daysUntilAppointment = hoursUntilAppointment / 24;\nif (daysUntilAppointment > config.business.max_advance_booking_days) {\n  availability.reason = `En fazla ${config.business.max_advance_booking_days} gün sonrasına randevu alınabilir`;\n  return { booking, availability };\n}\n\n// Mock: Check existing appointments (would query database)\nconst existingAppointments = []; // This would come from database\n\nconst endTime = new Date(requestedDate.getTime() + booking.service.duration_minutes * 60000);\nconst hasConflict = existingAppointments.some(apt => {\n  const aptStart = new Date(apt.start_time);\n  const aptEnd = new Date(apt.end_time);\n  return (requestedDate < aptEnd && endTime > aptStart);\n});\n\nif (hasConflict) {\n  availability.reason = 'Bu saat dolu';\n  // Generate alternative slots\n  availability.alternative_slots = [\n    { date: booking.requested_date, time: '10:00' },\n    { date: booking.requested_date, time: '14:00' },\n    { date: booking.requested_date, time: '16:00' }\n  ];\n  return { booking, availability };\n}\n\n// Slot is available!\navailability.is_available = true;\navailability.slot = {\n  date: booking.requested_date,\n  start_time: booking.requested_time,\n  end_time: endTime.toTimeString().slice(0, 5),\n  duration_minutes: booking.service.duration_minutes\n};\n\nreturn { booking, availability };"
+      },
+      "id": "check-availability",
+      "name": "Check Slot Availability",
+      "type": "n8n-nodes-base.code",
+      "position": [380, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-available",
+              "leftValue": "={{ $json.availability.is_available }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-available",
+      "name": "Is Slot Available?",
+      "type": "n8n-nodes-base.if",
+      "position": [600, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create confirmed appointment\nconst data = $input.first().json;\nconst config = $('Load Booking Configuration').first().json;\n\nconst appointment = {\n  id: `apt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,\n  status: 'confirmed',\n  \n  // Customer\n  customer: data.booking.customer,\n  \n  // Service & Staff\n  service: data.booking.service,\n  staff: data.booking.staff,\n  \n  // Time\n  date: data.booking.requested_date,\n  start_time: data.availability.slot.start_time,\n  end_time: data.availability.slot.end_time,\n  duration_minutes: data.availability.slot.duration_minutes,\n  timezone: config.business.timezone,\n  \n  // Price\n  price: data.booking.service.price,\n  currency: config.business.currency,\n  \n  // Metadata\n  source: data.booking.source,\n  created_at: new Date().toISOString(),\n  \n  // Confirmation\n  confirmation_code: Math.random().toString(36).substr(2, 8).toUpperCase(),\n  \n  // Reminders scheduled\n  reminders: {\n    reminder_24h: true,\n    reminder_2h: true\n  }\n};\n\nreturn appointment;"
+      },
+      "id": "create-appointment",
+      "name": "Create Appointment Record",
+      "type": "n8n-nodes-base.code",
+      "position": [820, 100],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $vars.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $vars.WHATSAPP_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $json.customer.phone }}\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"appointment_confirmation\",\n    \"language\": { \"code\": \"tr\" },\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          { \"type\": \"text\", \"text\": \"{{ $json.customer.name }}\" },\n          { \"type\": \"text\", \"text\": \"{{ $json.service.name }}\" },\n          { \"type\": \"text\", \"text\": \"{{ $json.date }}\" },\n          { \"type\": \"text\", \"text\": \"{{ $json.start_time }}\" },\n          { \"type\": \"text\", \"text\": \"{{ $json.confirmation_code }}\" }\n        ]\n      }\n    ]\n  }\n}",
+        "options": {}
+      },
+      "id": "send-whatsapp-confirmation",
+      "name": "Send WhatsApp Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1040, 100],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.BUSINESS_EMAIL }}",
+        "toEmail": "={{ $json.customer.email }}",
+        "subject": "=✅ Randevu Onayı - {{ $json.confirmation_code }}",
+        "emailType": "html",
+        "message": "=<h2>Randevunuz Onaylandı!</h2>\n<p>Sayın {{ $json.customer.name }},</p>\n<p>Randevunuz başarıyla oluşturuldu.</p>\n<table style=\"border-collapse: collapse; width: 100%; max-width: 400px;\">\n  <tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Hizmet:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.service.name }}</td></tr>\n  <tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Tarih:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.date }}</td></tr>\n  <tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Saat:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.start_time }} - {{ $json.end_time }}</td></tr>\n  <tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Personel:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $json.staff.name }}</td></tr>\n  <tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Onay Kodu:</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>{{ $json.confirmation_code }}</strong></td></tr>\n</table>\n<p style=\"margin-top: 20px;\">Randevunuzu iptal etmek veya değiştirmek için en az 24 saat önceden bildiriniz.</p>",
+        "options": {}
+      },
+      "id": "send-email-confirmation",
+      "name": "Send Email Confirmation",
+      "type": "n8n-nodes-base.gmail",
+      "position": [1040, 300],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "channel": "#appointments",
+        "text": "=📅 *Yeni Randevu*\n\n*Müşteri:* {{ $json.customer.name }}\n*Telefon:* {{ $json.customer.phone }}\n*Hizmet:* {{ $json.service.name }}\n*Tarih:* {{ $json.date }} {{ $json.start_time }}\n*Personel:* {{ $json.staff.name }}\n*Onay Kodu:* {{ $json.confirmation_code }}\n*Kaynak:* {{ $json.source }}",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "position": [1260, 200],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"appointment\": {\n    \"id\": \"{{ $('Create Appointment Record').item.json.id }}\",\n    \"confirmation_code\": \"{{ $('Create Appointment Record').item.json.confirmation_code }}\",\n    \"date\": \"{{ $('Create Appointment Record').item.json.date }}\",\n    \"time\": \"{{ $('Create Appointment Record').item.json.start_time }}\",\n    \"service\": \"{{ $('Create Appointment Record').item.json.service.name }}\",\n    \"staff\": \"{{ $('Create Appointment Record').item.json.staff.name }}\"\n  },\n  \"message\": \"Randevunuz başarıyla oluşturuldu!\"\n}",
+        "options": {}
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1480, 200],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"error\": \"{{ $('Check Slot Availability').item.json.availability.reason }}\",\n  \"alternative_slots\": {{ JSON.stringify($('Check Slot Availability').item.json.availability.alternative_slots || []) }}\n}",
+        "options": { "responseCode": 400 }
+      },
+      "id": "unavailable-response",
+      "name": "Slot Unavailable Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [820, 400],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"error\": \"Geçersiz istek. Lütfen tüm zorunlu alanları doldurun.\",\n  \"validation\": {{ JSON.stringify($json.validation) }}\n}",
+        "options": { "responseCode": 400 }
+      },
+      "id": "validation-error-response",
+      "name": "Validation Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [380, 400],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      },
+      "id": "reminder-scheduler",
+      "name": "Reminder Scheduler (Hourly)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [-500, 700],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for appointments needing reminders\nconst now = new Date();\nconst in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);\nconst in2Hours = new Date(now.getTime() + 2 * 60 * 60 * 1000);\n\n// Mock: This would query database for upcoming appointments\nconst upcomingAppointments = [\n  // Example appointment needing 24h reminder\n  {\n    id: 'apt_example',\n    customer: { name: 'Test Müşteri', phone: '+905551234567', email: 'test@example.com' },\n    date: in24Hours.toISOString().split('T')[0],\n    start_time: '14:00',\n    service: { name: 'Standart Randevu' },\n    reminder_24h_sent: false,\n    reminder_2h_sent: false\n  }\n];\n\nconst remindersToSend = [];\n\nfor (const apt of upcomingAppointments) {\n  const aptTime = new Date(`${apt.date}T${apt.start_time}`);\n  const hoursUntil = (aptTime - now) / (1000 * 60 * 60);\n  \n  if (hoursUntil <= 24 && hoursUntil > 23 && !apt.reminder_24h_sent) {\n    remindersToSend.push({ ...apt, reminder_type: '24h' });\n  }\n  \n  if (hoursUntil <= 2 && hoursUntil > 1 && !apt.reminder_2h_sent) {\n    remindersToSend.push({ ...apt, reminder_type: '2h' });\n  }\n}\n\nreturn remindersToSend.length > 0 ? remindersToSend : [{ no_reminders: true }];"
+      },
+      "id": "check-reminders",
+      "name": "Check Pending Reminders",
+      "type": "n8n-nodes-base.code",
+      "position": [-280, 700],
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Booking API Endpoint": {
+      "main": [[{ "node": "Load Booking Configuration", "type": "main", "index": 0 }]]
+    },
+    "Availability Check Endpoint": {
+      "main": [[{ "node": "Load Booking Configuration", "type": "main", "index": 0 }]]
+    },
+    "Load Booking Configuration": {
+      "main": [[{ "node": "Parse Booking Request", "type": "main", "index": 0 }]]
+    },
+    "Parse Booking Request": {
+      "main": [[{ "node": "Validate Request", "type": "main", "index": 0 }]]
+    },
+    "Validate Request": {
+      "main": [
+        [{ "node": "Check Slot Availability", "type": "main", "index": 0 }],
+        [{ "node": "Validation Error Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Slot Availability": {
+      "main": [[{ "node": "Is Slot Available?", "type": "main", "index": 0 }]]
+    },
+    "Is Slot Available?": {
+      "main": [
+        [{ "node": "Create Appointment Record", "type": "main", "index": 0 }],
+        [{ "node": "Unavailable Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Appointment Record": {
+      "main": [
+        [
+          { "node": "Send WhatsApp Confirmation", "type": "main", "index": 0 },
+          { "node": "Send Email Confirmation", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send WhatsApp Confirmation": {
+      "main": [[{ "node": "Notify Team", "type": "main", "index": 0 }]]
+    },
+    "Send Email Confirmation": {
+      "main": [[{ "node": "Notify Team", "type": "main", "index": 0 }]]
+    },
+    "Notify Team": {
+      "main": [[{ "node": "Success Response", "type": "main", "index": 0 }]]
+    },
+    "Reminder Scheduler (Hourly)": {
+      "main": [[{ "node": "Check Pending Reminders", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "Appointment" },
+    { "name": "Booking" },
+    { "name": "WhatsApp" },
+    { "name": "Turkish" },
+    { "name": "Grain" }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-01-09T00:00:00.000Z",
+  "versionId": "grain-appointment-booking-v1"
+}
