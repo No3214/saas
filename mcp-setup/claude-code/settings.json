@@ -6,11 +6,11 @@
         "-y",
         "supergateway",
         "--streamableHttp",
-        "http://localhost:5678/mcp-server/http",
+        "https://globaldigital.app.n8n.cloud/mcp-server/http",
         "--header",
-        "authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5MWQ3OTM1OC04M2FkLTQ3NGQtYWI3OC1lODM1NjQwY2ZkZTciLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6IjlmMmM1MTFhLTIxZWItNGFlNS1iODYwLTRlYTg5ZWY1YWNjZSIsImlhdCI6MTc2Nzk3ODg4OX0.hDzxJosGd5rnSsWQF5kbu5DGEjF-nZLVDbrUVJuUNnE"
+        "authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlM2Y3ZDMyZi00MzVkLTQ5ZDUtODNkOC05ZWE5N2E2NGRmOTIiLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6IjRiN2U5OTY1LTgxYmItNDhlNy1hMTA4LTVhNjM0NzVlNzVmZSIsImlhdCI6MTc2ODA0MTIzOX0.qi-BbWInWQvcQRcnslc-po-wq-ljR-PO0Yt3AU33FoY"
       ],
-      "description": "n8n workflow automation MCP server with JWT auth"
+      "description": "n8n cloud workflow automation - globaldigital"
     },
     "spawner-skills": {
       "command": "npx",
