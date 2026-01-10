@@ -1,0 +1,305 @@
+{
+  "name": "Grain Vibe Marketing - Reels Creator v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vibe-reels-creator",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Reels Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "grain-vibe-reels-creator"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-weekly",
+      "name": "Schedule - Weekly Content Planning",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 150]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse input and set defaults\nconst input = $input.first().json;\n\nconst product = input.product || input.topic || 'genel icerik';\nconst targetAudience = input.target_audience || 'girisimciler ve kucuk isletmeler';\nconst duration = input.duration || 30; // seconds\nconst platform = input.platform || 'instagram';\nconst tone = input.tone || 'samimi ve enerjik';\nconst vertical = input.vertical || 'general';\n\n// Duration-based format\nlet format = '30-saniye-tutorial';\nif (duration <= 15) format = '15-saniye-quick-tip';\nelse if (duration >= 60) format = '60-saniye-story';\n\nreturn [{\n  json: {\n    product,\n    target_audience: targetAudience,\n    duration,\n    platform,\n    tone,\n    vertical,\n    format,\n    request_time: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-prepare",
+      "name": "Prepare Request Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 2500
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Sen bir Vibe Marketing uzmaniysin. Instagram/TikTok Reels script'leri yaziyorsun.\n\nTalep Detaylari:\n- Urun/Konu: {{ $json.product }}\n- Hedef Kitle: {{ $json.target_audience }}\n- Sure: {{ $json.duration }} saniye\n- Platform: {{ $json.platform }}\n- Ton: {{ $json.tone }}\n- Format: {{ $json.format }}\n- Sektor: {{ $json.vertical }}\n\n---\n\nAsagidaki formatta bir Reels script'i olustur:\n\n## REELS SCRIPT\n\n### Hook (0-{{ Math.min(3, $json.duration * 0.1) }} saniye)\n**Gorsel:** [Sahne aciklamasi]\n**Ses:** [Konusma/Ses efekti]\n**Text Overlay:** [Ekranda gorunecek yazi]\n\n### Content ({{ Math.min(3, $json.duration * 0.1) }}-{{ $json.duration - 5 }} saniye)\n**Sahne 1:**\n- Gorsel: ...\n- Ses: ...\n- Text: ...\n\n**Sahne 2:**\n- Gorsel: ...\n- Ses: ...\n- Text: ...\n\n[Gerekli kadar sahne ekle]\n\n### CTA (Son 3-5 saniye)\n**Gorsel:** [Final sahne]\n**Ses:** [Call-to-action]\n**Text Overlay:** [CTA text]\n\n---\n\n### Caption Onerisi\n[Emoji ile basla, value proposition, CTA, satir boslugu sonra hashtag'ler]\n\n### Hashtag Seti\n[8-10 stratejik hashtag]\n\n### Trending Audio Onerileri\n[3-5 uygun trending ses onerisi]\n\n### Filming Notlari\n- Isik: ...\n- Aci: ...\n- Props: ...\n- Timing ipuclari: ...\n\n---\n\nScript:\n- {{ $json.tone }} tonunda yaz\n- Turkce, dogal konusma dili\n- Hook ilk 2 saniyede dikkat cekmeli\n- Her sahne icin net yonergeler ver\n- Platform ({{ $json.platform }}) uyumlu format\n- Hedef kitle ({{ $json.target_audience }}) icin optimize et"
+            }
+          ]
+        }
+      },
+      "id": "openai-script",
+      "name": "AI - Generate Reels Script",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [650, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.9,
+          "maxTokens": 1000
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Ayni konu icin 3 alternatif Hook oneris ver:\n\nKonu: {{ $json.product }}\nHedef Kitle: {{ $json.target_audience }}\n\nHer hook icin:\n1. Hook tipi (soru/shock/promise/relatable/controversy)\n2. Text (max 10 kelime)\n3. Neden etkili oldugu\n\nSadece 3 alternatif, kisa ve oz."
+            }
+          ]
+        }
+      },
+      "id": "openai-hooks",
+      "name": "AI - Generate Alt Hooks",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [650, 450],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-content",
+      "name": "Merge Script & Hooks",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [850, 375]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all content into final output\nconst input = $input.first().json;\n\nconst output = {\n  request: input.request || {},\n  main_script: input.script || '',\n  alternative_hooks: input.alt_hooks || '',\n  metadata: {\n    generated_at: new Date().toISOString(),\n    platform: input.request?.platform || 'instagram',\n    duration: input.request?.duration || 30,\n    format: input.request?.format || 'tutorial'\n  },\n  // Quick reference for team\n  quick_brief: {\n    hook_text: 'See main script',\n    cta_text: 'See main script',\n    hashtag_count: 8,\n    estimated_edit_time: `${Math.ceil((input.request?.duration || 30) / 10)} hours`\n  }\n};\n\nreturn [{ json: output }];"
+      },
+      "id": "code-format",
+      "name": "Format Final Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 375]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "reels_scripts",
+        "columns": "product, target_audience, platform, duration, script_content, alt_hooks, created_at",
+        "values": "={{ $json.request.product }}, {{ $json.request.target_audience }}, {{ $json.metadata.platform }}, {{ $json.metadata.duration }}, {{ $json.main_script }}, {{ $json.alternative_hooks }}, {{ $now.toISO() }}"
+      },
+      "id": "postgres-save",
+      "name": "Save Script to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 275],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#content-team",
+        "text": "*Yeni Reels Script Hazirlandi*\n\n*Konu:* {{ $json.request.product }}\n*Platform:* {{ $json.metadata.platform }}\n*Sure:* {{ $json.metadata.duration }}s\n\n*Quick Brief:*\n- Format: {{ $json.metadata.format }}\n- Est. Edit Time: {{ $json.quick_brief.estimated_edit_time }}\n\n_Script detaylari Notion'a eklendi._",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Content Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 475],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.NOTION_CONTENT_DB }}" },
+        "sheetName": "Reels Scripts",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Topic": "={{ $json.request.product }}",
+            "Platform": "={{ $json.metadata.platform }}",
+            "Duration": "={{ $json.metadata.duration }}",
+            "Script": "={{ $json.main_script }}",
+            "Status": "Draft",
+            "Created": "={{ $now.format('YYYY-MM-DD') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "notion-save",
+      "name": "Add to Notion Content Hub",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [1250, 125],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-creds",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Return Script Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1450, 375]
+    },
+    {
+      "parameters": {
+        "errorMessage": "Reels script generation failed"
+      },
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#content-alerts",
+        "text": "*Reels Script Hatasi*\n\nWorkflow: Vibe Marketing - Reels Creator\nHata: {{ $json.error.message }}\nZaman: {{ $now.format('DD.MM.YYYY HH:mm') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-error",
+      "name": "Error Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [450, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Reels Request": {
+      "main": [
+        [{ "node": "Prepare Request Parameters", "type": "main", "index": 0 }]
+      ]
+    },
+    "Schedule - Weekly Content Planning": {
+      "main": [
+        [{ "node": "Prepare Request Parameters", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Request Parameters": {
+      "main": [
+        [
+          { "node": "AI - Generate Reels Script", "type": "main", "index": 0 },
+          { "node": "AI - Generate Alt Hooks", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "AI - Generate Reels Script": {
+      "main": [
+        [{ "node": "Merge Script & Hooks", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI - Generate Alt Hooks": {
+      "main": [
+        [{ "node": "Merge Script & Hooks", "type": "main", "index": 1 }]
+      ]
+    },
+    "Merge Script & Hooks": {
+      "main": [
+        [{ "node": "Format Final Output", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Final Output": {
+      "main": [
+        [
+          { "node": "Save Script to Database", "type": "main", "index": 0 },
+          { "node": "Add to Notion Content Hub", "type": "main", "index": 0 },
+          { "node": "Notify Content Team", "type": "main", "index": 0 },
+          { "node": "Return Script Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Error Notification", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "meta": {
+    "grain_module": "vibe_marketing",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_features": [
+      "reels-scripting",
+      "hook-generation",
+      "multi-platform",
+      "ai-copywriting",
+      "notion-integration"
+    ],
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "vibe-marketing" },
+    { "name": "content-creation" },
+    { "name": "reels" },
+    { "name": "ai-powered" }
+  ]
+}

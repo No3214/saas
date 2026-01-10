@@ -1,0 +1,326 @@
+{
+  "name": "Grain Legacy - Local Business Starter Pack v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legacy-localbiz-lead",
+        "options": {}
+      },
+      "id": "webhook-lead",
+      "name": "Webhook - New Lead/Inquiry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 200],
+      "webhookId": "grain-legacy-localbiz-lead"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legacy-localbiz-review",
+        "options": {}
+      },
+      "id": "webhook-review",
+      "name": "Webhook - New Review",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "grain-legacy-localbiz-review"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-weekly",
+      "name": "Schedule - Weekly Summary",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process lead/inquiry\nconst lead = $input.first().json;\n\nreturn [{\n  json: {\n    lead_id: lead.lead_id || `LD-${Date.now()}`,\n    name: lead.name || lead.customer_name || 'Potansiyel Musteri',\n    phone: lead.phone || '',\n    email: lead.email || '',\n    service: lead.service || lead.interest || 'Genel Bilgi',\n    message: lead.message || lead.inquiry || '',\n    source: lead.source || 'website',\n    status: 'new',\n    created_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-process-lead",
+      "name": "Process Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "leads",
+        "columns": "lead_id, name, phone, email, service, message, source, status, created_at",
+        "values": "={{ $json.lead_id }}, {{ $json.name }}, {{ $json.phone }}, {{ $json.email }}, {{ $json.service }}, {{ $json.message }}, {{ $json.source }}, {{ $json.status }}, {{ $json.created_at }}"
+      },
+      "id": "postgres-save-lead",
+      "name": "Save Lead to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.BUSINESS_OWNER_PHONE }}",
+        "textBody": "YENI MUSTERI ADAYI!\n\nAd: {{ $json.name }}\nTelefon: {{ $json.phone }}\nHizmet: {{ $json.service }}\nKaynak: {{ $json.source }}\n\nMesaj:\n{{ $json.message || 'Mesaj yok' }}\n\n5 dakika icinde arayin!",
+        "options": {}
+      },
+      "id": "whatsapp-lead-alert",
+      "name": "WhatsApp - Lead Alert",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [850, 200],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process new review\nconst review = $input.first().json;\n\nconst rating = parseInt(review.rating) || 0;\nconst isPositive = rating >= 4;\nconst isNegative = rating <= 2;\n\nreturn [{\n  json: {\n    review_id: review.review_id || `RV-${Date.now()}`,\n    platform: review.platform || 'Google',\n    reviewer_name: review.reviewer_name || review.author || 'Anonim',\n    rating: rating,\n    review_text: review.review_text || review.text || '',\n    is_positive: isPositive,\n    is_negative: isNegative,\n    needs_response: true,\n    created_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-process-review",
+      "name": "Process Review Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_negative }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-negative-review",
+      "name": "Check if Negative Review",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.BUSINESS_OWNER_PHONE }}",
+        "textBody": "ACIL - OLUMSUZ YORUM!\n\nPlatform: {{ $json.platform }}\nPuan: {{ $json.rating }}/5\nYazan: {{ $json.reviewer_name }}\n\nYorum:\n{{ $json.review_text }}\n\nHemen yanit verin!",
+        "options": {}
+      },
+      "id": "whatsapp-negative-review",
+      "name": "WhatsApp - Urgent Negative Review",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [850, 350],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.BUSINESS_OWNER_PHONE }}",
+        "textBody": "Yeni Yorum\n\nPlatform: {{ $json.platform }}\nPuan: {{ $json.rating }}/5\nYazan: {{ $json.reviewer_name }}\n\nYorum:\n{{ $json.review_text }}",
+        "options": {}
+      },
+      "id": "whatsapp-positive-review",
+      "name": "WhatsApp - New Review Notification",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [850, 500],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as weekly_leads,\n  COUNT(*) FILTER (WHERE status = 'converted' AND created_at >= CURRENT_DATE - INTERVAL '7 days') as weekly_conversions,\n  ROUND(COUNT(*) FILTER (WHERE status = 'converted')::decimal / NULLIF(COUNT(*), 0) * 100, 1) as conversion_rate\nFROM leads",
+        "options": {}
+      },
+      "id": "postgres-weekly-stats",
+      "name": "Get Weekly Statistics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [450, 600],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.BUSINESS_OWNER_PHONE }}",
+        "textBody": "HAFTALIK OZET\n{{ $now.format('DD.MM.YYYY') }}\n\nYeni Lead: {{ $json.weekly_leads }}\nDonusum: {{ $json.weekly_conversions }}\nDonusum Orani: %{{ $json.conversion_rate }}\n\nIyi haftalar!",
+        "options": {}
+      },
+      "id": "whatsapp-weekly",
+      "name": "WhatsApp - Weekly Summary",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [650, 600],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, lead_id: $json.lead_id }) }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Return Lead Confirmation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "errorMessage": "Local business starter error"
+      },
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 750]
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.BUSINESS_OWNER_PHONE }}",
+        "textBody": "SISTEM HATASI!\n\nIsletme sistemi hatasi.\n\n{{ $json.error?.message || 'Bilinmeyen hata' }}",
+        "options": {}
+      },
+      "id": "whatsapp-error",
+      "name": "WhatsApp - Error Alert",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [450, 750],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - New Lead/Inquiry": {
+      "main": [
+        [{ "node": "Process Lead Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Lead Data": {
+      "main": [
+        [{ "node": "Save Lead to Database", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Lead to Database": {
+      "main": [
+        [
+          { "node": "WhatsApp - Lead Alert", "type": "main", "index": 0 },
+          { "node": "Return Lead Confirmation", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Webhook - New Review": {
+      "main": [
+        [{ "node": "Process Review Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Review Data": {
+      "main": [
+        [{ "node": "Check if Negative Review", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check if Negative Review": {
+      "main": [
+        [{ "node": "WhatsApp - Urgent Negative Review", "type": "main", "index": 0 }],
+        [{ "node": "WhatsApp - New Review Notification", "type": "main", "index": 0 }]
+      ]
+    },
+    "Schedule - Weekly Summary": {
+      "main": [
+        [{ "node": "Get Weekly Statistics", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Weekly Statistics": {
+      "main": [
+        [{ "node": "WhatsApp - Weekly Summary", "type": "main", "index": 0 }]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "WhatsApp - Error Alert", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "meta": {
+    "grain_module": "legacy_products",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_product_type": "standalone",
+    "grain_vertical": "local_business",
+    "grain_features": [
+      "lead-management",
+      "review-monitoring",
+      "negative-review-alerts",
+      "weekly-reports",
+      "whatsapp-notifications"
+    ],
+    "grain_pricing_tier": "starter",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "legacy-product" },
+    { "name": "local-business" },
+    { "name": "starter" }
+  ]
+}

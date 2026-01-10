@@ -1,8 +1,8 @@
 {
     "suite": "Grain SaaS Automation Suite",
-    "version": "5.5.0",
-    "last_updated": "2026-01-10T20:30:00Z",
-    "total_workflows": 63,
+    "version": "5.6.0",
+    "last_updated": "2026-01-10T22:00:00Z",
+    "total_workflows": 69,
     "enterprise_ready": true,
     "mcp_enabled": true,
     "architecture": {
@@ -488,16 +488,113 @@
                     "features": ["task-management", "notifications", "reporting"]
                 }
             ]
+        },
+        "vibe_marketing": {
+            "description": "Vibe Marketing - AI-powered video-first social media marketing",
+            "workflows": [
+                {
+                    "name": "Vibe Marketing Competitor Research v1",
+                    "file": "Grain_Vibe_Marketing_Competitor_Research_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Competitor website scraping",
+                        "Instagram profile analysis",
+                        "AI-powered SWOT generation",
+                        "Engagement metrics",
+                        "Hashtag analysis"
+                    ]
+                },
+                {
+                    "name": "Vibe Marketing Reels Creator v1",
+                    "file": "Grain_Vibe_Marketing_Reels_Creator_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Hook-Content-CTA scripting",
+                        "Multi-duration formats (15/30/60s)",
+                        "Alternative hooks generation",
+                        "Hashtag recommendations",
+                        "Notion integration"
+                    ]
+                },
+                {
+                    "name": "Vibe Marketing Trend Monitor v1",
+                    "file": "Grain_Vibe_Marketing_Trend_Monitor_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "TikTok trending sounds",
+                        "Google Trends analysis",
+                        "Twitter/X trends Turkey",
+                        "AI opportunity insights",
+                        "Urgent trend alerts"
+                    ]
+                }
+            ]
+        },
+        "legacy_products": {
+            "description": "Standalone starter packs for vertical markets",
+            "workflows": [
+                {
+                    "name": "Legacy E-commerce Starter v1",
+                    "file": "Grain_Legacy_Ecommerce_Starter_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Order webhook processing",
+                        "Customer WhatsApp notifications",
+                        "Store owner alerts",
+                        "Daily sales reports",
+                        "PostgreSQL integration"
+                    ]
+                },
+                {
+                    "name": "Legacy Hospitality Starter v1",
+                    "file": "Grain_Legacy_Hospitality_Starter_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Booking management",
+                        "Guest confirmations",
+                        "Reception alerts",
+                        "Morning briefing",
+                        "Occupancy tracking"
+                    ]
+                },
+                {
+                    "name": "Legacy Local Business Starter v1",
+                    "file": "Grain_Legacy_LocalBiz_Starter_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Lead capture & alerts",
+                        "Review monitoring",
+                        "Negative review urgency",
+                        "Weekly performance summary",
+                        "Conversion tracking"
+                    ]
+                }
+            ]
         }
     },
     "statistics": {
-        "total_workflows": 63,
-        "critical_tier": 25,
+        "total_workflows": 69,
+        "critical_tier": 31,
         "high_tier": 30,
         "medium_tier": 8,
-        "modules": 17
+        "modules": 19
     },
     "changelog": {
+        "v5.6.0": {
+            "date": "2026-01-10",
+            "changes": [
+                "NEW: Vibe Marketing module with 3 Critical workflows",
+                "NEW: Competitor Research - AI-powered SWOT, Instagram analysis",
+                "NEW: Reels Creator - Hook-Content-CTA scripting, multi-duration",
+                "NEW: Trend Monitor - TikTok, Google Trends, Twitter/X tracking",
+                "NEW: Legacy Products module with 3 starter packs",
+                "NEW: E-commerce Starter - Order management, WhatsApp notifications",
+                "NEW: Hospitality Starter - Booking management, morning briefing",
+                "NEW: Local Business Starter - Lead capture, review monitoring",
+                "Added CMO Agent and Vibe Marketing Claude Code skills",
+                "Total workflows: 69 across 19 modules"
+            ]
+        },
         "v5.5.0": {
             "date": "2026-01-10",
             "changes": [

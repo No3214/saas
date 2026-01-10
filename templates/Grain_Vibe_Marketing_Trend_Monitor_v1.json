@@ -1,0 +1,377 @@
+{
+  "name": "Grain Vibe Marketing - Trend Monitor v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,14,20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule - 3x Daily Trend Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vibe-trend-check",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Manual Trend Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 450],
+      "webhookId": "grain-vibe-trend-check"
+    },
+    {
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~tiktok-scraper/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "hashtags",
+              "value": "={{ ['turkiye', 'kesfet', 'viral', $json.niche || 'business'] }}"
+            },
+            {
+              "name": "resultsPerPage",
+              "value": "30"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "apify-tiktok",
+      "name": "Scrape TikTok Trends",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "qs": {
+          "engine": "google_trends",
+          "q": "={{ $json.niche || 'dijital pazarlama' }}",
+          "geo": "TR",
+          "data_type": "TIMESERIES"
+        },
+        "options": {}
+      },
+      "id": "serpapi-trends",
+      "name": "Google Trends Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.twitter.com/2/trends/by/woeid/23424969",
+        "authentication": "oAuth2Api",
+        "options": {}
+      },
+      "id": "twitter-trends",
+      "name": "Twitter/X Trends Turkey",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 550],
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "twitter-creds",
+          "name": "Twitter OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze TikTok trending content\nconst items = $input.all();\nconst videos = items.map(i => i.json);\n\nif (videos.length === 0) {\n  return [{ json: { error: 'No TikTok data', trends: [] } }];\n}\n\n// Extract trending sounds\nconst sounds = {};\nvideos.forEach(v => {\n  const sound = v.musicMeta?.musicName || 'Original';\n  sounds[sound] = (sounds[sound] || 0) + 1;\n});\n\nconst trendingSounds = Object.entries(sounds)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 10)\n  .map(([name, count]) => ({ name, usage_count: count }));\n\n// Extract trending hashtags\nconst hashtags = {};\nvideos.forEach(v => {\n  (v.hashtags || []).forEach(tag => {\n    hashtags[tag.name] = (hashtags[tag.name] || 0) + 1;\n  });\n});\n\nconst trendingHashtags = Object.entries(hashtags)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 15)\n  .map(([tag, count]) => ({ tag, count }));\n\n// Content format analysis\nconst formats = {\n  duet: videos.filter(v => v.isDuet).length,\n  stitch: videos.filter(v => v.isStitch).length,\n  original: videos.filter(v => !v.isDuet && !v.isStitch).length\n};\n\n// Average metrics\nconst avgViews = Math.round(videos.reduce((s, v) => s + (v.playCount || 0), 0) / videos.length);\nconst avgLikes = Math.round(videos.reduce((s, v) => s + (v.diggCount || 0), 0) / videos.length);\n\nreturn [{\n  json: {\n    platform: 'tiktok',\n    analyzed_videos: videos.length,\n    trending_sounds: trendingSounds,\n    trending_hashtags: trendingHashtags,\n    content_formats: formats,\n    avg_metrics: { views: avgViews, likes: avgLikes },\n    analyzed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-tiktok",
+      "name": "Analyze TikTok Trends",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Google Trends data\nconst data = $input.first().json;\n\nif (!data.interest_over_time) {\n  return [{ json: { platform: 'google_trends', error: 'No data', trends: [] } }];\n}\n\nconst timeline = data.interest_over_time.timeline_data || [];\n\n// Get trend direction\nconst recentValues = timeline.slice(-7).map(t => t.values?.[0]?.value || 0);\nconst avgRecent = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;\nconst avgOlder = timeline.slice(-14, -7).map(t => t.values?.[0]?.value || 0).reduce((a, b) => a + b, 0) / 7;\n\nconst trendDirection = avgRecent > avgOlder * 1.1 ? 'rising' : avgRecent < avgOlder * 0.9 ? 'falling' : 'stable';\n\n// Related queries\nconst relatedQueries = (data.related_queries?.rising || []).slice(0, 10).map(q => ({\n  query: q.query,\n  growth: q.value\n}));\n\nreturn [{\n  json: {\n    platform: 'google_trends',\n    query: data.search_parameters?.q || 'unknown',\n    trend_direction: trendDirection,\n    current_interest: avgRecent,\n    related_queries: relatedQueries,\n    analyzed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-google",
+      "name": "Process Google Trends",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Twitter trends\nconst data = $input.first().json;\n\nconst trends = (data.data || []).slice(0, 15).map(t => ({\n  name: t.name,\n  tweet_volume: t.tweet_volume || 0,\n  url: t.url\n}));\n\nreturn [{\n  json: {\n    platform: 'twitter',\n    location: 'Turkey',\n    trends: trends,\n    analyzed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-twitter",
+      "name": "Process Twitter Trends",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 550]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "merge-trends",
+      "name": "Merge All Trends",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [850, 375]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Sen bir Vibe Marketing trend analistsin. Asagidaki verileri analiz et ve aksiyon onerileri sun.\n\nTikTok Trendleri:\n{{ JSON.stringify($json.tiktok, null, 2) }}\n\nGoogle Trends:\n{{ JSON.stringify($json.google, null, 2) }}\n\nTwitter/X Trendleri:\n{{ JSON.stringify($json.twitter, null, 2) }}\n\n---\n\nAsagidaki formatta rapor olustur:\n\n## Gunluk Trend Raporu\n*{{ $now.format('DD MMMM YYYY') }}*\n\n### Trend Ozeti\n(3-4 cumle genel degerlendirme)\n\n### Acil Firsatlar (24 saat icinde)\n| Trend | Platform | Oneri | Oncelik |\n|-------|----------|-------|--------|\n| ... | ... | ... | Yuksek/Orta |\n\n### Trending Sesler (TikTok/Reels)\n1. **[Ses Adi]** - Kullanim onerisi\n2. ...\n\n### Hashtag Stratejisi\n- Bugunun hashtag'leri: ...\n- Kacinin hashtag'leri: ...\n\n### Icerik Fikirleri\n1. [Format] - [Konu] - [Platform]\n2. ...\n3. ...\n\n### Rakip Hareketi (Tahmin)\n(Bu trendlere rakipler nasil tepki verebilir)\n\n### Yarin icin Hazirlık\n(Onumuzdeki 24-48 saat icin oneiler)\n\n---\n\nTurkce yaz, kisa ve aksiyona yonelik ol."
+            }
+          ]
+        }
+      },
+      "id": "openai-analysis",
+      "name": "AI - Trend Analysis & Recommendations",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1050, 375],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "trend_reports",
+        "columns": "report_date, tiktok_data, google_data, twitter_data, ai_analysis, created_at",
+        "values": "={{ $now.format('YYYY-MM-DD') }}, {{ JSON.stringify($json.tiktok) }}, {{ JSON.stringify($json.google) }}, {{ JSON.stringify($json.twitter) }}, {{ $json.analysis }}, {{ $now.toISO() }}"
+      },
+      "id": "postgres-save",
+      "name": "Save Trend Report",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 275],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#marketing-daily",
+        "text": "*Gunluk Trend Raporu*\n{{ $now.format('DD.MM.YYYY HH:mm') }}\n\n{{ $json.analysis.substring(0, 500) }}...\n\n_Tam rapor icin dashboard'a bakin._",
+        "otherOptions": {}
+      },
+      "id": "slack-daily",
+      "name": "Send Daily Trend Update",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 475],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.urgent_opportunity }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-urgent",
+      "name": "Check Urgent Opportunity",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 625]
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.MARKETING_LEAD_PHONE }}",
+        "textBody": "ACIL TREND FIRSATI!\n\n{{ $json.urgent_trend }}\n\n24 saat icinde aksiyon alin.",
+        "options": {}
+      },
+      "id": "whatsapp-urgent",
+      "name": "WhatsApp - Urgent Alert",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1450, 575],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "Trend monitoring failed"
+      },
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 650]
+    },
+    {
+      "parameters": {
+        "channel": "#marketing-alerts",
+        "text": "*Trend Monitor Hatasi*\n\nHata: {{ $json.error.message }}\nZaman: {{ $now.format('DD.MM.YYYY HH:mm') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-error",
+      "name": "Error Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [450, 650],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule - 3x Daily Trend Check": {
+      "main": [
+        [
+          { "node": "Scrape TikTok Trends", "type": "main", "index": 0 },
+          { "node": "Google Trends Data", "type": "main", "index": 0 },
+          { "node": "Twitter/X Trends Turkey", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Webhook - Manual Trend Check": {
+      "main": [
+        [
+          { "node": "Scrape TikTok Trends", "type": "main", "index": 0 },
+          { "node": "Google Trends Data", "type": "main", "index": 0 },
+          { "node": "Twitter/X Trends Turkey", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Scrape TikTok Trends": {
+      "main": [
+        [{ "node": "Analyze TikTok Trends", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google Trends Data": {
+      "main": [
+        [{ "node": "Process Google Trends", "type": "main", "index": 0 }]
+      ]
+    },
+    "Twitter/X Trends Turkey": {
+      "main": [
+        [{ "node": "Process Twitter Trends", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze TikTok Trends": {
+      "main": [
+        [{ "node": "Merge All Trends", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Google Trends": {
+      "main": [
+        [{ "node": "Merge All Trends", "type": "main", "index": 1 }]
+      ]
+    },
+    "Process Twitter Trends": {
+      "main": [
+        [{ "node": "Merge All Trends", "type": "main", "index": 2 }]
+      ]
+    },
+    "Merge All Trends": {
+      "main": [
+        [{ "node": "AI - Trend Analysis & Recommendations", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI - Trend Analysis & Recommendations": {
+      "main": [
+        [
+          { "node": "Save Trend Report", "type": "main", "index": 0 },
+          { "node": "Send Daily Trend Update", "type": "main", "index": 0 },
+          { "node": "Check Urgent Opportunity", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Check Urgent Opportunity": {
+      "main": [
+        [{ "node": "WhatsApp - Urgent Alert", "type": "main", "index": 0 }]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Error Notification", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "meta": {
+    "grain_module": "vibe_marketing",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_features": [
+      "trend-monitoring",
+      "multi-platform",
+      "tiktok-analysis",
+      "google-trends",
+      "twitter-trends",
+      "ai-insights",
+      "urgent-alerts"
+    ],
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "vibe-marketing" },
+    { "name": "trend-analysis" },
+    { "name": "ai-powered" }
+  ]
+}
