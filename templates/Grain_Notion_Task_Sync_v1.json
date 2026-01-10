@@ -24,8 +24,8 @@
         "operation": "getAll",
         "databaseId": {
           "__rl": true,
-          "mode": "list",
-          "value": ""
+          "mode": "id",
+          "value": "509f6ed8fe9349d8937c586ae6fe407c"
         },
         "returnAll": false,
         "limit": 50,

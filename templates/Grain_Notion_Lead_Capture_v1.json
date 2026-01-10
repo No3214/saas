@@ -20,8 +20,8 @@
         "resource": "databasePage",
         "databaseId": {
           "__rl": true,
-          "mode": "list",
-          "value": ""
+          "mode": "id",
+          "value": "65db7766db1543f9aaad02db41deaa29"
         },
         "title": "={{ $json.body.name || $json.body.full_name || 'Yeni Lead' }}",
         "propertiesUi": {

@@ -13,8 +13,8 @@
         "event": "pageUpdatedInDatabase",
         "databaseId": {
           "__rl": true,
-          "mode": "list",
-          "value": ""
+          "mode": "id",
+          "value": "04a46df186f249448f3ef66b7a385f1b"
         },
         "simple": true
       },
