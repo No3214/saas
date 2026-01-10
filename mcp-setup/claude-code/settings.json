@@ -8,7 +8,7 @@
         "--streamableHttp",
         "https://globaldigital.app.n8n.cloud/mcp-server/http",
         "--header",
-        "authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlM2Y3ZDMyZi00MzVkLTQ5ZDUtODNkOC05ZWE5N2E2NGRmOTIiLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6IjRiN2U5OTY1LTgxYmItNDhlNy1hMTA4LTVhNjM0NzVlNzVmZSIsImlhdCI6MTc2ODA0MTIzOX0.qi-BbWInWQvcQRcnslc-po-wq-ljR-PO0Yt3AU33FoY"
+        "authorization:Bearer YOUR_N8N_MCP_JWT_TOKEN"
       ],
       "description": "n8n cloud workflow automation - globaldigital"
     },
