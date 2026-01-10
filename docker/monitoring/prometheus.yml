@@ -1,0 +1,54 @@
+# Grain SaaS - Prometheus Configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # n8n metrics (if enabled)
+  - job_name: 'n8n'
+    static_configs:
+      - targets: ['grain-n8n:5678']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # PostgreSQL metrics (requires postgres_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['grain-postgres:9187']
+    scrape_interval: 30s
+
+  # Redis metrics (requires redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['grain-redis:9121']
+    scrape_interval: 30s
+
+  # Traefik metrics
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['grain-traefik:8080']
+    scrape_interval: 15s
+
+  # Grain Brain API
+  - job_name: 'grain-brain'
+    static_configs:
+      - targets: ['grain-brain:8000']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Docker container metrics (if cAdvisor is added)
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['cadvisor:8080']
