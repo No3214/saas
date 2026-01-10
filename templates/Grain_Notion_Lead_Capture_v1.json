@@ -1,0 +1,144 @@
+{
+  "name": "Grain_Notion_Lead_Capture_v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grain/notion/lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "grain-notion-lead"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "title": "={{ $json.body.name || $json.body.full_name || 'Yeni Lead' }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Email|email",
+              "emailValue": "={{ $json.body.email }}"
+            },
+            {
+              "key": "Telefon|phone_number",
+              "phoneValue": "={{ $json.body.phone }}"
+            },
+            {
+              "key": "Kaynak|select",
+              "selectValue": "={{ $json.body.source || 'Web Form' }}"
+            },
+            {
+              "key": "Durum|status",
+              "statusValue": "Yeni"
+            },
+            {
+              "key": "Notlar|rich_text",
+              "richTextValue": "={{ $json.body.message || $json.body.notes || '' }}"
+            }
+          ]
+        }
+      },
+      "id": "notion-create",
+      "name": "Notion Lead Ekle",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [500, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Lead kaydedildi', notion_id: $json.id }) }}"
+      },
+      "id": "response-success",
+      "name": "Basarili Yanit",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [750, 250]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error?.message || 'Bilinmeyen hata' }) }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "response-error",
+      "name": "Hata Yaniti",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Hata Yakalayici",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [500, 500]
+    }
+  ],
+  "connections": {
+    "Lead Webhook": {
+      "main": [
+        [
+          {
+            "node": "Notion Lead Ekle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Lead Ekle": {
+      "main": [
+        [
+          {
+            "node": "Basarili Yanit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hata Yakalayici": {
+      "main": [
+        [
+          {
+            "node": "Hata Yaniti",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "grain_module": "notion",
+    "grain_tier": "High",
+    "grain_version": "1.0.0",
+    "grain_features": ["lead-capture", "crm", "webhook"],
+    "grain_integrations": ["Notion", "Webhook"],
+    "grain_language": "tr"
+  }
+}

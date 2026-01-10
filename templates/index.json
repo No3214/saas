@@ -1,8 +1,8 @@
 {
     "suite": "Grain SaaS Automation Suite",
-    "version": "5.1.0",
-    "last_updated": "2026-01-09T12:00:00Z",
-    "total_workflows": 57,
+    "version": "5.3.0",
+    "last_updated": "2026-01-10T12:00:00Z",
+    "total_workflows": 60,
     "enterprise_ready": true,
     "mcp_enabled": true,
     "architecture": {
@@ -429,14 +429,37 @@
                     "tier": "High"
                 }
             ]
+        },
+        "notion": {
+            "description": "Notion workspace integration and automation",
+            "workflows": [
+                {
+                    "name": "Notion Lead Capture v1",
+                    "file": "Grain_Notion_Lead_Capture_v1.json",
+                    "tier": "High",
+                    "features": ["webhook", "crm", "lead-capture"]
+                },
+                {
+                    "name": "Notion Content Hub v1",
+                    "file": "Grain_Notion_Content_Hub_v1.json",
+                    "tier": "High",
+                    "features": ["content-management", "markdown", "publishing"]
+                },
+                {
+                    "name": "Notion Task Sync v1",
+                    "file": "Grain_Notion_Task_Sync_v1.json",
+                    "tier": "Medium",
+                    "features": ["task-management", "notifications", "reporting"]
+                }
+            ]
         }
     },
     "statistics": {
-        "total_workflows": 57,
+        "total_workflows": 60,
         "critical_tier": 22,
-        "high_tier": 28,
-        "medium_tier": 7,
-        "modules": 16
+        "high_tier": 30,
+        "medium_tier": 8,
+        "modules": 17
     },
     "changelog": {
         "v5.1.0": {
