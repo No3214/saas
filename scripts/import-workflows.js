@@ -16,7 +16,7 @@ const http = require('http');
 const config = {
   n8nUrl: process.env.N8N_URL || 'http://localhost:5678',
   apiKey: process.env.N8N_API_KEY || '',
-  templatesDir: path.join(__dirname, '..', 'n8n-templates'),
+  templatesDir: path.join(__dirname, '..', 'templates'),
   dryRun: process.argv.includes('--dry-run'),
   verbose: process.argv.includes('--verbose')
 };

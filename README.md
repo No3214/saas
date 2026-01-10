@@ -23,7 +23,7 @@ Grain SaaS, küçük ve orta ölçekli işletmeler ile dijital ajanslar için ta
 
 ## Ana Bileşenler
 
-### 1. n8n Workflow Templates (`/n8n-templates`)
+### 1. Workflow Templates (`/templates`)
 
 | Kategori | Workflow Sayısı | Açıklama |
 |----------|-----------------|----------|
@@ -38,7 +38,7 @@ Grain SaaS, küçük ve orta ölçekli işletmeler ile dijital ajanslar için ta
 | **Operations** | 4 | RevOps, faturalama, CDP, sözleşme analizi |
 | **AI Productivity** | 5 | Chatbot, RAG, web search, content generator |
 
-### 2. Claude Code Skills (`/.claude/skills`)
+### 2. Claude Code Skills (`/mcp-setup/claude-code/skills`)
 
 15 özelleştirilmiş skill seti:
 - `workflow-creator` - Yeni workflow oluşturma rehberi
@@ -47,7 +47,7 @@ Grain SaaS, küçük ve orta ölçekli işletmeler ile dijital ajanslar için ta
 - `vibeship-spawner-skills` - 462 harici skill erişimi
 - `external-resources` - MCP serverlar, community node'lar
 
-### 3. Slash Commands (`/.claude/commands`)
+### 3. Slash Commands (`/mcp-setup/claude-code/commands`)
 
 | Komut | Açıklama |
 |-------|----------|
@@ -159,21 +159,46 @@ npm install n8n-nodes-scrapeninja
 
 ---
 
-## Dosya Yapısı
+## Dosya Yapısı (Enterprise)
 
 ```
 saas/
-├── .claude/
-│   ├── settings.json      # Claude Code yapılandırması
-│   ├── skills/            # 15 skill dizini
-│   ├── commands/          # 8 slash command
-│   └── hooks/             # Session hooks
-├── n8n-templates/
-│   ├── index.json         # Workflow kataloğu
-│   └── Grain_*.json       # 57 workflow template
-├── .env.example           # Environment template
-├── .gitignore
-└── README.md
+├── .github/                    # GitHub Governance
+│   ├── workflows/              # CI/CD pipelines
+│   └── ISSUE_TEMPLATE/         # Issue templates
+├── templates/                  # Workflow Templates
+│   ├── Grain_*.json           # 57 workflow template
+│   ├── bundles/               # Full suite bundles
+│   └── index.json             # Workflow catalog
+├── subflows/                   # Reusable Components
+│   └── Grain_Sub_*.json       # Modular subflows
+├── services/                   # Microservices
+│   └── grain-brain/           # Python AI service
+├── mcp-setup/                  # AI Infrastructure
+│   ├── claude-code/           # Claude Code config
+│   │   ├── skills/            # 15 skills
+│   │   ├── commands/          # 8 commands
+│   │   └── hooks/             # Session hooks
+│   └── claude_config.json     # MCP config
+├── mcp-server/                 # MCP Server
+├── config/                     # Configuration
+│   ├── .env.example           # Environment template
+│   └── environments/          # Per-env configs
+├── docker/                     # Container Config
+│   └── docker-compose.yml     # Full stack
+├── scripts/                    # Automation Scripts
+├── bin/                        # CLI Tools
+├── docs/                       # Documentation
+├── landing/                    # Landing Page
+├── dashboard/                  # Admin Dashboard
+├── assets/                     # Static Assets
+│   ├── images/
+│   ├── logos/
+│   └── icons/
+├── README.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+└── LICENSE
 ```
 
 ---
