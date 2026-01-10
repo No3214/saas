@@ -1,14 +1,55 @@
 {
-  "count": 117,
-  "lastUpdated": "2026-01-08",
+  "count": 121,
+  "lastUpdated": "2026-01-10",
+  "version": "5.2.0",
   "enterprise_ready": true,
   "mcp_enabled": true,
+  "community_nodes_required": [
+    "n8n-nodes-evolution-api",
+    "n8n-nodes-elevenlabs",
+    "n8n-nodes-perplexity",
+    "n8n-nodes-pdforge",
+    "n8n-nodes-scrapeninja",
+    "n8n-nodes-tesseractjs"
+  ],
+  "mcp_servers_integrated": [
+    "n8n-mcp",
+    "spawner-skills",
+    "postgres",
+    "github",
+    "slack",
+    "playwright"
+  ],
   "categories": {
     "core": [
       "Grain_Master_Orchestrator_v1.json",
       "Grain_MCP_Client_Connector_v1.json",
       "Grain_Self_Healing_Pipeline_v1.json",
       "Grain_Autonomous_Decision_Engine_v1.json"
+    ],
+    "voice_ai": [
+      "Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
+      "Grain_Voice_AI_Assistant_v1.json",
+      "Grain_AI_Meeting_Notes_v1.json"
+    ],
+    "whatsapp": [
+      "Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
+      "Grain_Reputation_Management_Suite_v1.json",
+      "AI-Powered WhatsApp Chatbot for Text, Voice, Images & PDFs.json"
+    ],
+    "turkish_local": [
+      "Grain_Turkish_Local_Business_Manager_v1.json",
+      "Grain_Turkish_GBP_Optimizer_v1.json",
+      "Grain_Reputation_Management_Suite_v1.json"
+    ],
+    "agency_whitelabel": [
+      "Grain_WhiteLabel_Agency_Dashboard_v1.json",
+      "Grain_Client_Reporting_Dashboard_v1.json",
+      "Grain_Proposal_Contract_Generator_v1.json"
+    ],
+    "appointment_booking": [
+      "Grain_AI_Appointment_Booking_v1.json",
+      "Grain_Restaurant_Reservation_v1.json"
     ],
     "hospitality": [
       "Grain_Dynamic_Pricing_Engine_v1.json",
@@ -852,6 +893,69 @@
       "category": "local_business",
       "description": "AI-powered automatic review responses for Google and TripAdvisor with sentiment routing",
       "roi": "4x faster response time, 95% consistency"
+    },
+    {
+      "filename": "Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
+      "category": "voice_ai",
+      "description": "ElevenLabs Conversational AI ile WhatsApp üzerinden Türkçe sesli asistan - intent analizi, CRM entegrasyonu",
+      "roi": "7/24 sesli müşteri desteği",
+      "features": ["ElevenLabs Voice AI", "WhatsApp Business API", "Turkish NLU", "CRM Integration"],
+      "community_nodes": ["n8n-nodes-elevenlabs"]
+    },
+    {
+      "filename": "Grain_WhiteLabel_Agency_Dashboard_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_WhiteLabel_Agency_Dashboard_v1.json",
+      "category": "agency_whitelabel",
+      "description": "Ajanslar için white-label dashboard otomasyonu - müşteri portali, KPI takibi, otomatik raporlama",
+      "roi": "80% raporlama süresi tasarrufu",
+      "features": ["Multi-tenant", "Branded Reports", "Real-time KPIs", "Client Portal"]
+    },
+    {
+      "filename": "Grain_AI_Appointment_Booking_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Appointment_Booking_v1.json",
+      "category": "appointment_booking",
+      "description": "AI destekli randevu sistemi - doğal dil anlama, takvim senkronizasyonu, otomatik hatırlatmalar",
+      "roi": "60% randevu verimliliği artışı",
+      "features": ["NLU Booking", "Google Calendar", "WhatsApp Reminders", "Smart Scheduling"]
+    },
+    {
+      "filename": "Grain_Reputation_Management_Suite_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Reputation_Management_Suite_v1.json",
+      "category": "turkish_local",
+      "description": "Kapsamlı itibar yönetimi - çoklu platform yorum takibi, AI yanıtları, sağlık puanı, yorum talep kampanyaları",
+      "roi": "5-9% yıldız başına gelir artışı",
+      "features": ["Multi-platform Reviews", "AI Response Generation", "Health Score", "Review Campaigns", "WhatsApp Outreach"]
+    },
+    {
+      "filename": "Grain_Turkish_Local_Business_Manager_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Turkish_Local_Business_Manager_v1.json",
+      "category": "turkish_local",
+      "description": "Türk yerel işletmeleri için platform yönetimi - Google, Yelp, Şikayetvar takibi, AI önerileri",
+      "roi": "40% yerel görünürlük artışı",
+      "features": ["Turkish Platforms", "Multi-business Support", "AI Recommendations", "Health Monitoring"]
+    },
+    {
+      "filename": "Grain_Turkish_GBP_Optimizer_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Turkish_GBP_Optimizer_v1.json",
+      "category": "turkish_local",
+      "description": "Google Business Profile optimizasyonu - Türkçe içerik, otomatik paylaşım, yerel SEO",
+      "roi": "30% daha fazla yerel tıklama"
+    },
+    {
+      "filename": "Grain_AI_Chatbot_Web_Search_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Chatbot_Web_Search_v1.json",
+      "category": "ai_productivity",
+      "description": "Web arama entegreli AI chatbot - gerçek zamanlı bilgi, Türkçe destek, SerpAPI",
+      "roi": "Güncel bilgiye dayalı yanıtlar"
+    },
+    {
+      "filename": "Grain_Web_Scraper_Agent_v1.json",
+      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Web_Scraper_Agent_v1.json",
+      "category": "intelligence",
+      "description": "AI destekli web scraper - yapılandırılabilir çıkarım, çoklu format, içerik analizi",
+      "roi": "Otomatik veri toplama",
+      "community_nodes": ["n8n-nodes-scrapeninja", "n8n-nodes-firecrawl"]
     }
   ]
 }
