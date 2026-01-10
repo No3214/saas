@@ -1,5 +1,5 @@
 {
-  "count": 121,
+  "count": 57,
   "lastUpdated": "2026-01-10",
   "version": "5.2.0",
   "enterprise_ready": true,
@@ -24,18 +24,15 @@
     "core": [
       "Grain_Master_Orchestrator_v1.json",
       "Grain_MCP_Client_Connector_v1.json",
-      "Grain_Self_Healing_Pipeline_v1.json",
-      "Grain_Autonomous_Decision_Engine_v1.json"
+      "Grain_Self_Healing_Pipeline_v1.json"
     ],
     "voice_ai": [
       "Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
-      "Grain_Voice_AI_Assistant_v1.json",
       "Grain_AI_Meeting_Notes_v1.json"
     ],
     "whatsapp": [
       "Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
-      "Grain_Reputation_Management_Suite_v1.json",
-      "AI-Powered WhatsApp Chatbot for Text, Voice, Images & PDFs.json"
+      "Grain_Reputation_Management_Suite_v1.json"
     ],
     "turkish_local": [
       "Grain_Turkish_Local_Business_Manager_v1.json",
@@ -44,8 +41,7 @@
     ],
     "agency_whitelabel": [
       "Grain_WhiteLabel_Agency_Dashboard_v1.json",
-      "Grain_Client_Reporting_Dashboard_v1.json",
-      "Grain_Proposal_Contract_Generator_v1.json"
+      "Grain_Client_Reporting_Dashboard_v1.json"
     ],
     "appointment_booking": [
       "Grain_AI_Appointment_Booking_v1.json",
@@ -53,63 +49,39 @@
     ],
     "hospitality": [
       "Grain_Dynamic_Pricing_Engine_v1.json",
-      "Grain_Booking_Channel_Sync_v1.json",
       "Grain_Housekeeping_Operations_v1.json",
       "Grain_Guest_Communication_Journey_v1.json",
       "Grain_Review_Management_AI_v1.json",
-      "Grain_Review_Management_v1.json",
       "Grain_Restaurant_Reservation_v1.json"
     ],
     "agency": [
       "Grain_Campaign_Performance_Monitor_v1.json",
-      "Grain_Client_Onboarding_Automation_v1.json",
-      "Grain_Client_Reporting_Dashboard_v1.json",
-      "Grain_Proposal_Contract_Generator_v1.json"
+      "Grain_Client_Reporting_Dashboard_v1.json"
     ],
     "marketing": [
       "Grain_Email_Marketing_Automation_v1.json",
-      "Grain_Omnichannel_Marketing_Hub_v1.json",
-      "Grain_Influencer_Marketing_Hub_v1.json",
-      "Grain_Influencer_Outreach_v1.json",
-      "Grain_SEO_Content_Pipeline_v1.json",
-      "Grain_Multi_Platform_Publisher_v1.json",
       "Grain_Multi_Platform_Publisher_v2.json",
       "Grain_Content_Repurposing_Engine_v1.json"
     ],
     "ai_content": [
-      "Grain_Multi_Agent_Content_System_v1.json",
       "Grain_AI_Copywriting_Studio_v1.json",
       "Grain_AI_Visual_Content_Generator_v1.json",
-      "Grain_Agentic_AI_Orchestrator_v1.json",
-      "Grain_Prompt_Engineering_Studio_v1.json",
-      "Grain_Knowledge_Base_AI_Search_v1.json",
-      "Grain_Knowledge_RAG_v1.json",
-      "Grain_Voice_AI_Assistant_v1.json"
+      "Grain_Knowledge_Base_AI_Search_v1.json"
     ],
     "analytics": [
       "Grain_Unified_Analytics_Dashboard_v1.json",
-      "Grain_AB_Testing_Engine_v1.json",
-      "Grain_Video_Performance_Tracker_v1.json",
-      "Grain_Content_Performance_Analyzer_v1.json",
-      "Grain_Predictive_Analytics_Engine_v1.json",
-      "Grain_Root_Cause_Analyzer_v1.json"
+      "Grain_AB_Testing_Engine_v1.json"
     ],
     "customer_success": [
       "Grain_Churn_Prediction_Prevention_v1.json",
       "Grain_Customer_Support_Automation_v1.json",
-      "Grain_Personalization_Engine_v1.json",
       "Grain_NPS_Feedback_Collection_v1.json",
       "Grain_Customer_Onboarding_Automation_v1.json",
       "Grain_Subscription_Lifecycle_Manager_v1.json",
       "Grain_Ticket_Escalation_Manager_v1.json"
     ],
     "growth": [
-      "Grain_Referral_Program_Automation_v1.json",
-      "Grain_Referral_Affiliate_Program_v1.json",
-      "Grain_Webinar_Event_Automation_v1.json",
-      "Grain_Lead_Conversion_Funnel_v1.json",
-      "Grain_Landing_Page_CRO_Hub_v1.json",
-      "Grain_Meeting_Intelligence_Hub_v1.json"
+      "Grain_Lead_Conversion_Funnel_v1.json"
     ],
     "operations": [
       "Grain_RevOps_Hub_v1.json",
@@ -119,35 +91,15 @@
     ],
     "intelligence": [
       "Grain_Competitive_Intelligence_v1.json",
-      "Grain_Competitor_Monitoring_Hub_v1.json",
-      "Grain_Social_Listening_Sentiment_v1.json",
       "Grain_Social_Inbox_Manager_v1.json"
     ],
     "seo": [
       "Grain_SEO_Site_Audit_v1.json",
       "Grain_SEO_Engine_v1.json",
-      "Grain_SEO_Keyword_Research_Free_v1.json",
-      "Grain_Keyword_Research_Pipeline_v1.json",
-      "Grain_Keyword_Gap_Analysis_v1.json",
-      "Grain_Rank_Tracking_v1.json",
-      "Grain_SERP_Rank_Tracker_Free_v1.json",
-      "Grain_Backlink_Monitor_v1.json",
-      "Grain_Local_Citation_Builder_v1.json",
       "Grain_GSC_Hub_v1.json"
-    ],
-    "local_seo": [
-      "Grain_Local_SEO_Automation_Hub_v1.json",
-      "Grain_Local_Citation_Builder_v1.json",
-      "Grain_GBP_Auto_Posting_v1.json"
-    ],
-    "restaurant": [
-      "Grain_Restaurant_Marketing_Hub_v1.json",
-      "Grain_Restaurant_Loyalty_Program_v1.json",
-      "Grain_Guest_Feedback_Review_v1.json"
     ],
     "ai_productivity": [
       "Grain_AI_Meeting_Notes_v1.json",
-      "Grain_AI_Chatbot_Builder_v1.json",
       "Grain_Slack_Teams_Bot_v1.json"
     ],
     "document_processing": [
@@ -155,43 +107,32 @@
       "Grain_Multi_Language_Translation_v1.json"
     ],
     "finance": [
-      "Grain_Subscription_Management_v1.json",
       "Grain_Expense_Management_v1.json"
     ],
     "media": [
       "Grain_Podcast_Production_Pipeline_v1.json"
     ],
     "hr": [
-      "Grain_HR_Onboarding_Offboarding_v1.json",
       "Grain_Recruitment_AI_Agent_v1.json"
     ],
     "ecommerce": [
       "Grain_Ecommerce_Orchestrator_v1.json"
     ],
     "ai_cost_optimization": [
-      "Grain_LLM_Semantic_Cache_v1.json",
       "Grain_AI_Token_Cost_Tracker_v1.json"
     ],
     "devops": [
       "Grain_Workflow_Backup_System_v1.json",
       "Grain_MCP_Workflow_Monitor_v1.json"
     ],
-    "content_marketing": [
-      "Grain_AI_Content_Factory_v1.json"
-    ],
     "pro": [
       "Grain_Agentic_AI_Orchestrator_v2_Pro.json"
-    ],
-    "video": [
-      "Viral_Video_Ad_Factory.json",
-      "AI_SERP_Brand_Monitor.json"
     ],
     "real_estate": [
       "Grain_Real_Estate_Land_Showcase_v1.json"
     ],
     "local_business": [
-      "Grain_Local_Business_Listing_Manager_v1.json",
-      "Grain_AI_Review_Responder_v1.json"
+      "Grain_Local_Business_Listing_Manager_v1.json"
     ]
   },
   "files": [
@@ -201,13 +142,6 @@
       "category": "hospitality",
       "description": "AI-driven real-time pricing based on demand signals, competitor rates, events, and seasonality",
       "roi": "15-20% RevPAR increase"
-    },
-    {
-      "filename": "Grain_Booking_Channel_Sync_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Booking_Channel_Sync_v1.json",
-      "category": "hospitality",
-      "description": "Real-time synchronization across OTAs (Booking.com, Expedia, Airbnb, VRBO)",
-      "roi": "40% ADR increase, zero overbookings"
     },
     {
       "filename": "Grain_Housekeeping_Operations_v1.json",
@@ -238,25 +172,11 @@
       "roi": "20% ROAS improvement"
     },
     {
-      "filename": "Grain_Client_Onboarding_Automation_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Client_Onboarding_Automation_v1.json",
-      "category": "agency",
-      "description": "Automated client setup with service-specific task generation",
-      "roi": "80% faster onboarding"
-    },
-    {
       "filename": "Grain_Client_Reporting_Dashboard_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Client_Reporting_Dashboard_v1.json",
       "category": "agency",
       "description": "White-label PDF reports with AI insights generation",
       "roi": "5+ hours saved per client monthly"
-    },
-    {
-      "filename": "Grain_Multi_Agent_Content_System_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Multi_Agent_Content_System_v1.json",
-      "category": "ai_content",
-      "description": "Research, SEO, Writer, Editor, QA agents working in sequence",
-      "roi": "10x content output"
     },
     {
       "filename": "Grain_AI_Copywriting_Studio_v1.json",
@@ -266,53 +186,11 @@
       "roi": "5x faster copy production"
     },
     {
-      "filename": "Grain_Omnichannel_Marketing_Hub_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Omnichannel_Marketing_Hub_v1.json",
-      "category": "marketing",
-      "description": "Coordinated campaigns across Email, SMS, Push, Social",
-      "roi": "287% higher purchase rate"
-    },
-    {
-      "filename": "Grain_Influencer_Marketing_Hub_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Influencer_Marketing_Hub_v1.json",
-      "category": "marketing",
-      "description": "Influencer discovery, scoring, outreach, and campaign management",
-      "roi": "50% lower influencer CAC"
-    },
-    {
-      "filename": "Grain_SEO_Content_Pipeline_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SEO_Content_Pipeline_v1.json",
-      "category": "marketing",
-      "description": "Keyword research, content gap analysis, and brief generation",
-      "roi": "40% organic traffic increase"
-    },
-    {
       "filename": "Grain_Churn_Prediction_Prevention_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Churn_Prediction_Prevention_v1.json",
       "category": "customer_success",
       "description": "AI-powered churn scoring with automated retention workflows",
       "roi": "25% churn reduction"
-    },
-    {
-      "filename": "Grain_Personalization_Engine_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Personalization_Engine_v1.json",
-      "category": "customer_success",
-      "description": "Real-time personalization based on behavior and predictions",
-      "roi": "35% conversion lift"
-    },
-    {
-      "filename": "Grain_Webinar_Event_Automation_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Webinar_Event_Automation_v1.json",
-      "category": "growth",
-      "description": "Full webinar lifecycle from registration to follow-up",
-      "roi": "50% higher attendance rate"
-    },
-    {
-      "filename": "Grain_Referral_Program_Automation_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Referral_Program_Automation_v1.json",
-      "category": "growth",
-      "description": "Automated referral tracking, rewards, and win-back campaigns",
-      "roi": "30% lower CAC"
     },
     {
       "filename": "Grain_Email_Marketing_Automation_v1.json",
@@ -327,22 +205,10 @@
       "description": "Customer data platform with identity resolution"
     },
     {
-      "filename": "Grain_Agentic_AI_Orchestrator_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Agentic_AI_Orchestrator_v1.json",
-      "category": "ai_content",
-      "description": "Multi-agent AI system with human-in-the-loop"
-    },
-    {
       "filename": "Grain_AB_Testing_Engine_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AB_Testing_Engine_v1.json",
       "category": "analytics",
       "description": "Statistical A/B testing with AI variant generation"
-    },
-    {
-      "filename": "Grain_Landing_Page_CRO_Hub_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Landing_Page_CRO_Hub_v1.json",
-      "category": "growth",
-      "description": "Landing page optimization with AI analysis"
     },
     {
       "filename": "Grain_Unified_Analytics_Dashboard_v1.json",
@@ -369,18 +235,6 @@
       "description": "AI image and video generation workflows"
     },
     {
-      "filename": "Grain_Prompt_Engineering_Studio_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Prompt_Engineering_Studio_v1.json",
-      "category": "ai_content",
-      "description": "Prompt optimization and testing framework"
-    },
-    {
-      "filename": "Grain_Multi_Platform_Publisher_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Multi_Platform_Publisher_v1.json",
-      "category": "marketing",
-      "description": "Cross-platform content publishing"
-    },
-    {
       "filename": "Grain_Multi_Platform_Publisher_v2.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Multi_Platform_Publisher_v2.json",
       "category": "marketing",
@@ -391,12 +245,6 @@
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Lead_Conversion_Funnel_v1.json",
       "category": "growth",
       "description": "Lead nurturing and conversion automation"
-    },
-    {
-      "filename": "Grain_Video_Performance_Tracker_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Video_Performance_Tracker_v1.json",
-      "category": "analytics",
-      "description": "Video analytics across platforms"
     },
     {
       "filename": "Grain_Competitive_Intelligence_v1.json",
@@ -411,80 +259,11 @@
       "description": "AI-powered support ticket routing and responses"
     },
     {
-      "filename": "Grain_Social_Listening_Sentiment_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Social_Listening_Sentiment_v1.json",
-      "category": "intelligence",
-      "description": "Social media monitoring with sentiment analysis"
-    },
-    {
       "filename": "Grain_SEO_Site_Audit_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SEO_Site_Audit_v1.json",
       "category": "seo",
       "description": "Comprehensive SEO site audit with 50+ technical checks (SEMrush-style)",
       "roi": "20% organic traffic increase"
-    },
-    {
-      "filename": "Grain_Keyword_Research_Pipeline_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Keyword_Research_Pipeline_v1.json",
-      "category": "seo",
-      "description": "AI-powered keyword research with clustering and gap analysis (Ahrefs-style)",
-      "roi": "3x keyword opportunities discovered"
-    },
-    {
-      "filename": "Grain_Rank_Tracking_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Rank_Tracking_v1.json",
-      "category": "seo",
-      "description": "Daily SERP position tracking with alerts and trend analysis",
-      "roi": "Real-time ranking visibility"
-    },
-    {
-      "filename": "Grain_Backlink_Monitor_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Backlink_Monitor_v1.json",
-      "category": "seo",
-      "description": "Backlink profile monitoring with new/lost alerts and outreach automation",
-      "roi": "50% faster link recovery"
-    },
-    {
-      "filename": "Grain_Local_Citation_Builder_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Local_Citation_Builder_v1.json",
-      "category": "local_seo",
-      "description": "NAP consistency audit and automated citation submission",
-      "roi": "40% local ranking improvement"
-    },
-    {
-      "filename": "Grain_Local_SEO_Automation_Hub_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Local_SEO_Automation_Hub_v1.json",
-      "category": "local_seo",
-      "description": "Google Business Profile management with multi-platform review monitoring",
-      "roi": "25% more local visibility"
-    },
-    {
-      "filename": "Grain_Content_Performance_Analyzer_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Content_Performance_Analyzer_v1.json",
-      "category": "analytics",
-      "description": "Content scoring with traffic, SEO, engagement, and social metrics",
-      "roi": "2x content effectiveness"
-    },
-    {
-      "filename": "Grain_Restaurant_Marketing_Hub_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Restaurant_Marketing_Hub_v1.json",
-      "category": "restaurant",
-      "description": "Guest CDP with lifecycle campaigns (welcome, win-back, birthday)",
-      "roi": "30% repeat visit increase"
-    },
-    {
-      "filename": "Grain_Restaurant_Loyalty_Program_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Restaurant_Loyalty_Program_v1.json",
-      "category": "restaurant",
-      "description": "Points-based loyalty with tier upgrades and reward redemption",
-      "roi": "25% customer retention boost"
-    },
-    {
-      "filename": "Grain_Guest_Feedback_Review_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Guest_Feedback_Review_v1.json",
-      "category": "restaurant",
-      "description": "NPS surveys with AI review response generation",
-      "roi": "50% more positive reviews"
     },
     {
       "filename": "Grain_Multi_Language_Translation_v1.json",
@@ -494,25 +273,11 @@
       "roi": "10x faster translations"
     },
     {
-      "filename": "Grain_Subscription_Management_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Subscription_Management_v1.json",
-      "category": "finance",
-      "description": "Stripe subscription lifecycle management with MRR/ARR tracking and automated billing emails",
-      "roi": "25% reduced churn"
-    },
-    {
       "filename": "Grain_Podcast_Production_Pipeline_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Podcast_Production_Pipeline_v1.json",
       "category": "media",
       "description": "End-to-end podcast production with AI transcription, show notes, chapters, and multi-platform publishing",
       "roi": "80% production time saved"
-    },
-    {
-      "filename": "Grain_AI_Chatbot_Builder_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Chatbot_Builder_v1.json",
-      "category": "ai_productivity",
-      "description": "RAG-powered chatbot with knowledge base, intent detection, and human escalation",
-      "roi": "60% support ticket reduction"
     },
     {
       "filename": "Grain_AI_Meeting_Notes_v1.json",
@@ -564,32 +329,11 @@
       "roi": "99.9% uptime guarantee"
     },
     {
-      "filename": "Grain_Autonomous_Decision_Engine_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Autonomous_Decision_Engine_v1.json",
-      "category": "core",
-      "description": "AI-powered decision engine for autonomous business process automation",
-      "roi": "80% faster decision cycles"
-    },
-    {
-      "filename": "Grain_Voice_AI_Assistant_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Voice_AI_Assistant_v1.json",
-      "category": "ai_content",
-      "description": "Voice-enabled AI assistant with speech-to-text and natural language processing",
-      "roi": "Hands-free automation control"
-    },
-    {
       "filename": "Grain_Knowledge_Base_AI_Search_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Knowledge_Base_AI_Search_v1.json",
       "category": "ai_content",
       "description": "AI-powered knowledge base search with semantic understanding",
       "roi": "70% faster information retrieval"
-    },
-    {
-      "filename": "Grain_Knowledge_RAG_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Knowledge_RAG_v1.json",
-      "category": "ai_content",
-      "description": "Retrieval-Augmented Generation system for context-aware AI responses",
-      "roi": "95% answer accuracy"
     },
     {
       "filename": "Grain_Ecommerce_Orchestrator_v1.json",
@@ -599,25 +343,11 @@
       "roi": "50% operational efficiency increase"
     },
     {
-      "filename": "Grain_HR_Onboarding_Offboarding_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_HR_Onboarding_Offboarding_v1.json",
-      "category": "hr",
-      "description": "Automated employee onboarding and offboarding workflows with compliance tracking",
-      "roi": "75% HR time saved"
-    },
-    {
       "filename": "Grain_Recruitment_AI_Agent_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Recruitment_AI_Agent_v1.json",
       "category": "hr",
       "description": "AI-powered recruitment automation with candidate screening and scheduling",
       "roi": "60% faster hiring process"
-    },
-    {
-      "filename": "Grain_Competitor_Monitoring_Hub_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Competitor_Monitoring_Hub_v1.json",
-      "category": "intelligence",
-      "description": "Real-time competitor tracking with pricing, content, and social monitoring",
-      "roi": "Strategic market advantage"
     },
     {
       "filename": "Grain_Social_Inbox_Manager_v1.json",
@@ -632,20 +362,6 @@
       "category": "marketing",
       "description": "Transform content across formats - blog to social, video to podcast, etc.",
       "roi": "5x content output from single source"
-    },
-    {
-      "filename": "Grain_Influencer_Outreach_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Influencer_Outreach_v1.json",
-      "category": "marketing",
-      "description": "Automated influencer discovery and personalized outreach campaigns",
-      "roi": "40% higher response rates"
-    },
-    {
-      "filename": "Grain_Proposal_Contract_Generator_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Proposal_Contract_Generator_v1.json",
-      "category": "agency",
-      "description": "AI-powered proposal and contract generation with e-signature integration",
-      "roi": "70% faster deal closure"
     },
     {
       "filename": "Grain_Contract_Review_Compliance_v1.json",
@@ -683,60 +399,11 @@
       "roi": "40% faster resolution times"
     },
     {
-      "filename": "Grain_Meeting_Intelligence_Hub_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Meeting_Intelligence_Hub_v1.json",
-      "category": "growth",
-      "description": "Meeting analytics with conversation intelligence and deal insights",
-      "roi": "25% higher win rates"
-    },
-    {
-      "filename": "Grain_Referral_Affiliate_Program_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Referral_Affiliate_Program_v1.json",
-      "category": "growth",
-      "description": "Affiliate program management with tracking and commission automation",
-      "roi": "35% new customer acquisition"
-    },
-    {
-      "filename": "Grain_Predictive_Analytics_Engine_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Predictive_Analytics_Engine_v1.json",
-      "category": "analytics",
-      "description": "ML-powered predictive analytics for forecasting and trend detection",
-      "roi": "Data-driven decision making"
-    },
-    {
-      "filename": "Grain_Root_Cause_Analyzer_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Root_Cause_Analyzer_v1.json",
-      "category": "analytics",
-      "description": "Automated root cause analysis with incident correlation",
-      "roi": "60% faster issue resolution"
-    },
-    {
       "filename": "Grain_SEO_Engine_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SEO_Engine_v1.json",
       "category": "seo",
       "description": "Comprehensive SEO automation engine with AI optimization",
       "roi": "40% organic traffic growth"
-    },
-    {
-      "filename": "Grain_SEO_Keyword_Research_Free_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SEO_Keyword_Research_Free_v1.json",
-      "category": "seo",
-      "description": "Free keyword research tool using Google Suggest and PAA",
-      "roi": "Cost-effective keyword insights"
-    },
-    {
-      "filename": "Grain_Keyword_Gap_Analysis_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Keyword_Gap_Analysis_v1.json",
-      "category": "seo",
-      "description": "Competitive keyword gap analysis with opportunity scoring",
-      "roi": "Identify ranking opportunities"
-    },
-    {
-      "filename": "Grain_SERP_Rank_Tracker_Free_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_SERP_Rank_Tracker_Free_v1.json",
-      "category": "seo",
-      "description": "Free SERP position tracking with daily updates",
-      "roi": "Real-time ranking visibility"
     },
     {
       "filename": "Grain_GSC_Hub_v1.json",
@@ -746,62 +413,11 @@
       "roi": "Actionable search insights"
     },
     {
-      "filename": "Grain_GBP_Auto_Posting_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_GBP_Auto_Posting_v1.json",
-      "category": "local_seo",
-      "description": "Automated Google Business Profile posting and updates",
-      "roi": "30% more local engagement"
-    },
-    {
       "filename": "Grain_Restaurant_Reservation_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Restaurant_Reservation_v1.json",
       "category": "hospitality",
       "description": "Restaurant reservation management with confirmations and reminders",
       "roi": "20% reduced no-shows"
-    },
-    {
-      "filename": "Grain_Review_Management_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Review_Management_v1.json",
-      "category": "hospitality",
-      "description": "Multi-platform review aggregation and response management",
-      "roi": "Improved online reputation"
-    },
-    {
-      "filename": "0 - MARKETING TEAM.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/0%20-%20MARKETING%20TEAM.json",
-      "category": "legacy"
-    },
-    {
-      "filename": "AI-Powered Short-Form Video Generator with OpenAI, Flux, Kling, and ElevenLabs and upload to all social networks.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/AI-Powered%20Short-Form%20Video%20Generator%20with%20OpenAI%2C%20Flux%2C%20Kling%2C%20and%20ElevenLabs%20and%20upload%20to%20all%20social%20networks.json",
-      "category": "legacy"
-    },
-    {
-      "filename": "AI-Powered WhatsApp Chatbot for Text, Voice, Images & PDFs.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/AI-Powered%20WhatsApp%20Chatbot%20for%20Text%2C%20Voice%2C%20Images%20%26%20PDFs.json",
-      "category": "legacy"
-    },
-    {
-      "filename": "APOLLO_SCRAPER.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/APOLLO_SCRAPER.json",
-      "category": "legacy"
-    },
-    {
-      "filename": "LinkedIn Comments to Leads Extractor.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/LinkedIn%20Comments%20to%20Leads%20Extractor.json",
-      "category": "legacy"
-    },
-    {
-      "filename": "Online Marketing Weekly Report.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Online%20Marketing%20Weekly%20Report.json",
-      "category": "legacy"
-    },
-    {
-      "filename": "Grain_LLM_Semantic_Cache_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_LLM_Semantic_Cache_v1.json",
-      "category": "ai_cost_optimization",
-      "description": "Reduce LLM API costs by 60-90% using semantic caching with Redis Vector Store",
-      "roi": "60-90% LLM cost reduction"
     },
     {
       "filename": "Grain_AI_Token_Cost_Tracker_v1.json",
@@ -825,13 +441,6 @@
       "roi": "AI-powered workflow debugging"
     },
     {
-      "filename": "Grain_AI_Content_Factory_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Content_Factory_v1.json",
-      "category": "content_marketing",
-      "description": "AI-powered content factory that monitors trends and generates multi-platform content with Slack approval",
-      "roi": "10x content output"
-    },
-    {
       "filename": "Grain_RAG_Company_Chatbot_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_RAG_Company_Chatbot_v1.json",
       "category": "ai_productivity",
@@ -839,32 +448,11 @@
       "roi": "70% faster information retrieval"
     },
     {
-      "filename": "Grain_Competitor_Pricing_Monitor_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Competitor_Pricing_Monitor_v1.json",
-      "category": "intelligence",
-      "description": "Automated competitor pricing monitoring using Bright Data and OpenAI with price change alerts",
-      "roi": "Strategic pricing advantage"
-    },
-    {
       "filename": "Grain_Agentic_AI_Orchestrator_v2_Pro.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_Agentic_AI_Orchestrator_v2_Pro.json",
       "category": "pro",
       "description": "Advanced multi-agent AI orchestrator with enhanced capabilities - Pro version",
       "roi": "Enterprise AI automation"
-    },
-    {
-      "filename": "Viral_Video_Ad_Factory.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Viral_Video_Ad_Factory.json",
-      "category": "video",
-      "description": "Automated viral video ad creation and publishing pipeline",
-      "roi": "Viral content at scale"
-    },
-    {
-      "filename": "AI_SERP_Brand_Monitor.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/AI_SERP_Brand_Monitor.json",
-      "category": "video",
-      "description": "Monitor brand visibility in AI-powered search results and SERP positions",
-      "roi": "Brand visibility insights"
     },
     {
       "filename": "Grain_Real_Estate_Land_Showcase_v1.json",
@@ -888,20 +476,20 @@
       "roi": "50% time savings on review management"
     },
     {
-      "filename": "Grain_AI_Review_Responder_v1.json",
-      "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_AI_Review_Responder_v1.json",
-      "category": "local_business",
-      "description": "AI-powered automatic review responses for Google and TripAdvisor with sentiment routing",
-      "roi": "4x faster response time, 95% consistency"
-    },
-    {
       "filename": "Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
       "raw_url": "https://raw.githubusercontent.com/No3214/saas/main/n8n-templates/Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
       "category": "voice_ai",
       "description": "ElevenLabs Conversational AI ile WhatsApp üzerinden Türkçe sesli asistan - intent analizi, CRM entegrasyonu",
       "roi": "7/24 sesli müşteri desteği",
-      "features": ["ElevenLabs Voice AI", "WhatsApp Business API", "Turkish NLU", "CRM Integration"],
-      "community_nodes": ["n8n-nodes-elevenlabs"]
+      "features": [
+        "ElevenLabs Voice AI",
+        "WhatsApp Business API",
+        "Turkish NLU",
+        "CRM Integration"
+      ],
+      "community_nodes": [
+        "n8n-nodes-elevenlabs"
+      ]
     },
     {
       "filename": "Grain_WhiteLabel_Agency_Dashboard_v1.json",
@@ -909,7 +497,12 @@
       "category": "agency_whitelabel",
       "description": "Ajanslar için white-label dashboard otomasyonu - müşteri portali, KPI takibi, otomatik raporlama",
       "roi": "80% raporlama süresi tasarrufu",
-      "features": ["Multi-tenant", "Branded Reports", "Real-time KPIs", "Client Portal"]
+      "features": [
+        "Multi-tenant",
+        "Branded Reports",
+        "Real-time KPIs",
+        "Client Portal"
+      ]
     },
     {
       "filename": "Grain_AI_Appointment_Booking_v1.json",
@@ -917,7 +510,12 @@
       "category": "appointment_booking",
       "description": "AI destekli randevu sistemi - doğal dil anlama, takvim senkronizasyonu, otomatik hatırlatmalar",
       "roi": "60% randevu verimliliği artışı",
-      "features": ["NLU Booking", "Google Calendar", "WhatsApp Reminders", "Smart Scheduling"]
+      "features": [
+        "NLU Booking",
+        "Google Calendar",
+        "WhatsApp Reminders",
+        "Smart Scheduling"
+      ]
     },
     {
       "filename": "Grain_Reputation_Management_Suite_v1.json",
@@ -925,7 +523,13 @@
       "category": "turkish_local",
       "description": "Kapsamlı itibar yönetimi - çoklu platform yorum takibi, AI yanıtları, sağlık puanı, yorum talep kampanyaları",
       "roi": "5-9% yıldız başına gelir artışı",
-      "features": ["Multi-platform Reviews", "AI Response Generation", "Health Score", "Review Campaigns", "WhatsApp Outreach"]
+      "features": [
+        "Multi-platform Reviews",
+        "AI Response Generation",
+        "Health Score",
+        "Review Campaigns",
+        "WhatsApp Outreach"
+      ]
     },
     {
       "filename": "Grain_Turkish_Local_Business_Manager_v1.json",
@@ -933,7 +537,12 @@
       "category": "turkish_local",
       "description": "Türk yerel işletmeleri için platform yönetimi - Google, Yelp, Şikayetvar takibi, AI önerileri",
       "roi": "40% yerel görünürlük artışı",
-      "features": ["Turkish Platforms", "Multi-business Support", "AI Recommendations", "Health Monitoring"]
+      "features": [
+        "Turkish Platforms",
+        "Multi-business Support",
+        "AI Recommendations",
+        "Health Monitoring"
+      ]
     },
     {
       "filename": "Grain_Turkish_GBP_Optimizer_v1.json",
@@ -955,7 +564,10 @@
       "category": "intelligence",
       "description": "AI destekli web scraper - yapılandırılabilir çıkarım, çoklu format, içerik analizi",
       "roi": "Otomatik veri toplama",
-      "community_nodes": ["n8n-nodes-scrapeninja", "n8n-nodes-firecrawl"]
+      "community_nodes": [
+        "n8n-nodes-scrapeninja",
+        "n8n-nodes-firecrawl"
+      ]
     }
   ]
 }
