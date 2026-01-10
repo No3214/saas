@@ -1,3 +1,13 @@
+---
+name: Workflow Creator
+description: Grain SaaS için n8n workflow'ları oluşturur. JSON yapısı, naming convention, tier sistemi ve best practices ile production-ready workflow'lar üretir.
+triggers:
+  - "yeni workflow oluştur"
+  - "workflow yarat"
+  - "n8n template"
+  - "create workflow"
+---
+
 # Workflow Creator Skill
 
 Bu skill, Grain SaaS Automation Suite için yeni n8n workflow'ları oluşturmayı sağlar.

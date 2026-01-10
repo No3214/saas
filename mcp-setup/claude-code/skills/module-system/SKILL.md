@@ -1,3 +1,13 @@
+---
+name: Module System
+description: Grain SaaS modül mimarisi - 16 modül, workflow organizasyonu, tier sistemi ve inter-module iletişimi.
+triggers:
+  - "modül"
+  - "module"
+  - "workflow organization"
+  - "tier system"
+---
+
 # Module System Skill
 
 Grain SaaS Automation Suite modül mimarisi.

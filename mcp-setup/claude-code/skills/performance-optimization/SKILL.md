@@ -1,3 +1,14 @@
+---
+name: Performance Optimization
+description: n8n workflow performans optimizasyonu - caching, parallel execution, batch processing, memory management.
+triggers:
+  - "performance"
+  - "optimizasyon"
+  - "hız"
+  - "caching"
+  - "parallel"
+---
+
 # Performance Optimization Skill
 
 n8n workflow performans optimizasyonu rehberi.

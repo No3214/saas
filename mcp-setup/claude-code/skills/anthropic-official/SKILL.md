@@ -1,3 +1,13 @@
+---
+name: Anthropic Official
+description: Anthropic resmi kaynakları - claude-code, skills, mcp-servers, cookbooks ve SDK entegrasyonu.
+triggers:
+  - "anthropic"
+  - "claude"
+  - "official"
+  - "resmi"
+---
+
 # Anthropic Official Resources
 
 Anthropic'in resmi GitHub kaynakları ve projeye entegrasyonu.

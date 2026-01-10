@@ -1,3 +1,13 @@
+---
+name: Testing & Debugging
+description: n8n workflow test stratejileri - unit testing, integration testing, debugging teknikleri ve monitoring.
+triggers:
+  - "test"
+  - "debug"
+  - "workflow test"
+  - "hata ayıklama"
+---
+
 # Testing & Debugging Skill
 
 n8n workflow'larını test etme ve debug etme rehberi.

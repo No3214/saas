@@ -1,3 +1,13 @@
+---
+name: n8n Best Practices
+description: n8n workflow geliştirme standartları - naming convention, node organization, error handling, performance optimization.
+triggers:
+  - "n8n best practice"
+  - "workflow standard"
+  - "n8n convention"
+  - "workflow optimization"
+---
+
 # n8n Best Practices Skill
 
 n8n workflow geliştirme için en iyi pratikler.

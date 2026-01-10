@@ -1,3 +1,13 @@
+---
+name: MCP Integration
+description: Model Context Protocol entegrasyonu - n8n, PostgreSQL, GitHub, Slack, Playwright MCP server yapılandırması ve kullanımı.
+triggers:
+  - "mcp server"
+  - "mcp bağlantı"
+  - "mcp integration"
+  - "model context protocol"
+---
+
 # MCP Integration Skill
 
 Model Context Protocol (MCP) entegrasyon rehberi.

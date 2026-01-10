@@ -1,3 +1,13 @@
+---
+name: Claude Code Plugins
+description: Claude Code resmi plugin'leri - code-simplifier, code-review, security-guidance, frontend-design ve kurulum rehberi.
+triggers:
+  - "plugin"
+  - "claude code plugin"
+  - "code review"
+  - "code simplifier"
+---
+
 # Claude Code Plugins Skill
 
 Claude Code için tüm resmi plugin'ler ve kullanım rehberi.

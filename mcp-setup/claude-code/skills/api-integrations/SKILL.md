@@ -1,3 +1,14 @@
+---
+name: API Integrations
+description: OpenAI, WhatsApp, Google, ElevenLabs ve diğer API entegrasyonları - credentials, rate limiting, error handling.
+triggers:
+  - "api entegrasyon"
+  - "api integration"
+  - "openai api"
+  - "whatsapp api"
+  - "credentials"
+---
+
 # API Integrations Skill
 
 Grain SaaS'ta kullanılan API entegrasyonları ve best practices.

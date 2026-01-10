@@ -1,3 +1,13 @@
+---
+name: VibeShip Spawner Skills
+description: 462 production-grade skill - AI agents, backend, blockchain, marketing kategorilerinde hazır skill kütüphanesi.
+triggers:
+  - "vibeship"
+  - "spawner"
+  - "skill library"
+  - "462 skill"
+---
+
 # VibeShip Spawner Skills Integration
 
 462 production-grade skill sistemi entegrasyonu.

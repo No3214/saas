@@ -1,3 +1,14 @@
+---
+name: Webhooks & Triggers
+description: n8n webhook ve trigger pattern'leri - API endpoints, scheduled triggers, event-based automation, authentication.
+triggers:
+  - "webhook"
+  - "trigger"
+  - "api endpoint"
+  - "schedule"
+  - "cron"
+---
+
 # Webhooks & Triggers Skill
 
 n8n webhook ve trigger pattern'leri.

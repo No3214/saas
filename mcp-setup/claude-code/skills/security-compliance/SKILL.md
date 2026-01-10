@@ -1,3 +1,14 @@
+---
+name: Security & Compliance
+description: KVKK uyumu, API güvenliği, veri şifreleme, credential yönetimi ve güvenlik best practices.
+triggers:
+  - "güvenlik"
+  - "security"
+  - "kvkk"
+  - "compliance"
+  - "encryption"
+---
+
 # Security & Compliance Skill
 
 n8n workflow güvenlik ve uyumluluk rehberi.

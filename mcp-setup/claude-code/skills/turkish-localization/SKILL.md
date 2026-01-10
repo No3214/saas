@@ -1,3 +1,13 @@
+---
+name: Turkish Localization
+description: Türkçe dil desteği, yerelleştirme kuralları, mesaj şablonları ve tarih/para formatları. Türk işletmeleri için içerik optimizasyonu.
+triggers:
+  - "türkçe"
+  - "localization"
+  - "yerelleştirme"
+  - "turkish content"
+---
+
 # Turkish Localization Skill
 
 Grain SaaS için Türkçe dil desteği ve yerelleştirme kuralları.

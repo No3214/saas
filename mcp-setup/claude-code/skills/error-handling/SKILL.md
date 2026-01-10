@@ -1,3 +1,13 @@
+---
+name: Error Handling
+description: n8n workflow hata yönetimi - error types, retry logic, fallback strategies, logging ve notification.
+triggers:
+  - "hata yönetimi"
+  - "error handling"
+  - "workflow error"
+  - "retry logic"
+---
+
 # Error Handling Skill
 
 n8n workflow hata yönetimi rehberi.

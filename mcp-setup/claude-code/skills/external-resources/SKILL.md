@@ -1,3 +1,14 @@
+---
+name: External Resources
+description: MCP servers (1200+), n8n community nodes (5000+), AI voice platforms, local business tools ve entegrasyon rehberi.
+triggers:
+  - "external"
+  - "harici kaynak"
+  - "mcp server"
+  - "community node"
+  - "voice ai"
+---
+
 # External Resources & Legacy Products
 
 Grain SaaS'a entegre edilebilecek dış kaynaklar ve araçlar.
