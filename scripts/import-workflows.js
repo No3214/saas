@@ -128,10 +128,19 @@ async function getExistingWorkflows() {
 // Import a workflow
 async function importWorkflow(workflow) {
   try {
-    const response = await makeRequest('/api/v1/workflows', 'POST', workflow);
+    // Clean workflow for n8n API - remove custom meta fields
+    const cleanWorkflow = {
+      name: workflow.name,
+      nodes: workflow.nodes,
+      connections: workflow.connections,
+      settings: workflow.settings || {}
+    };
+
+    const response = await makeRequest('/api/v1/workflows', 'POST', cleanWorkflow);
     return { success: true, id: response.id, name: response.name };
   } catch (e) {
-    return { success: false, error: e.body?.message || e.message || 'Unknown error' };
+    const errorMsg = e.body?.message || e.body?.error || JSON.stringify(e.body) || e.message || 'Unknown error';
+    return { success: false, error: errorMsg };
   }
 }
 
