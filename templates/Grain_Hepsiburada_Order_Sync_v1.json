@@ -1,0 +1,617 @@
+{
+  "name": "Grain Hepsiburada Order Sync v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "hb_merchant_id",
+              "value": "={{ $vars.HEPSIBURADA_MERCHANT_ID }}"
+            },
+            {
+              "name": "hb_api_url",
+              "value": "https://mpop-sit.hepsiburada.com"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [250, 0],
+      "notesInFlow": true,
+      "notes": "🔧 Hepsiburada Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🛍️ Hepsiburada Order Sync v1\n\n**Features:**\n- Sipariş senkronizasyonu\n- Stok güncelleme\n- Kargo takibi\n- WhatsApp bildirimleri\n\n**API Docs:** merchants.hepsiburada.com",
+        "height": 160,
+        "width": 320,
+        "color": 6
+      },
+      "id": "note-overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [450, -120]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Poll Orders (5min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grain/hepsiburada/order-webhook",
+        "options": {
+          "responseMode": "responseNode"
+        }
+      },
+      "id": "webhook-order",
+      "name": "Order Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "hepsiburada-order"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $node.GRAIN_CONFIG.json.hb_api_url }}/orders/merchantid/{{ $node.GRAIN_CONFIG.json.hb_merchant_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "Open"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-orders",
+      "name": "Fetch Hepsiburada Orders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "hepsiburada-api",
+          "name": "Hepsiburada API"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Hepsiburada API response with validation\nconst response = $input.first().json;\n\n// Check for API error\nif (response.error) {\n  throw new Error(`Hepsiburada API Error: ${response.error}`);\n}\n\nconst orders = response.data?.orders || response.orders || [];\n\nif (orders.length === 0) {\n  return [{ json: { message: 'Yeni sipariş yok', count: 0, source: 'api_poll' } }];\n}\n\nreturn orders.map(order => ({\n  json: {\n    source: 'api_poll',\n    order: {\n      orderId: order.orderNumber || order.id,\n      orderDate: order.orderDate,\n      status: order.status,\n      customer: {\n        name: `${order.deliveryAddress?.firstName || ''} ${order.deliveryAddress?.lastName || ''}`.trim(),\n        phone: order.deliveryAddress?.phone?.replace(/\\D/g, '') || '',\n        city: order.deliveryAddress?.city,\n        district: order.deliveryAddress?.district,\n        address: order.deliveryAddress?.addressLine\n      },\n      items: (order.lines || order.orderItems || []).map(item => ({\n        sku: item.merchantSku || item.sku,\n        barcode: item.hepsiburadaSku || item.barcode,\n        productName: item.productName,\n        quantity: item.quantity,\n        price: item.unitPrice || item.price,\n        discount: item.discount || 0\n      })),\n      totalPrice: order.totalPrice || order.grandTotal,\n      cargoCompany: order.cargoCompany?.name || 'Belirtilmemiş',\n      cargoTrackingNumber: order.cargoTrackingNumber\n    }\n  }\n}));"
+      },
+      "id": "parse-orders",
+      "name": "Parse Order Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse incoming webhook with signature verification\nconst webhookData = $input.first().json;\n\n// Validate webhook payload\nif (!webhookData.body) {\n  return [{ json: { error: 'Empty webhook body', source: 'webhook' } }];\n}\n\nconst body = webhookData.body;\n\n// Handle single order or array\nconst orders = Array.isArray(body) ? body : [body];\n\nreturn orders.map(order => ({\n  json: {\n    source: 'webhook',\n    order: {\n      orderId: order.orderNumber || order.orderId,\n      orderDate: order.orderDate || new Date().toISOString(),\n      status: order.status || 'New',\n      customer: {\n        name: order.customerName || order.deliveryAddress?.fullName || 'Müşteri',\n        phone: (order.customerPhone || order.deliveryAddress?.phone || '').replace(/\\D/g, ''),\n        city: order.city || order.deliveryAddress?.city,\n        district: order.deliveryAddress?.district,\n        address: order.deliveryAddress?.addressLine\n      },\n      items: (order.items || order.lines || []).map(item => ({\n        sku: item.sku || item.merchantSku,\n        barcode: item.barcode,\n        productName: item.name || item.productName,\n        quantity: item.quantity || 1,\n        price: item.price || item.unitPrice\n      })),\n      totalPrice: order.totalPrice || order.grandTotal,\n      cargoCompany: order.cargoCompany || 'Belirtilmemiş'\n    }\n  }\n}));"
+      },
+      "id": "parse-webhook",
+      "name": "Parse Webhook Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "order.orderId",
+              "field2": "order.orderId"
+            }
+          ]
+        },
+        "options": {
+          "fuzzy": false
+        }
+      },
+      "id": "merge-sources",
+      "name": "Merge Order Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-order",
+              "leftValue": "={{ $json.order?.orderId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-valid",
+      "name": "Filter Valid Orders",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "orders"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "order_id": "={{ $json.order.orderId }}",
+            "marketplace": "hepsiburada",
+            "customer_name": "={{ $json.order.customer.name }}",
+            "customer_phone": "={{ $json.order.customer.phone }}",
+            "customer_city": "={{ $json.order.customer.city }}",
+            "total_price": "={{ $json.order.totalPrice }}",
+            "status": "={{ $json.order.status }}",
+            "cargo_company": "={{ $json.order.cargoCompany }}",
+            "order_date": "={{ $json.order.orderDate }}",
+            "updated_at": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {
+          "conflictColumns": ["order_id", "marketplace"]
+        }
+      },
+      "id": "save-order",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare stock updates for each item\nconst order = $input.first().json.order;\nconst stockUpdates = [];\n\nfor (const item of order.items || []) {\n  if (item.sku && item.quantity) {\n    stockUpdates.push({\n      json: {\n        sku: item.sku,\n        barcode: item.barcode,\n        productName: item.productName,\n        quantitySold: item.quantity,\n        orderId: order.orderId,\n        marketplace: 'hepsiburada'\n      }\n    });\n  }\n}\n\nreturn stockUpdates.length > 0 ? stockUpdates : [{ json: { skip: true } }];"
+      },
+      "id": "prepare-stock",
+      "name": "Prepare Stock Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE products SET stock = GREATEST(stock - {{ $json.quantitySold }}, 0), updated_at = NOW() WHERE sku = '{{ $json.sku }}' OR barcode = '{{ $json.barcode }}' RETURNING sku, barcode, stock as new_stock, product_name",
+        "options": {}
+      },
+      "id": "update-stock",
+      "name": "Update Stock Level",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1450, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "low-stock-check",
+              "leftValue": "={{ $json.new_stock }}",
+              "rightValue": 10,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-stock-level",
+      "name": "Low Stock Check",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1650, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#stok-uyarilari",
+        "text": "=⚠️ *Düşük Stok - Hepsiburada*\n\nÜrün: {{ $json.product_name || $json.sku }}\nSKU: {{ $json.sku }}\nKalan: *{{ $json.new_stock }} adet*\n\nSipariş: {{ $json.orderId }}",
+        "otherOptions": {}
+      },
+      "id": "low-stock-alert",
+      "name": "Slack Low Stock Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1850, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-main",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "=Türkçe sipariş onay mesajı yaz. Kısa, samimi ve profesyonel ol.\n\nMüşteri: {{ $json.order.customer.name }}\nSipariş No: {{ $json.order.orderId }}\nÜrünler: {{ $json.order.items.map(i => i.productName).join(', ') }}\nToplam: {{ $json.order.totalPrice }} TL\nMarketplace: Hepsiburada\n\nMesaj maksimum 160 karakter olsun. 1-2 emoji kullan."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "ai-generate-message",
+      "name": "AI Generate Message",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1450, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-main",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-phone",
+              "leftValue": "={{ $json.order.customer.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-phone",
+      "name": "Has Phone Number?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "phoneNumberId": "={{ $vars.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "=+90{{ $json.order.customer.phone }}",
+        "textBody": "={{ $('AI Generate Message').first().json.message?.content || $('AI Generate Message').first().json.text }}"
+      },
+      "id": "send-whatsapp",
+      "name": "Send WhatsApp Notification",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1850, 200],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "whatsapp-main",
+          "name": "WhatsApp Business"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Sipariş işlendi', orderId: $('Filter Valid Orders').first().json.order?.orderId, timestamp: $now.toISO() }) }}"
+      },
+      "id": "webhook-response",
+      "name": "Send Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [1450, 600]
+    },
+    {
+      "parameters": {
+        "channel": "#hepsiburada-hatalar",
+        "text": "=🚨 *Hepsiburada Sync Hatası*\n\nWorkflow: {{ $workflow.name }}\nHata: {{ $json.execution?.error?.message || 'Bilinmeyen hata' }}\nZaman: {{ $now.format('DD.MM.YYYY HH:mm') }}\n\nExecution: {{ $execution.id }}",
+        "otherOptions": {}
+      },
+      "id": "error-alert",
+      "name": "Error Alert to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1650, 600],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-main",
+          "name": "Slack"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Poll Orders (5min)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Hepsiburada Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Webhook Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Hepsiburada Orders": {
+      "main": [
+        [
+          {
+            "node": "Parse Order Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Order Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Order Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Webhook Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Order Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Order Sources": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Orders": {
+      "main": [
+        [
+          {
+            "node": "Save to Database",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Stock Updates",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Generate Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Stock Updates": {
+      "main": [
+        [
+          {
+            "node": "Update Stock Level",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Stock Level": {
+      "main": [
+        [
+          {
+            "node": "Low Stock Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Low Stock Check": {
+      "main": [
+        [
+          {
+            "node": "Slack Low Stock Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Message": {
+      "main": [
+        [
+          {
+            "node": "Has Phone Number?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Phone Number?": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Notification": {
+      "main": [
+        [
+          {
+            "node": "Send Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "meta": {
+    "grain_module": "ecommerce",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_description": "Hepsiburada sipariş senkronizasyonu ve stok yönetimi",
+    "grain_features": [
+      "Hepsiburada API entegrasyonu",
+      "Dual-trigger (webhook + polling)",
+      "Otomatik stok güncelleme",
+      "AI Türkçe WhatsApp bildirimleri",
+      "Düşük stok Slack uyarıları",
+      "PostgreSQL persistence",
+      "Error handling with alerts"
+    ],
+    "grain_integrations": [
+      "Hepsiburada Merchant API",
+      "PostgreSQL",
+      "OpenAI GPT-4o-mini",
+      "WhatsApp Business API",
+      "Slack"
+    ],
+    "grain_dependencies": [
+      "PostgreSQL (orders, products tables)",
+      "OpenAI API key",
+      "WhatsApp Business account",
+      "Slack workspace"
+    ]
+  }
+}

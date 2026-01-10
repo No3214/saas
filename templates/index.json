@@ -1,8 +1,8 @@
 {
     "suite": "Grain SaaS Automation Suite",
-    "version": "5.4.0",
-    "last_updated": "2026-01-10T19:00:00Z",
-    "total_workflows": 62,
+    "version": "5.5.0",
+    "last_updated": "2026-01-10T20:30:00Z",
+    "total_workflows": 63,
     "enterprise_ready": true,
     "mcp_enabled": true,
     "architecture": {
@@ -344,6 +344,18 @@
                         "Bulk price updates",
                         "PostgreSQL integration"
                     ]
+                },
+                {
+                    "name": "Hepsiburada Order Sync v1",
+                    "file": "Grain_Hepsiburada_Order_Sync_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Hepsiburada API integration",
+                        "Dual-trigger sync",
+                        "Stock management",
+                        "WhatsApp notifications",
+                        "Turkish AI messages"
+                    ]
                 }
             ]
         },
@@ -479,13 +491,22 @@
         }
     },
     "statistics": {
-        "total_workflows": 62,
-        "critical_tier": 24,
+        "total_workflows": 63,
+        "critical_tier": 25,
         "high_tier": 30,
         "medium_tier": 8,
         "modules": 17
     },
     "changelog": {
+        "v5.5.0": {
+            "date": "2026-01-10",
+            "changes": [
+                "NEW: Hepsiburada Order Sync - Türkiye'nin 2. büyük e-ticaret platformu",
+                "E-commerce module now supports both Trendyol and Hepsiburada",
+                "Improved workflow validation with best practices",
+                "State machine documentation for all critical workflows"
+            ]
+        },
         "v5.4.0": {
             "date": "2026-01-10",
             "changes": [
