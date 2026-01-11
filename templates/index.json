@@ -1,8 +1,8 @@
 {
     "suite": "Grain SaaS Automation Suite",
-    "version": "5.7.0",
-    "last_updated": "2026-01-11T00:00:00Z",
-    "total_workflows": 71,
+    "version": "5.8.0",
+    "last_updated": "2026-01-11T12:00:00Z",
+    "total_workflows": 73,
     "enterprise_ready": true,
     "mcp_enabled": true,
     "architecture": {
@@ -556,6 +556,37 @@
                 }
             ]
         },
+        "playwright_automation": {
+            "description": "Browser automation with Playwright MCP for web scraping and monitoring",
+            "workflows": [
+                {
+                    "name": "Playwright Competitor Scraper v1",
+                    "file": "Grain_Playwright_Competitor_Scraper_v1.json",
+                    "tier": "High",
+                    "mcp_enabled": true,
+                    "features": [
+                        "Playwright browser automation",
+                        "Full-page screenshots",
+                        "AI competitor analysis",
+                        "PostgreSQL storage",
+                        "Slack alerts"
+                    ]
+                },
+                {
+                    "name": "Playwright Social Monitor v1",
+                    "file": "Grain_Playwright_Social_Monitor_v1.json",
+                    "tier": "High",
+                    "mcp_enabled": true,
+                    "features": [
+                        "Social media profile tracking",
+                        "Follower growth monitoring",
+                        "Engagement analysis",
+                        "Growth alerts",
+                        "Multi-platform support"
+                    ]
+                }
+            ]
+        },
         "legacy_products": {
             "description": "Standalone starter packs for vertical markets",
             "workflows": [
@@ -599,13 +630,25 @@
         }
     },
     "statistics": {
-        "total_workflows": 71,
+        "total_workflows": 73,
         "critical_tier": 33,
-        "high_tier": 30,
+        "high_tier": 32,
         "medium_tier": 8,
-        "modules": 19
+        "modules": 20
     },
     "changelog": {
+        "v5.8.0": {
+            "date": "2026-01-11",
+            "changes": [
+                "NEW: Playwright MCP integration for browser automation",
+                "NEW: Playwright Competitor Scraper - AI-powered website analysis with screenshots",
+                "NEW: Playwright Social Monitor - Multi-platform profile tracking with growth alerts",
+                "NEW: Docker service for Playwright MCP (grain-playwright)",
+                "NEW: MCP server configuration (mcp-servers.json)",
+                "Added playwright_automation module",
+                "Total workflows: 73 across 20 modules"
+            ]
+        },
         "v5.7.0": {
             "date": "2026-01-11",
             "changes": [

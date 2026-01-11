@@ -1,0 +1,85 @@
+{
+    "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/specification/main/schema/mcp-config.json",
+    "version": "1.0.0",
+    "description": "Grain SaaS MCP Server Configuration",
+    "mcpServers": {
+        "playwright": {
+            "command": "docker",
+            "args": [
+                "run",
+                "-i",
+                "--rm",
+                "--network", "grain-network",
+                "mcp/playwright"
+            ],
+            "description": "Browser automation for web scraping and testing",
+            "capabilities": [
+                "browser_navigation",
+                "form_filling",
+                "screenshot",
+                "accessibility_snapshot"
+            ]
+        },
+        "playwright-headless": {
+            "command": "docker",
+            "args": [
+                "run",
+                "-i",
+                "--rm",
+                "--network", "grain-network",
+                "-e", "HEADLESS=true",
+                "mcp/playwright"
+            ],
+            "description": "Headless browser for server-side automation"
+        },
+        "grain-filesystem": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "/home/user/saas/templates"
+            ],
+            "description": "Access to Grain workflow templates"
+        },
+        "n8n": {
+            "url": "https://globaldigital.app.n8n.cloud/mcp-server/http",
+            "description": "n8n Cloud MCP endpoint",
+            "capabilities": [
+                "workflow_execution",
+                "workflow_management"
+            ]
+        }
+    },
+    "tools": {
+        "browser_automation": {
+            "description": "Web scraping and browser testing tools",
+            "server": "playwright",
+            "use_cases": [
+                "Competitor website analysis",
+                "Social media profile scraping",
+                "E-commerce price monitoring",
+                "SEO SERP checking"
+            ]
+        },
+        "workflow_templates": {
+            "description": "Access and manage n8n workflow templates",
+            "server": "grain-filesystem"
+        }
+    },
+    "security": {
+        "allowed_domains": [
+            "*.google.com",
+            "*.instagram.com",
+            "*.tiktok.com",
+            "*.twitter.com",
+            "*.x.com",
+            "*.trendyol.com",
+            "*.hepsiburada.com",
+            "*.sikayetvar.com",
+            "*.tripadvisor.com",
+            "*.yelp.com"
+        ],
+        "sandbox_mode": true,
+        "network_isolation": true
+    }
+}

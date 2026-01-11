@@ -1,13 +1,13 @@
 # Grain SaaS Automation Suite
 
-71 AI-powered n8n workflow template koleksiyonu. E-commerce, pazarlama, SEO, emlak, vibe marketing ve iletisim otomasyonu icin.
+73 AI-powered n8n workflow template koleksiyonu. E-commerce, pazarlama, SEO, emlak, vibe marketing, Playwright browser otomasyonu ve iletisim otomasyonu icin.
 
-**Version:** 5.7.0 | **Workflows:** 71 | **Modules:** 19 | **Marketing Agents:** 5
+**Version:** 5.8.0 | **Workflows:** 73 | **Modules:** 20 | **Marketing Agents:** 5 | **MCP Servers:** 3
 
 ## Proje Yapisi
 
 ```
-/templates/          - n8n workflow JSON dosyalari (71 adet)
+/templates/          - n8n workflow JSON dosyalari (73 adet)
 /templates/bundles/  - Full suite bundle'lar
 /scripts/            - Import, validate, bundle scriptleri
 /docker/             - Docker compose (production + dev)
@@ -52,6 +52,22 @@ Specialized AI agents for growth marketing.
 | Content Creator | AIDA Model | Multi-format, Content Multiplication |
 | Instagram Curator | 3-3-3 Rule | Visual strategy, Reels optimization |
 | Reddit Community Builder | 90-9-1 Rule | Authentic engagement, REDDIT model |
+
+## Playwright MCP (Browser Automation)
+
+Docker tabanli browser otomasyon modulu.
+
+| Workflow | Ozellikler |
+|----------|------------|
+| `Grain_Playwright_Competitor_Scraper_v1` | Rakip site analizi, screenshot, AI SWOT |
+| `Grain_Playwright_Social_Monitor_v1` | Profil takibi, takipci degisim, alert |
+
+**Konfigurasyon:** `mcp-setup/mcp-servers.json`
+
+```bash
+# Docker ile calistir
+docker run -i --rm --network grain-network mcp/playwright
+```
 
 ## Legacy Product Starter Pack'ler
 
@@ -163,6 +179,7 @@ SLACK_BOT_TOKEN
 | Dosya | Icerik |
 |-------|--------|
 | `docs/ARCHITECTURE_DIAGRAMS.md` | 13 Mermaid diyagrami - sistem mimarisi |
+| `docs/MCP_INTEGRATION.md` | Playwright MCP entegrasyon rehberi |
 | `docs/strategy/MEGA_STRATEGY_v1.md` | 36-ay stratejik plan |
 | `docs/strategy/ROADMAP_Q1_2026.md` | Q1 2026 aksiyon plani |
 | `docs/STATE_MACHINES.md` | Workflow state diyagramlari |

@@ -1,0 +1,406 @@
+{
+    "name": "Grain Playwright Social Monitor v1",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "hours",
+                            "hoursInterval": 2
+                        }
+                    ]
+                }
+            },
+            "id": "schedule-trigger",
+            "name": "Her 2 Saatte",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [240, 300]
+        },
+        {
+            "parameters": {
+                "operation": "select",
+                "schema": "public",
+                "table": "social_profiles",
+                "returnAll": true,
+                "options": {}
+            },
+            "id": "get-profiles",
+            "name": "Takip Edilen Profiller",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [460, 300],
+            "credentials": {
+                "postgres": {
+                    "id": "postgres-cred",
+                    "name": "PostgreSQL Grain"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "batchSize": 1,
+                "options": {}
+            },
+            "id": "split-profiles",
+            "name": "Profilleri Ayir",
+            "type": "n8n-nodes-base.splitInBatches",
+            "typeVersion": 3,
+            "position": [680, 300]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://grain-playwright:3000/browser_navigate",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "url",
+                            "value": "={{ $json.profile_url }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "timeout": 60000
+                }
+            },
+            "id": "navigate-profile",
+            "name": "Profil Sayfasina Git",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [900, 300]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://grain-playwright:3000/browser_wait_for",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "time",
+                            "value": "3"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "wait-load",
+            "name": "Sayfa Yuklensin",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [1120, 300]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://grain-playwright:3000/browser_snapshot",
+                "options": {}
+            },
+            "id": "get-snapshot",
+            "name": "Accessibility Snapshot",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [1340, 300]
+        },
+        {
+            "parameters": {
+                "model": "gpt-4o",
+                "messages": {
+                    "values": [
+                        {
+                            "content": "=Asagidaki sosyal medya profil verisini analiz et:\n\n{{ $json.snapshot }}\n\nCikart:\n1. Takipci sayisi (followers)\n2. Takip sayisi (following)\n3. Post sayisi\n4. Son 5 post ozeti (varsa)\n5. Bio/Aciklama\n6. Engagement orani tahmini\n7. Icerik turu (video, foto, carousel)\n8. Posting frekansi tahmini\n\nJSON formatinda yanit ver. Bulamadigin alanlari null olarak dondur."
+                        }
+                    ]
+                },
+                "options": {
+                    "temperature": 0.2
+                }
+            },
+            "id": "ai-extract",
+            "name": "AI Profil Analizi",
+            "type": "@n8n/n8n-nodes-langchain.openAi",
+            "typeVersion": 1.6,
+            "position": [1560, 300],
+            "credentials": {
+                "openAiApi": {
+                    "id": "openai-cred",
+                    "name": "OpenAI API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "insert",
+                "schema": "public",
+                "table": "social_metrics",
+                "columns": "profile_id,check_date,followers,following,posts,engagement_rate,content_type,post_frequency,bio,last_posts",
+                "options": {
+                    "onConflict": "updateOnConflict",
+                    "conflictColumn": "profile_id,check_date"
+                }
+            },
+            "id": "save-metrics",
+            "name": "Metrikleri Kaydet",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [1780, 300],
+            "credentials": {
+                "postgres": {
+                    "id": "postgres-cred",
+                    "name": "PostgreSQL Grain"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict"
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.followers_change }}",
+                            "rightValue": "1000",
+                            "operator": {
+                                "type": "number",
+                                "operation": "gte"
+                            }
+                        }
+                    ],
+                    "combinator": "or"
+                },
+                "options": {}
+            },
+            "id": "big-change-check",
+            "name": "Buyuk Degisim?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.1,
+            "position": [2000, 300]
+        },
+        {
+            "parameters": {
+                "channel": "#social-alerts",
+                "text": "=:chart_with_upwards_trend: *Onemli Degisim Tespit Edildi!*\n\n*Profil:* {{ $json.profile_name }}\n*Platform:* {{ $json.platform }}\n\n*Takipci Degisimi:* {{ $json.followers_change > 0 ? '+' : '' }}{{ $json.followers_change }}\n*Mevcut Takipci:* {{ $json.followers }}\n\n*Son Post:*\n{{ $json.last_post_summary }}",
+                "otherOptions": {}
+            },
+            "id": "alert-slack",
+            "name": "Slack Alert",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.2,
+            "position": [2220, 200],
+            "credentials": {
+                "slackApi": {
+                    "id": "slack-cred",
+                    "name": "Slack API"
+                }
+            }
+        },
+        {
+            "parameters": {},
+            "id": "no-alert",
+            "name": "Normal Devam",
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [2220, 400]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "http://grain-playwright:3000/browser_close",
+                "options": {}
+            },
+            "id": "close-browser",
+            "name": "Browser Kapat",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [2440, 300]
+        },
+        {
+            "parameters": {
+                "loopItems": "={{ $items.length }}"
+            },
+            "id": "loop-next",
+            "name": "Sonraki Profil",
+            "type": "n8n-nodes-base.splitInBatches",
+            "typeVersion": 3,
+            "position": [2660, 300]
+        }
+    ],
+    "connections": {
+        "Her 2 Saatte": {
+            "main": [
+                [
+                    {
+                        "node": "Takip Edilen Profiller",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Takip Edilen Profiller": {
+            "main": [
+                [
+                    {
+                        "node": "Profilleri Ayir",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Profilleri Ayir": {
+            "main": [
+                [
+                    {
+                        "node": "Profil Sayfasina Git",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Profil Sayfasina Git": {
+            "main": [
+                [
+                    {
+                        "node": "Sayfa Yuklensin",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sayfa Yuklensin": {
+            "main": [
+                [
+                    {
+                        "node": "Accessibility Snapshot",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Accessibility Snapshot": {
+            "main": [
+                [
+                    {
+                        "node": "AI Profil Analizi",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "AI Profil Analizi": {
+            "main": [
+                [
+                    {
+                        "node": "Metrikleri Kaydet",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Metrikleri Kaydet": {
+            "main": [
+                [
+                    {
+                        "node": "Buyuk Degisim?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Buyuk Degisim?": {
+            "main": [
+                [
+                    {
+                        "node": "Slack Alert",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Normal Devam",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Slack Alert": {
+            "main": [
+                [
+                    {
+                        "node": "Browser Kapat",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Normal Devam": {
+            "main": [
+                [
+                    {
+                        "node": "Browser Kapat",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Browser Kapat": {
+            "main": [
+                [
+                    {
+                        "node": "Sonraki Profil",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sonraki Profil": {
+            "main": [
+                [
+                    {
+                        "node": "Profil Sayfasina Git",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1",
+        "saveManualExecutions": true,
+        "callerPolicy": "workflowsFromSameOwner",
+        "errorWorkflow": "Grain_Self_Healing_Pipeline_v1"
+    },
+    "meta": {
+        "grain_module": "vibe_marketing",
+        "grain_tier": "High",
+        "grain_version": "1.0.0",
+        "grain_language": "tr",
+        "grain_features": [
+            "playwright-automation",
+            "social-media-monitoring",
+            "ai-analysis",
+            "growth-alerts"
+        ],
+        "grain_mcp_enabled": true,
+        "description": "Playwright ile sosyal medya profil takibi - takipci degisimi, engagement, trend analizi"
+    }
+}

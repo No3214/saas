@@ -249,6 +249,28 @@ services:
           cpus: '0.25'
 
   # ============================================
+  # MCP SERVERS
+  # ============================================
+  playwright:
+    image: mcp/playwright:latest
+    container_name: grain-playwright
+    restart: unless-stopped
+    environment:
+      - HEADLESS=true
+      - BROWSER=chromium
+      - TIMEOUT_ACTION=5000
+      - TIMEOUT_NAVIGATION=60000
+    networks:
+      - grain-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+    labels:
+      - "traefik.enable=false"
+
+  # ============================================
   # BACKUP
   # ============================================
   backup:
