@@ -1,13 +1,13 @@
 # Grain SaaS Automation Suite
 
-63 AI-powered n8n workflow template koleksiyonu. E-commerce, pazarlama, SEO, emlak ve iletisim otomasyonu icin.
+69 AI-powered n8n workflow template koleksiyonu. E-commerce, pazarlama, SEO, emlak, vibe marketing ve iletisim otomasyonu icin.
 
-**Version:** 5.5.0 | **Workflows:** 63 | **Modules:** 17
+**Version:** 5.6.0 | **Workflows:** 69 | **Modules:** 19
 
 ## Proje Yapisi
 
 ```
-/templates/          - n8n workflow JSON dosyalari (63 adet)
+/templates/          - n8n workflow JSON dosyalari (69 adet)
 /templates/bundles/  - Full suite bundle'lar
 /scripts/            - Import, validate, bundle scriptleri
 /docker/             - Docker compose (production + dev)
@@ -29,7 +29,27 @@ docker-compose -f docker-compose.main.yml up -d
 docker-compose up -d
 ```
 
-## E-commerce Entegrasyonlari (Priority #1)
+## Vibe Marketing (NEW in v5.6.0)
+
+AI-powered video-first social media marketing modulu.
+
+| Workflow | Ozellikler |
+|----------|------------|
+| `Grain_Vibe_Marketing_Competitor_Research_v1` | Rakip analizi, AI SWOT, Instagram tracking |
+| `Grain_Vibe_Marketing_Reels_Creator_v1` | Hook-Content-CTA scripting, 15/30/60s formatlar |
+| `Grain_Vibe_Marketing_Trend_Monitor_v1` | TikTok, Google Trends, Twitter/X tracking |
+
+## Legacy Product Starter Pack'ler
+
+Dikey pazarlar icin bagimsiz starter cozumler.
+
+| Workflow | Sektor | Ozellikler |
+|----------|--------|------------|
+| `Grain_Legacy_Ecommerce_Starter_v1` | E-ticaret | Siparis, WhatsApp, gunluk rapor |
+| `Grain_Legacy_Hospitality_Starter_v1` | Otelcilik | Rezervasyon, sabah brifingi |
+| `Grain_Legacy_LocalBiz_Starter_v1` | Yerel Isletme | Lead, yorum takibi, haftalik ozet |
+
+## E-commerce Entegrasyonlari
 
 | Platform | Workflow | Ozellikler |
 |----------|----------|------------|
@@ -137,10 +157,14 @@ SLACK_BOT_TOKEN
 ## Claude Code Skills
 
 ```bash
-# Mevcut skill'ler
+# Core Skills
 /workflow-creator     # Yeni workflow olustur
 /n8n-best-practices   # Best practice kontrol
 /api-integrations     # API entegrasyon rehberi
+
+# Marketing Skills (NEW)
+/cmo-agent            # AI CMO - rakip analizi, SWOT, strateji
+/vibe-marketing       # Video-first marketing - reels, trend takibi
 ```
 
 ## Git Branch
