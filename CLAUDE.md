@@ -1,13 +1,13 @@
 # Grain SaaS Automation Suite
 
-69 AI-powered n8n workflow template koleksiyonu. E-commerce, pazarlama, SEO, emlak, vibe marketing ve iletisim otomasyonu icin.
+71 AI-powered n8n workflow template koleksiyonu. E-commerce, pazarlama, SEO, emlak, vibe marketing ve iletisim otomasyonu icin.
 
-**Version:** 5.6.0 | **Workflows:** 69 | **Modules:** 19
+**Version:** 5.7.0 | **Workflows:** 71 | **Modules:** 19 | **Marketing Agents:** 5
 
 ## Proje Yapisi
 
 ```
-/templates/          - n8n workflow JSON dosyalari (69 adet)
+/templates/          - n8n workflow JSON dosyalari (71 adet)
 /templates/bundles/  - Full suite bundle'lar
 /scripts/            - Import, validate, bundle scriptleri
 /docker/             - Docker compose (production + dev)
@@ -29,7 +29,7 @@ docker-compose -f docker-compose.main.yml up -d
 docker-compose up -d
 ```
 
-## Vibe Marketing (NEW in v5.6.0)
+## Vibe Marketing (5 Workflow)
 
 AI-powered video-first social media marketing modulu.
 
@@ -38,6 +38,20 @@ AI-powered video-first social media marketing modulu.
 | `Grain_Vibe_Marketing_Competitor_Research_v1` | Rakip analizi, AI SWOT, Instagram tracking |
 | `Grain_Vibe_Marketing_Reels_Creator_v1` | Hook-Content-CTA scripting, 15/30/60s formatlar |
 | `Grain_Vibe_Marketing_Trend_Monitor_v1` | TikTok, Google Trends, Twitter/X tracking |
+| `Grain_Vibe_Marketing_Entity_Profiler_v1` | AI persona, brand archetype, content pillars |
+| `Grain_Vibe_Marketing_Content_Calendar_v1` | Multi-week, multi-platform content planning |
+
+## Marketing Agents (5 Agent)
+
+Specialized AI agents for growth marketing.
+
+| Agent | Framework | Focus |
+|-------|-----------|-------|
+| TikTok Strategist | Viral Content | Algorithm optimization, UGC campaigns |
+| Growth Hacker | AARRR Funnel | ICE prioritization, viral loops |
+| Content Creator | AIDA Model | Multi-format, Content Multiplication |
+| Instagram Curator | 3-3-3 Rule | Visual strategy, Reels optimization |
+| Reddit Community Builder | 90-9-1 Rule | Authentic engagement, REDDIT model |
 
 ## Legacy Product Starter Pack'ler
 
@@ -148,6 +162,7 @@ SLACK_BOT_TOKEN
 
 | Dosya | Icerik |
 |-------|--------|
+| `docs/ARCHITECTURE_DIAGRAMS.md` | 13 Mermaid diyagrami - sistem mimarisi |
 | `docs/strategy/MEGA_STRATEGY_v1.md` | 36-ay stratejik plan |
 | `docs/strategy/ROADMAP_Q1_2026.md` | Q1 2026 aksiyon plani |
 | `docs/STATE_MACHINES.md` | Workflow state diyagramlari |
