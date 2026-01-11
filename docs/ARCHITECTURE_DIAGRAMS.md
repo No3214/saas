@@ -1,6 +1,6 @@
 # Grain SaaS Architecture Diagrams
 
-**Version:** 5.7.0 | **Last Updated:** 2026-01-11
+**Version:** 5.8.0 | **Last Updated:** 2026-01-11
 
 Bu dokuman Grain SaaS Automation Suite'in tam mimari diyagramlarini icerir.
 
@@ -49,7 +49,7 @@ flowchart TB
 
 ---
 
-## 2. Modul Baglantilari (19 Modul)
+## 2. Modul Baglantilari (20 Modul)
 
 ```mermaid
 graph LR
@@ -82,6 +82,7 @@ graph LR
         COMM((Communication))
         NOTION((Notion))
         LEGACY((Legacy Products))
+        PW((Playwright))
     end
 
     CORE --> AI
@@ -98,6 +99,8 @@ graph LR
     HOSP --> LEGACY
     LST --> LEGACY
     VOICE --> AGENCY
+    PW --> VIBE
+    PW --> SEO
     NOTION --> MKT
 ```
 
@@ -419,7 +422,87 @@ flowchart TD
 
 ---
 
-## 10. Tam Sistem Akis Diyagrami
+## 10. Playwright MCP Docker Mimarisi
+
+```mermaid
+flowchart TB
+    subgraph Docker["DOCKER NETWORK (grain-network)"]
+        subgraph Services["CORE SERVICES"]
+            N8N[n8n:5678]
+            PG[(PostgreSQL:5432)]
+            REDIS[(Redis:6379)]
+        end
+
+        subgraph MCP["MCP SERVERS"]
+            PW[Playwright MCP]
+            BROWSER[Chromium Browser]
+        end
+
+        subgraph Monitoring["MONITORING"]
+            GRAF[Grafana:3000]
+            PROM[Prometheus:9090]
+        end
+    end
+
+    subgraph External["EXTERNAL TARGETS"]
+        WEB1[Competitor Sites]
+        WEB2[Social Media]
+        WEB3[E-commerce Platforms]
+    end
+
+    N8N --> PW
+    PW --> BROWSER
+    BROWSER --> WEB1
+    BROWSER --> WEB2
+    BROWSER --> WEB3
+    N8N --> PG
+    N8N --> REDIS
+    PW --> PG
+    PROM --> N8N
+    GRAF --> PROM
+```
+
+### Playwright Workflow Akisi
+
+```mermaid
+sequenceDiagram
+    participant N8N as n8n Workflow
+    participant PW as Playwright MCP
+    participant BR as Chromium
+    participant WEB as Target Website
+    participant AI as OpenAI GPT-4o
+    participant DB as PostgreSQL
+
+    N8N->>PW: browser_navigate(url)
+    PW->>BR: Launch Browser
+    BR->>WEB: HTTP Request
+    WEB-->>BR: HTML Response
+    BR-->>PW: Page Loaded
+    PW-->>N8N: Success
+
+    N8N->>PW: browser_snapshot()
+    PW->>BR: Get Accessibility Tree
+    BR-->>PW: DOM Snapshot
+    PW-->>N8N: Snapshot Data
+
+    N8N->>PW: browser_take_screenshot()
+    PW->>BR: Capture Screen
+    BR-->>PW: PNG Image
+    PW-->>N8N: Screenshot Path
+
+    N8N->>AI: Analyze Content
+    AI-->>N8N: AI Analysis
+
+    N8N->>DB: Save Results
+    DB-->>N8N: Saved
+
+    N8N->>PW: browser_close()
+    PW->>BR: Close Browser
+```
+
+---
+
+## 11. Tam Sistem Akis Diyagrami
 
 ```mermaid
 flowchart TB
@@ -512,18 +595,18 @@ flowchart TB
 
 ---
 
-## 11. Tier Dagilimi
+## 12. Tier Dagilimi
 
 ```mermaid
-pie title Workflow Tier Dagilimi (71 Workflow)
+pie title Workflow Tier Dagilimi (73 Workflow)
     "Critical (33)" : 33
-    "High (30)" : 30
+    "High (32)" : 32
     "Medium (8)" : 8
 ```
 
 ---
 
-## 12. Modul Baslarina Workflow Sayisi
+## 13. Modul Baslarina Workflow Sayisi
 
 ```mermaid
 bar title Modul Basina Workflow Sayisi
@@ -534,6 +617,7 @@ bar title Modul Basina Workflow Sayisi
     "Sales Revenue" : 4
     "Marketing" : 6
     "SEO" : 4
+    "Playwright" : 2
     "Local SEO TR" : 4
     "Hospitality" : 3
     "Real Estate" : 1
@@ -550,7 +634,7 @@ bar title Modul Basina Workflow Sayisi
 
 ---
 
-## 13. Teknoloji Stack
+## 14. Teknoloji Stack
 
 ```mermaid
 flowchart LR
@@ -564,6 +648,11 @@ flowchart LR
         N8N[n8n Workflow]
         REDIS[Redis Queue]
         PG[PostgreSQL]
+    end
+
+    subgraph MCP["MCP SERVERS"]
+        PLAYWRIGHT[Playwright MCP]
+        CHROMIUM[Chromium Browser]
     end
 
     subgraph AI["AI PROVIDERS"]
@@ -587,9 +676,12 @@ flowchart LR
     end
 
     DOCKER --> N8N
+    DOCKER --> PLAYWRIGHT
     TRAEFIK --> DOCKER
     N8N --> REDIS
     N8N --> PG
+    N8N --> PLAYWRIGHT
+    PLAYWRIGHT --> CHROMIUM
 
     N8N --> OPENAI
     N8N --> ELEVEN
@@ -610,12 +702,13 @@ flowchart LR
 
 ## Sonuc
 
-Bu mimari diyagramlar Grain SaaS Automation Suite v5.7.0'in tam gorunumunu saglar:
+Bu mimari diyagramlar Grain SaaS Automation Suite v5.8.0'in tam gorunumunu saglar:
 
-- **19 Modul** - Kapsamli is otomasyonu
-- **71 Workflow** - Production-ready sablonlar
+- **20 Modul** - Kapsamli is otomasyonu
+- **73 Workflow** - Production-ready sablonlar
 - **5 Marketing Agent** - AI destekli pazarlama
 - **3 Legacy Starter** - Dikey pazar cozumleri
+- **3 MCP Server** - Playwright, n8n, Filesystem
 - **Entegre Mimari** - Tum modullerin birbiriyle calismasi
 
 ---

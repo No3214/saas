@@ -90,6 +90,121 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "grain_db" <<-EOSQL
     CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
     CREATE INDEX IF NOT EXISTS idx_workflow_logs_name ON workflow_logs(workflow_name);
 
+    -- ============================================
+    -- PLAYWRIGHT / VIBE MARKETING TABLES
+    -- ============================================
+
+    -- Competitor analysis table
+    CREATE TABLE IF NOT EXISTS competitor_analysis (
+        id SERIAL PRIMARY KEY,
+        competitor_url VARCHAR(500) NOT NULL,
+        competitor_name VARCHAR(255),
+        analysis_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        value_proposition TEXT,
+        target_audience TEXT,
+        pricing_strategy TEXT,
+        key_features JSONB,
+        weaknesses TEXT,
+        opportunities TEXT,
+        screenshot_path VARCHAR(500),
+        raw_content TEXT,
+        ai_analysis JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(competitor_url, analysis_date)
+    );
+
+    -- Social profiles to monitor
+    CREATE TABLE IF NOT EXISTS social_profiles (
+        id SERIAL PRIMARY KEY,
+        profile_url VARCHAR(500) UNIQUE NOT NULL,
+        profile_name VARCHAR(255),
+        platform VARCHAR(50) NOT NULL,
+        is_competitor BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        tags TEXT[],
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Social metrics history
+    CREATE TABLE IF NOT EXISTS social_metrics (
+        id SERIAL PRIMARY KEY,
+        profile_id INTEGER REFERENCES social_profiles(id) ON DELETE CASCADE,
+        check_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        followers INTEGER,
+        following INTEGER,
+        posts INTEGER,
+        engagement_rate DECIMAL(5,2),
+        content_type VARCHAR(100),
+        post_frequency VARCHAR(100),
+        bio TEXT,
+        last_posts JSONB,
+        raw_snapshot JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(profile_id, check_date)
+    );
+
+    -- Entity profiles (Vibe Marketing)
+    CREATE TABLE IF NOT EXISTS entity_profiles (
+        id SERIAL PRIMARY KEY,
+        entity_name VARCHAR(255) NOT NULL,
+        website_url VARCHAR(500),
+        persona JSONB,
+        brand_archetype VARCHAR(100),
+        target_audience JSONB,
+        communication_style JSONB,
+        content_pillars JSONB,
+        core_messaging TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Content calendar
+    CREATE TABLE IF NOT EXISTS content_calendar (
+        id SERIAL PRIMARY KEY,
+        entity_id INTEGER REFERENCES entity_profiles(id) ON DELETE CASCADE,
+        post_date DATE NOT NULL,
+        platform VARCHAR(50) NOT NULL,
+        content_type VARCHAR(50),
+        content_pillar VARCHAR(100),
+        hook TEXT,
+        content TEXT,
+        cta TEXT,
+        hashtags TEXT[],
+        status VARCHAR(50) DEFAULT 'planned',
+        published_url VARCHAR(500),
+        performance_data JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Playwright indexes
+    CREATE INDEX IF NOT EXISTS idx_competitor_analysis_url ON competitor_analysis(competitor_url);
+    CREATE INDEX IF NOT EXISTS idx_competitor_analysis_date ON competitor_analysis(analysis_date);
+    CREATE INDEX IF NOT EXISTS idx_social_profiles_platform ON social_profiles(platform);
+    CREATE INDEX IF NOT EXISTS idx_social_metrics_profile ON social_metrics(profile_id);
+    CREATE INDEX IF NOT EXISTS idx_social_metrics_date ON social_metrics(check_date);
+    CREATE INDEX IF NOT EXISTS idx_entity_profiles_name ON entity_profiles(entity_name);
+    CREATE INDEX IF NOT EXISTS idx_content_calendar_entity ON content_calendar(entity_id);
+    CREATE INDEX IF NOT EXISTS idx_content_calendar_date ON content_calendar(post_date);
+
+    -- Triggers for new tables
+    DROP TRIGGER IF EXISTS update_social_profiles_updated_at ON social_profiles;
+    CREATE TRIGGER update_social_profiles_updated_at
+        BEFORE UPDATE ON social_profiles
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+    DROP TRIGGER IF EXISTS update_entity_profiles_updated_at ON entity_profiles;
+    CREATE TRIGGER update_entity_profiles_updated_at
+        BEFORE UPDATE ON entity_profiles
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+    DROP TRIGGER IF EXISTS update_content_calendar_updated_at ON content_calendar;
+    CREATE TRIGGER update_content_calendar_updated_at
+        BEFORE UPDATE ON content_calendar
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
     -- Update trigger function
     CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS \$\$
