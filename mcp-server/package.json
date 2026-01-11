@@ -1,0 +1,21 @@
+{
+  "name": "grain-n8n-templates-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for Grain n8n Workflow Templates - 80+ AI-powered automation workflows",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "grain-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": ["mcp", "n8n", "workflow", "automation", "templates", "ai"],
+  "author": "Grain",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0"
+  }
+}

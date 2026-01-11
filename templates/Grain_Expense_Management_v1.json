@@ -1,0 +1,536 @@
+{
+  "name": "Grain Expense Management Automation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "expenses/submit",
+        "options": {}
+      },
+      "id": "expense-webhook",
+      "name": "Expense Submission",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "expense-submit"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "expenses/receipt",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "receipt-webhook",
+      "name": "Receipt Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "receipt-upload"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-report",
+      "name": "Weekly Report (Mon 9AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize expense record\nconst input = $input.first().json.body || $input.first().json;\n\nconst expense = {\n  expenseId: `EXP-${Date.now().toString(36).toUpperCase()}`,\n  userId: input.userId,\n  employeeEmail: input.employeeEmail,\n  employeeName: input.employeeName,\n  department: input.department,\n  \n  // Expense details\n  amount: parseFloat(input.amount) || 0,\n  currency: input.currency || 'USD',\n  category: input.category || 'other', // travel, meals, supplies, software, equipment, other\n  subcategory: input.subcategory,\n  description: input.description,\n  \n  // Receipt info\n  receiptUrl: input.receiptUrl,\n  hasReceipt: !!input.receiptUrl,\n  \n  // Project/client allocation\n  projectId: input.projectId,\n  projectName: input.projectName,\n  clientId: input.clientId,\n  billable: input.billable || false,\n  \n  // Date info\n  expenseDate: input.expenseDate || new Date().toISOString().split('T')[0],\n  submittedAt: new Date().toISOString(),\n  \n  // Status\n  status: 'pending_review',\n  requiresApproval: true,\n  approvalLevel: null,\n  \n  // Metadata\n  source: input.source || 'api',\n  tags: input.tags || [],\n  notes: input.notes\n};\n\nreturn [{ json: expense }];"
+      },
+      "id": "init-expense",
+      "name": "Initialize Expense",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.OCR_API_URL }}/extract",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"documentUrl\": \"{{ $json.receiptUrl }}\",\n  \"documentType\": \"receipt\",\n  \"extractFields\": [\"merchantName\", \"date\", \"total\", \"tax\", \"items\", \"paymentMethod\"]\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "ocr-receipt",
+      "name": "OCR Receipt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ocr-api-key",
+          "name": "OCR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and enrich expense with OCR data\nconst expense = $('Initialize Expense').first().json;\nconst ocrData = $input.first().json;\n\n// Merge OCR data if available\nconst enrichedExpense = {\n  ...expense,\n  ocrExtracted: {\n    merchantName: ocrData.merchantName,\n    receiptDate: ocrData.date,\n    total: ocrData.total,\n    tax: ocrData.tax,\n    items: ocrData.items || [],\n    paymentMethod: ocrData.paymentMethod,\n    confidence: ocrData.confidence || 0.9\n  }\n};\n\n// Validate amount matches receipt\nconst amountDiff = Math.abs(expense.amount - (ocrData.total || expense.amount));\nconst amountMismatch = amountDiff > 1; // More than $1 difference\n\n// Auto-categorize based on merchant if not set\nif (expense.category === 'other' && ocrData.merchantName) {\n  const merchant = ocrData.merchantName.toLowerCase();\n  if (/uber|lyft|taxi|airlines|delta|united|southwest|hotel|marriott|hilton/i.test(merchant)) {\n    enrichedExpense.category = 'travel';\n  } else if (/restaurant|cafe|starbucks|mcdonald|chipotle|doordash|grubhub/i.test(merchant)) {\n    enrichedExpense.category = 'meals';\n  } else if (/office depot|staples|amazon|walmart/i.test(merchant)) {\n    enrichedExpense.category = 'supplies';\n  } else if (/github|aws|google|microsoft|adobe|slack|zoom/i.test(merchant)) {\n    enrichedExpense.category = 'software';\n  }\n}\n\nenrichedExpense.validation = {\n  amountMismatch,\n  amountDifference: amountDiff,\n  hasValidReceipt: ocrData.confidence > 0.7,\n  warnings: []\n};\n\nif (amountMismatch) {\n  enrichedExpense.validation.warnings.push(`Amount mismatch: Submitted $${expense.amount}, Receipt shows $${ocrData.total}`);\n}\n\nreturn [{ json: enrichedExpense }];"
+      },
+      "id": "validate-expense",
+      "name": "Validate & Enrich",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check expense against company policy\nconst expense = $input.first().json;\n\n// Company policy rules (configurable)\nconst policy = {\n  maxAmounts: {\n    meals: 75,\n    travel: 500,\n    supplies: 200,\n    software: 100,\n    equipment: 1000,\n    other: 100\n  },\n  requiresReceipt: 25, // Amount threshold requiring receipt\n  requiresPreApproval: 500, // Amount requiring pre-approval\n  approvalLevels: [\n    { max: 100, approver: 'manager' },\n    { max: 500, approver: 'director' },\n    { max: 2000, approver: 'vp' },\n    { max: Infinity, approver: 'cfo' }\n  ],\n  blockedCategories: [], // Categories that need special approval\n  weekendMealsAllowed: false\n};\n\nconst violations = [];\nlet requiresApproval = false;\nlet approvalLevel = 'auto';\n\n// Check amount limits\nconst categoryLimit = policy.maxAmounts[expense.category] || policy.maxAmounts.other;\nif (expense.amount > categoryLimit) {\n  violations.push(`Amount $${expense.amount} exceeds ${expense.category} limit of $${categoryLimit}`);\n  requiresApproval = true;\n}\n\n// Check receipt requirement\nif (expense.amount >= policy.requiresReceipt && !expense.hasReceipt) {\n  violations.push(`Receipt required for expenses over $${policy.requiresReceipt}`);\n  requiresApproval = true;\n}\n\n// Check pre-approval requirement\nif (expense.amount >= policy.requiresPreApproval) {\n  violations.push(`Expenses over $${policy.requiresPreApproval} require pre-approval`);\n  requiresApproval = true;\n}\n\n// Determine approval level\nfor (const level of policy.approvalLevels) {\n  if (expense.amount <= level.max) {\n    approvalLevel = level.approver;\n    break;\n  }\n}\n\n// Weekend meals check\nif (expense.category === 'meals') {\n  const expenseDay = new Date(expense.expenseDate).getDay();\n  if ((expenseDay === 0 || expenseDay === 6) && !policy.weekendMealsAllowed) {\n    violations.push('Weekend meals require additional justification');\n    requiresApproval = true;\n  }\n}\n\n// Combine with OCR validation warnings\nconst allWarnings = [...(expense.validation?.warnings || []), ...violations];\n\nconst checkedExpense = {\n  ...expense,\n  policyCheck: {\n    compliant: violations.length === 0,\n    violations,\n    warnings: allWarnings,\n    requiresApproval: requiresApproval || expense.amount > 50,\n    approvalLevel\n  },\n  status: violations.length > 0 ? 'policy_violation' : (expense.amount > 50 ? 'pending_approval' : 'auto_approved')\n};\n\nreturn [{ json: checkedExpense }];"
+      },
+      "id": "policy-check",
+      "name": "Policy Compliance Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needs-approval",
+              "leftValue": "={{ $json.policyCheck.requiresApproval }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "approval-check",
+      "name": "Needs Approval?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.EXPENSE_DB_URL }}/expenses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-expense",
+      "name": "Save Expense",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "expense-db-api",
+          "name": "Expense DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.HR_API_URL }}/employees/{{ $json.userId }}/manager",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-approver",
+      "name": "Get Approver",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 450],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hr-api-key",
+          "name": "HR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.EXPENSE_FROM_EMAIL }}",
+        "toEmail": "={{ $('Get Approver').first().json.email }}",
+        "subject": "=Expense Approval Required: {{ $('Policy Compliance Check').first().json.expenseId }}",
+        "emailType": "html",
+        "message": "=<h2>Expense Approval Request</h2>\n\n<p>A new expense requires your approval:</p>\n\n<table style=\"border-collapse: collapse; width: 100%; max-width: 600px;\">\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Expense ID:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">{{ $('Policy Compliance Check').first().json.expenseId }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Employee:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">{{ $('Policy Compliance Check').first().json.employeeName }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Amount:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">${{ $('Policy Compliance Check').first().json.amount }} {{ $('Policy Compliance Check').first().json.currency }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Category:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">{{ $('Policy Compliance Check').first().json.category }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Description:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">{{ $('Policy Compliance Check').first().json.description }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Date:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">{{ $('Policy Compliance Check').first().json.expenseDate }}</td>\n  </tr>\n</table>\n\n{{ $('Policy Compliance Check').first().json.policyCheck.warnings.length > 0 ? '<h3 style=\"color: #e67e22;\">⚠️ Warnings:</h3><ul>' + $('Policy Compliance Check').first().json.policyCheck.warnings.map(w => '<li>' + w + '</li>').join('') + '</ul>' : '' }}\n\n<p style=\"margin-top: 20px;\">\n  <a href=\"{{ $vars.EXPENSE_APP_URL }}/approve/{{ $('Policy Compliance Check').first().json.expenseId }}\" style=\"background-color: #27ae60; color: white; padding: 10px 20px; text-decoration: none; margin-right: 10px;\">✅ Approve</a>\n  <a href=\"{{ $vars.EXPENSE_APP_URL }}/reject/{{ $('Policy Compliance Check').first().json.expenseId }}\" style=\"background-color: #e74c3c; color: white; padding: 10px 20px; text-decoration: none;\">❌ Reject</a>\n</p>\n\n<p style=\"margin-top: 20px;\">\n  <a href=\"{{ $('Policy Compliance Check').first().json.receiptUrl }}\">View Receipt</a>\n</p>",
+        "options": {}
+      },
+      "id": "send-approval-email",
+      "name": "Request Approval Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [2000, 450],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.EXPENSE_SLACK_CHANNEL }}",
+        "text": "=💰 *New Expense Submitted*\n\n*ID:* {{ $json.expenseId }}\n*Employee:* {{ $json.employeeName }}\n*Amount:* ${{ $json.amount }} {{ $json.currency }}\n*Category:* {{ $json.category }}\n*Status:* {{ $json.status === 'auto_approved' ? '✅ Auto-Approved' : '⏳ Pending Approval' }}\n\n{{ $json.policyCheck.warnings.length > 0 ? '⚠️ *Warnings:*\\n' + $json.policyCheck.warnings.map(w => '• ' + w).join('\\n') : '' }}",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Finance Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2000, 650],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"expenseId\": \"{{ $('Policy Compliance Check').first().json.expenseId }}\",\n  \"status\": \"{{ $('Policy Compliance Check').first().json.status }}\",\n  \"message\": \"{{ $('Policy Compliance Check').first().json.status === 'auto_approved' ? 'Expense auto-approved' : 'Expense submitted for approval' }}\",\n  \"warnings\": {{ JSON.stringify($('Policy Compliance Check').first().json.policyCheck.warnings) }}\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2250, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "expenses/approve",
+        "options": {}
+      },
+      "id": "approval-webhook",
+      "name": "Approval Action",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 1000],
+      "webhookId": "expense-approve"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process approval/rejection\nconst input = $input.first().json.body || $input.first().json;\n\nconst approval = {\n  expenseId: input.expenseId,\n  action: input.action, // 'approve' or 'reject'\n  approverEmail: input.approverEmail,\n  approverName: input.approverName,\n  comments: input.comments,\n  processedAt: new Date().toISOString()\n};\n\nreturn [{ json: approval }];"
+      },
+      "id": "process-approval",
+      "name": "Process Approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 1000]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $vars.EXPENSE_DB_URL }}/expenses/{{ $json.expenseId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"{{ $json.action === 'approve' ? 'approved' : 'rejected' }}\",\n  \"approver\": {\n    \"email\": \"{{ $json.approverEmail }}\",\n    \"name\": \"{{ $json.approverName }}\",\n    \"comments\": \"{{ $json.comments }}\",\n    \"processedAt\": \"{{ $json.processedAt }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "update-expense",
+      "name": "Update Expense Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "expense-db-api",
+          "name": "Expense DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-approved",
+              "leftValue": "={{ $('Process Approval').first().json.action }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-approved",
+      "name": "Was Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 1000]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.ACCOUNTING_API_URL }}/expenses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "create-accounting-entry",
+      "name": "Create Accounting Entry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 900],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "accounting-api-key",
+          "name": "Accounting API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.EXPENSE_FROM_EMAIL }}",
+        "toEmail": "={{ $json.employeeEmail }}",
+        "subject": "=Your Expense {{ $('Process Approval').first().json.action === 'approve' ? 'Approved' : 'Rejected' }}: {{ $json.expenseId }}",
+        "emailType": "html",
+        "message": "=<h2>Expense {{ $('Process Approval').first().json.action === 'approve' ? 'Approved ✅' : 'Rejected ❌' }}</h2>\n\n<p>Your expense report has been {{ $('Process Approval').first().json.action === 'approve' ? 'approved' : 'rejected' }}.</p>\n\n<table style=\"border-collapse: collapse; width: 100%; max-width: 600px;\">\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Expense ID:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">{{ $json.expenseId }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Amount:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">${{ $json.amount }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\"><strong>Processed By:</strong></td>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">{{ $('Process Approval').first().json.approverName }}</td>\n  </tr>\n</table>\n\n{{ $('Process Approval').first().json.comments ? '<p><strong>Comments:</strong> ' + $('Process Approval').first().json.comments + '</p>' : '' }}\n\n{{ $('Process Approval').first().json.action === 'approve' ? '<p>The amount will be processed in your next reimbursement cycle.</p>' : '<p>Please contact your manager if you have questions about this decision.</p>' }}",
+        "options": {}
+      },
+      "id": "notify-employee",
+      "name": "Notify Employee",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1250, 1100],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate weekly expense report\nconst now = new Date();\nconst weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\n\nreturn [{ json: {\n  reportType: 'weekly',\n  startDate: weekAgo.toISOString().split('T')[0],\n  endDate: now.toISOString().split('T')[0],\n  generatedAt: now.toISOString()\n}}];"
+      },
+      "id": "init-report",
+      "name": "Initialize Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 800]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.EXPENSE_DB_URL }}/expenses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startDate",
+              "value": "={{ $json.startDate }}"
+            },
+            {
+              "name": "endDate",
+              "value": "={{ $json.endDate }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-expenses",
+      "name": "Fetch Week Expenses",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 800],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "expense-db-api",
+          "name": "Expense DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile expense report\nconst reportMeta = $('Initialize Report').first().json;\nconst expenses = $input.first().json.expenses || [];\n\n// Calculate metrics\nconst totalAmount = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);\nconst byStatus = expenses.reduce((acc, e) => {\n  acc[e.status] = (acc[e.status] || 0) + 1;\n  return acc;\n}, {});\nconst byCategory = expenses.reduce((acc, e) => {\n  acc[e.category] = (acc[e.category] || 0) + (e.amount || 0);\n  return acc;\n}, {});\nconst byDepartment = expenses.reduce((acc, e) => {\n  acc[e.department] = (acc[e.department] || 0) + (e.amount || 0);\n  return acc;\n}, {});\n\n// Top spenders\nconst byEmployee = expenses.reduce((acc, e) => {\n  const key = e.employeeEmail;\n  if (!acc[key]) acc[key] = { name: e.employeeName, email: key, total: 0 };\n  acc[key].total += e.amount || 0;\n  return acc;\n}, {});\nconst topSpenders = Object.values(byEmployee).sort((a, b) => b.total - a.total).slice(0, 10);\n\n// Policy violations\nconst violations = expenses.filter(e => e.status === 'policy_violation' || (e.policyCheck?.violations?.length > 0));\n\nconst report = {\n  ...reportMeta,\n  summary: {\n    totalExpenses: expenses.length,\n    totalAmount,\n    averageExpense: expenses.length > 0 ? Math.round(totalAmount / expenses.length * 100) / 100 : 0\n  },\n  byStatus,\n  byCategory,\n  byDepartment,\n  topSpenders,\n  policyViolations: {\n    count: violations.length,\n    items: violations.slice(0, 20)\n  },\n  pendingApprovals: expenses.filter(e => e.status === 'pending_approval').length\n};\n\nreturn [{ json: report }];"
+      },
+      "id": "compile-report",
+      "name": "Compile Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 800]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.EXPENSE_FROM_EMAIL }}",
+        "toEmail": "={{ $vars.FINANCE_TEAM_EMAIL }}",
+        "subject": "=Weekly Expense Report: {{ $json.startDate }} to {{ $json.endDate }}",
+        "emailType": "html",
+        "message": "=<h2>📊 Weekly Expense Report</h2>\n<p><strong>Period:</strong> {{ $json.startDate }} to {{ $json.endDate }}</p>\n\n<h3>Summary</h3>\n<table style=\"border-collapse: collapse; width: 100%; max-width: 500px;\">\n  <tr style=\"background-color: #f8f9fa;\">\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">Total Expenses</td>\n    <td style=\"padding: 10px; border: 1px solid #ddd; text-align: right;\">{{ $json.summary.totalExpenses }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">Total Amount</td>\n    <td style=\"padding: 10px; border: 1px solid #ddd; text-align: right; font-weight: bold;\">${{ $json.summary.totalAmount.toLocaleString() }}</td>\n  </tr>\n  <tr style=\"background-color: #f8f9fa;\">\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">Average Expense</td>\n    <td style=\"padding: 10px; border: 1px solid #ddd; text-align: right;\">${{ $json.summary.averageExpense }}</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">Pending Approvals</td>\n    <td style=\"padding: 10px; border: 1px solid #ddd; text-align: right;\">{{ $json.pendingApprovals }}</td>\n  </tr>\n  <tr style=\"background-color: #f8f9fa;\">\n    <td style=\"padding: 10px; border: 1px solid #ddd;\">Policy Violations</td>\n    <td style=\"padding: 10px; border: 1px solid #ddd; text-align: right; color: {{ $json.policyViolations.count > 0 ? '#e74c3c' : '#27ae60' }};\">{{ $json.policyViolations.count }}</td>\n  </tr>\n</table>\n\n<h3>By Category</h3>\n<ul>\n{{ Object.entries($json.byCategory).map(([cat, amt]) => '<li>' + cat + ': $' + amt.toLocaleString() + '</li>').join('') }}\n</ul>\n\n<h3>By Department</h3>\n<ul>\n{{ Object.entries($json.byDepartment).map(([dept, amt]) => '<li>' + dept + ': $' + amt.toLocaleString() + '</li>').join('') }}\n</ul>\n\n<h3>Top Spenders</h3>\n<ol>\n{{ $json.topSpenders.map(s => '<li>' + s.name + ' - $' + s.total.toLocaleString() + '</li>').join('') }}\n</ol>\n\n<p><a href=\"{{ $vars.EXPENSE_APP_URL }}/reports\">View Full Report in Dashboard</a></p>",
+        "options": {}
+      },
+      "id": "send-report",
+      "name": "Send Report Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1250, 800],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Expense Submission": {
+      "main": [
+        [{ "node": "Initialize Expense", "type": "main", "index": 0 }]
+      ]
+    },
+    "Receipt Upload": {
+      "main": [
+        [{ "node": "Initialize Expense", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize Expense": {
+      "main": [
+        [{ "node": "OCR Receipt", "type": "main", "index": 0 }]
+      ]
+    },
+    "OCR Receipt": {
+      "main": [
+        [{ "node": "Validate & Enrich", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate & Enrich": {
+      "main": [
+        [{ "node": "Policy Compliance Check", "type": "main", "index": 0 }]
+      ]
+    },
+    "Policy Compliance Check": {
+      "main": [
+        [{ "node": "Needs Approval?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Needs Approval?": {
+      "main": [
+        [
+          { "node": "Save Expense", "type": "main", "index": 0 },
+          { "node": "Get Approver", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Save Expense", "type": "main", "index": 0 },
+          { "node": "Notify Finance Team", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Get Approver": {
+      "main": [
+        [{ "node": "Request Approval Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Request Approval Email": {
+      "main": [
+        [
+          { "node": "Notify Finance Team", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Approval Action": {
+      "main": [
+        [{ "node": "Process Approval", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Approval": {
+      "main": [
+        [{ "node": "Update Expense Status", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Expense Status": {
+      "main": [
+        [{ "node": "Was Approved?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Was Approved?": {
+      "main": [
+        [
+          { "node": "Create Accounting Entry", "type": "main", "index": 0 },
+          { "node": "Notify Employee", "type": "main", "index": 0 }
+        ],
+        [{ "node": "Notify Employee", "type": "main", "index": 0 }]
+      ]
+    },
+    "Weekly Report (Mon 9AM)": {
+      "main": [
+        [{ "node": "Initialize Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize Report": {
+      "main": [
+        [{ "node": "Fetch Week Expenses", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Week Expenses": {
+      "main": [
+        [{ "node": "Compile Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Report": {
+      "main": [
+        [{ "node": "Send Report Email", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "expense", "name": "expense" },
+    { "id": "finance", "name": "finance" },
+    { "id": "automation", "name": "automation" },
+    { "id": "approval", "name": "approval" }
+  ],
+  "triggerCount": 4,
+  "updatedAt": "2026-01-08T00:00:00.000Z",
+  "versionId": "1"
+}

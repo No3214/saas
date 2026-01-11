@@ -1,0 +1,314 @@
+{
+  "name": "Grain White-Label Agency Dashboard v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "id": "daily-report-trigger",
+      "name": "Daily Report Trigger (06:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [-600, 300],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "agency-dashboard/{{ $parameter.client_id }}",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "dashboard-api",
+      "name": "Dashboard API Endpoint",
+      "type": "n8n-nodes-base.webhook",
+      "position": [-600, 500],
+      "webhookId": "agency-dashboard-api",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agency & Client Configuration\nconst config = {\n  agency: {\n    id: $vars.AGENCY_ID || 'agency_001',\n    name: $vars.AGENCY_NAME || 'Digital Agency',\n    logo_url: $vars.AGENCY_LOGO || '',\n    primary_color: $vars.AGENCY_PRIMARY_COLOR || '#2563eb',\n    secondary_color: $vars.AGENCY_SECONDARY_COLOR || '#1e40af',\n    domain: $vars.AGENCY_DOMAIN || 'reports.agency.com',\n    email_from: $vars.AGENCY_EMAIL || 'reports@agency.com'\n  },\n  \n  clients: [\n    {\n      id: 'client_001',\n      name: 'Örnek İşletme A.Ş.',\n      industry: 'restaurant',\n      google_analytics_id: '',\n      google_ads_id: '',\n      meta_ads_id: '',\n      google_business_id: '',\n      social_accounts: {\n        instagram: '',\n        facebook: '',\n        linkedin: ''\n      },\n      contacts: [\n        { email: 'owner@example.com', name: 'İşletme Sahibi', send_reports: true }\n      ],\n      report_frequency: 'weekly', // daily, weekly, monthly\n      kpis: ['traffic', 'conversions', 'reviews', 'social_engagement']\n    }\n  ],\n  \n  report_templates: {\n    executive_summary: true,\n    traffic_analytics: true,\n    seo_performance: true,\n    social_media: true,\n    paid_ads: true,\n    reviews_reputation: true,\n    recommendations: true\n  }\n};\n\nreturn config;"
+      },
+      "id": "load-config",
+      "name": "Load Agency Configuration",
+      "type": "n8n-nodes-base.code",
+      "position": [-380, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-clients",
+      "name": "Process Each Client",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [-160, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/analytics/v3/data/ga",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "ids", "value": "ga:{{ $json.clients[0].google_analytics_id }}" },
+            { "name": "start-date", "value": "30daysAgo" },
+            { "name": "end-date", "value": "today" },
+            { "name": "metrics", "value": "ga:sessions,ga:users,ga:pageviews,ga:bounceRate,ga:avgSessionDuration,ga:goalCompletionsAll" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-ga-data",
+      "name": "Fetch Google Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [60, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "https://searchconsole.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($json.website) }}/searchAnalytics/query",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"startDate\": \"{{ $now.minus({days: 30}).toFormat('yyyy-MM-dd') }}\",\n  \"endDate\": \"{{ $now.toFormat('yyyy-MM-dd') }}\",\n  \"dimensions\": [\"query\", \"page\"],\n  \"rowLimit\": 100\n}",
+        "options": {}
+      },
+      "id": "fetch-gsc-data",
+      "name": "Fetch Search Console",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [60, 400],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $json.social_accounts.instagram }}/insights",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "metric", "value": "impressions,reach,follower_count,profile_views" },
+            { "name": "period", "value": "day" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-instagram",
+      "name": "Fetch Instagram Insights",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [60, 600],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "https://mybusinessbusinessinformation.googleapis.com/v1/{{ $json.google_business_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "fetch-gbp-data",
+      "name": "Fetch Google Business Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [60, 800],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all data sources\nconst config = $('Load Agency Configuration').first().json;\nconst gaData = $('Fetch Google Analytics').first().json || {};\nconst gscData = $('Fetch Search Console').first().json || {};\nconst instagramData = $('Fetch Instagram Insights').first().json || {};\nconst gbpData = $('Fetch Google Business Profile').first().json || {};\n\nconst client = config.clients[0];\nconst reportDate = new Date().toISOString().split('T')[0];\n\n// Calculate metrics\nconst metrics = {\n  traffic: {\n    sessions: gaData.totalsForAllResults?.['ga:sessions'] || 0,\n    users: gaData.totalsForAllResults?.['ga:users'] || 0,\n    pageviews: gaData.totalsForAllResults?.['ga:pageviews'] || 0,\n    bounce_rate: parseFloat(gaData.totalsForAllResults?.['ga:bounceRate'] || 0).toFixed(2),\n    avg_session_duration: gaData.totalsForAllResults?.['ga:avgSessionDuration'] || 0,\n    conversions: gaData.totalsForAllResults?.['ga:goalCompletionsAll'] || 0\n  },\n  \n  seo: {\n    total_clicks: gscData.rows?.reduce((sum, row) => sum + row.clicks, 0) || 0,\n    total_impressions: gscData.rows?.reduce((sum, row) => sum + row.impressions, 0) || 0,\n    avg_position: gscData.rows?.length > 0 \n      ? (gscData.rows.reduce((sum, row) => sum + row.position, 0) / gscData.rows.length).toFixed(1) \n      : 0,\n    top_queries: (gscData.rows || []).slice(0, 10).map(r => ({\n      query: r.keys[0],\n      clicks: r.clicks,\n      impressions: r.impressions\n    }))\n  },\n  \n  social: {\n    instagram: {\n      followers: instagramData.data?.find(d => d.name === 'follower_count')?.values[0]?.value || 0,\n      reach: instagramData.data?.find(d => d.name === 'reach')?.values[0]?.value || 0,\n      impressions: instagramData.data?.find(d => d.name === 'impressions')?.values[0]?.value || 0\n    }\n  },\n  \n  reviews: {\n    google_rating: gbpData.averageRating || 0,\n    total_reviews: gbpData.totalReviewCount || 0\n  }\n};\n\n// Calculate period comparisons (mock for now)\nconst comparisons = {\n  traffic_change: '+12.5%',\n  seo_change: '+8.3%',\n  social_change: '+15.2%',\n  reviews_change: '+3'\n};\n\nreturn {\n  report_id: `report_${Date.now()}`,\n  generated_at: new Date().toISOString(),\n  period: {\n    start: $now.minus({days: 30}).toFormat('yyyy-MM-dd'),\n    end: $now.toFormat('yyyy-MM-dd')\n  },\n  agency: config.agency,\n  client: client,\n  metrics: metrics,\n  comparisons: comparisons\n};"
+      },
+      "id": "aggregate-data",
+      "name": "Aggregate All Data",
+      "type": "n8n-nodes-base.code",
+      "position": [280, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Sen profesyonel bir dijital pazarlama analisti ve rapor yazarısın. Aşağıdaki verilere göre müşteri için özet ve öneriler oluştur.\n\nMüşteri: {{ $json.client.name }}\nSektör: {{ $json.client.industry }}\nDönem: {{ $json.period.start }} - {{ $json.period.end }}\n\nMetrikler:\n{{ JSON.stringify($json.metrics, null, 2) }}\n\nDeğişimler:\n{{ JSON.stringify($json.comparisons, null, 2) }}\n\nJSON formatında yanıt ver:\n{\n  \"executive_summary\": \"2-3 cümlelik genel değerlendirme\",\n  \"highlights\": [\n    { \"metric\": \"metrik adı\", \"value\": \"değer\", \"trend\": \"up|down|stable\", \"insight\": \"kısa yorum\" }\n  ],\n  \"recommendations\": [\n    { \"priority\": \"high|medium|low\", \"category\": \"seo|social|ads|content\", \"action\": \"yapılması gereken\", \"expected_impact\": \"beklenen etki\" }\n  ],\n  \"next_month_focus\": \"Gelecek ay odaklanılması gereken alan\"\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "maxTokens": 1500,
+          "temperature": 0.5
+        }
+      },
+      "id": "generate-insights",
+      "name": "Generate AI Insights",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [500, 400],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate White-Label HTML Report\nconst data = $('Aggregate All Data').first().json;\nconst insights = JSON.parse($('Generate AI Insights').first().json.message.content);\nconst agency = data.agency;\nconst client = data.client;\nconst metrics = data.metrics;\n\nconst html = `\n<!DOCTYPE html>\n<html lang=\"tr\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Performans Raporu - ${client.name}</title>\n  <style>\n    :root {\n      --primary: ${agency.primary_color};\n      --secondary: ${agency.secondary_color};\n    }\n    * { margin: 0; padding: 0; box-sizing: border-box; }\n    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; color: #1e293b; }\n    .header { background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; padding: 40px; }\n    .header img { height: 50px; margin-bottom: 20px; }\n    .header h1 { font-size: 28px; margin-bottom: 8px; }\n    .header p { opacity: 0.9; }\n    .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }\n    .summary-card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }\n    .summary-card h2 { color: var(--primary); margin-bottom: 16px; font-size: 20px; }\n    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }\n    .metric-card { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }\n    .metric-card .value { font-size: 32px; font-weight: bold; color: var(--primary); }\n    .metric-card .label { color: #64748b; font-size: 14px; margin-top: 4px; }\n    .metric-card .change { font-size: 14px; margin-top: 8px; }\n    .change.up { color: #22c55e; }\n    .change.down { color: #ef4444; }\n    .recommendations { list-style: none; }\n    .recommendations li { padding: 16px; border-left: 4px solid var(--primary); background: #f8fafc; margin-bottom: 12px; border-radius: 0 8px 8px 0; }\n    .recommendations li.high { border-color: #ef4444; }\n    .recommendations li.medium { border-color: #f59e0b; }\n    .recommendations li.low { border-color: #22c55e; }\n    .footer { text-align: center; padding: 40px; color: #64748b; font-size: 14px; }\n    .footer a { color: var(--primary); }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    ${agency.logo_url ? `<img src=\"${agency.logo_url}\" alt=\"${agency.name}\">` : `<h3>${agency.name}</h3>`}\n    <h1>Aylık Performans Raporu</h1>\n    <p>${client.name} • ${data.period.start} - ${data.period.end}</p>\n  </div>\n  \n  <div class=\"container\">\n    <div class=\"summary-card\">\n      <h2>📊 Yönetici Özeti</h2>\n      <p>${insights.executive_summary}</p>\n    </div>\n    \n    <div class=\"metrics-grid\">\n      <div class=\"metric-card\">\n        <div class=\"value\">${metrics.traffic.sessions.toLocaleString()}</div>\n        <div class=\"label\">Oturum</div>\n        <div class=\"change up\">${data.comparisons.traffic_change}</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"value\">${metrics.traffic.users.toLocaleString()}</div>\n        <div class=\"label\">Kullanıcı</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"value\">${metrics.seo.total_clicks.toLocaleString()}</div>\n        <div class=\"label\">SEO Tıklama</div>\n        <div class=\"change up\">${data.comparisons.seo_change}</div>\n      </div>\n      <div class=\"metric-card\">\n        <div class=\"value\">${metrics.reviews.google_rating}</div>\n        <div class=\"label\">Google Puanı</div>\n      </div>\n    </div>\n    \n    <div class=\"summary-card\">\n      <h2>💡 Öneriler</h2>\n      <ul class=\"recommendations\">\n        ${insights.recommendations.map(r => `\n          <li class=\"${r.priority}\">\n            <strong>${r.action}</strong><br>\n            <small>Beklenen Etki: ${r.expected_impact}</small>\n          </li>\n        `).join('')}\n      </ul>\n    </div>\n    \n    <div class=\"summary-card\">\n      <h2>🎯 Gelecek Ay Odak</h2>\n      <p>${insights.next_month_focus}</p>\n    </div>\n  </div>\n  \n  <div class=\"footer\">\n    <p>Bu rapor ${agency.name} tarafından hazırlanmıştır.</p>\n    <p><a href=\"https://${agency.domain}\">${agency.domain}</a></p>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  html_report: html,\n  report_data: data,\n  insights: insights\n};"
+      },
+      "id": "generate-html-report",
+      "name": "Generate White-Label HTML Report",
+      "type": "n8n-nodes-base.code",
+      "position": [720, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "mode": "jsonToBinary",
+        "options": {}
+      },
+      "id": "create-pdf",
+      "name": "Convert to PDF (Optional)",
+      "type": "n8n-nodes-base.convertToFile",
+      "position": [940, 300],
+      "disabled": true,
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $('Load Agency Configuration').first().json.agency.email_from }}",
+        "toEmail": "={{ $('Aggregate All Data').first().json.client.contacts.filter(c => c.send_reports).map(c => c.email).join(',') }}",
+        "subject": "=📊 {{ $('Aggregate All Data').first().json.client.name }} - Aylık Performans Raporu",
+        "emailType": "html",
+        "message": "={{ $json.html_report }}",
+        "options": {}
+      },
+      "id": "send-email-report",
+      "name": "Send Email Report",
+      "type": "n8n-nodes-base.gmail",
+      "position": [940, 500],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, report: $json.report_data, insights: $json.insights }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "api-response",
+      "name": "API Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [940, 700],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "resource": "spreadsheet",
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Reports Log" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "report_id": "={{ $json.report_data.report_id }}",
+            "client_name": "={{ $json.report_data.client.name }}",
+            "generated_at": "={{ $json.report_data.generated_at }}",
+            "sessions": "={{ $json.report_data.metrics.traffic.sessions }}",
+            "users": "={{ $json.report_data.metrics.traffic.users }}",
+            "seo_clicks": "={{ $json.report_data.metrics.seo.total_clicks }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-to-sheets",
+      "name": "Log Report to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1160, 400],
+      "disabled": true,
+      "typeVersion": 4.5
+    }
+  ],
+  "connections": {
+    "Daily Report Trigger (06:00)": {
+      "main": [[{ "node": "Load Agency Configuration", "type": "main", "index": 0 }]]
+    },
+    "Dashboard API Endpoint": {
+      "main": [[{ "node": "Load Agency Configuration", "type": "main", "index": 0 }]]
+    },
+    "Load Agency Configuration": {
+      "main": [[{ "node": "Process Each Client", "type": "main", "index": 0 }]]
+    },
+    "Process Each Client": {
+      "main": [
+        [
+          { "node": "Fetch Google Analytics", "type": "main", "index": 0 },
+          { "node": "Fetch Search Console", "type": "main", "index": 0 },
+          { "node": "Fetch Instagram Insights", "type": "main", "index": 0 },
+          { "node": "Fetch Google Business Profile", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Google Analytics": {
+      "main": [[{ "node": "Aggregate All Data", "type": "main", "index": 0 }]]
+    },
+    "Fetch Search Console": {
+      "main": [[{ "node": "Aggregate All Data", "type": "main", "index": 0 }]]
+    },
+    "Fetch Instagram Insights": {
+      "main": [[{ "node": "Aggregate All Data", "type": "main", "index": 0 }]]
+    },
+    "Fetch Google Business Profile": {
+      "main": [[{ "node": "Aggregate All Data", "type": "main", "index": 0 }]]
+    },
+    "Aggregate All Data": {
+      "main": [[{ "node": "Generate AI Insights", "type": "main", "index": 0 }]]
+    },
+    "Generate AI Insights": {
+      "main": [[{ "node": "Generate White-Label HTML Report", "type": "main", "index": 0 }]]
+    },
+    "Generate White-Label HTML Report": {
+      "main": [
+        [
+          { "node": "Send Email Report", "type": "main", "index": 0 },
+          { "node": "API Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Email Report": {
+      "main": [[{ "node": "Log Report to Sheets", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "White-Label" },
+    { "name": "Agency" },
+    { "name": "Dashboard" },
+    { "name": "Reporting" },
+    { "name": "Grain" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-09T00:00:00.000Z",
+  "versionId": "grain-whitelabel-dashboard-v1"
+}

@@ -1,0 +1,454 @@
+{
+    "listing_management_system": {
+        "version": "2.0",
+        "system_name": "Grain Local Business Listing Manager",
+        "business_profile": {
+            "basic_info": {
+                "business_id": "REST_001",
+                "business_name": "Lezzet Konağı",
+                "business_name_local": "Lezzet Konağı Türk Mutfağı",
+                "legal_name": "Lezzet Konağı Yiyecek İçecek Ltd. Şti.",
+                "slogan": "Geleneksel Tatlar, Modern Sunum",
+                "description": {
+                    "short": "Kadıköy'ün kalbinde otantik Türk mutfağı. Taze malzemeler, özel tarifler.",
+                    "long": "1998'den bu yana İstanbul'un en sevilen adreslerinden biri olan Lezzet Konağı, geleneksel Türk mutfağını modern bir anlayışla sunuyor. Taze, yerel malzemelerle hazırlanan özel tariflerimiz, sıcak atmosferimiz ve kaliteli hizmetimizle sizleri ağırlamaktan mutluluk duyuyoruz. Düğün, nişan, iş yemeği ve özel gün organizasyonlarınız için ideal mekanımızda unutulmaz anılar biriktirin.",
+                    "seo_optimized": "Kadıköy restoran | Türk mutfağı İstanbul | En iyi kebap Kadıköy | Fine dining Anadolu yakası | Özel gün organizasyonu İstanbul"
+                },
+                "year_established": 1998,
+                "employee_count": "25-50",
+                "languages_spoken": [
+                    "Türkçe",
+                    "İngilizce",
+                    "Almanca",
+                    "Arapça"
+                ]
+            },
+            "contact_info": {
+                "primary_phone": "+90 216 345 67 89",
+                "secondary_phone": "+90 216 345 67 90",
+                "whatsapp": "+90 532 123 45 67",
+                "fax": "+90 216 345 67 91",
+                "email": "info@lezzetkonagi.com.tr",
+                "website": "https://www.lezzetkonagi.com.tr",
+                "booking_url": "https://www.lezzetkonagi.com.tr/rezervasyon",
+                "menu_url": "https://www.lezzetkonagi.com.tr/menu",
+                "order_url": "https://www.lezzetkonagi.com.tr/siparis"
+            },
+            "location": {
+                "address": {
+                    "street": "Moda Caddesi No: 42",
+                    "street2": "Caferağa Mahallesi",
+                    "district": "Kadıköy",
+                    "city": "İstanbul",
+                    "state": "İstanbul",
+                    "postal_code": "34710",
+                    "country": "Türkiye",
+                    "country_code": "TR"
+                },
+                "coordinates": {
+                    "latitude": 40.9876,
+                    "longitude": 29.0234
+                },
+                "service_area": {
+                    "type": "radius",
+                    "radius_km": 15,
+                    "areas": [
+                        "Kadıköy",
+                        "Üsküdar",
+                        "Ataşehir",
+                        "Maltepe",
+                        "Beşiktaş",
+                        "Şişli"
+                    ]
+                },
+                "is_service_area_business": false,
+                "hide_address": false
+            },
+            "categories": {
+                "primary_category": {
+                    "id": "turkish_restaurant",
+                    "name": "Türk Restoranı",
+                    "google_category_id": "gcid:turkish_restaurant"
+                },
+                "secondary_categories": [
+                    {
+                        "id": "fine_dining",
+                        "name": "Fine Dining",
+                        "google_category_id": "gcid:fine_dining_restaurant"
+                    },
+                    {
+                        "id": "kebab_restaurant",
+                        "name": "Kebap Restoranı",
+                        "google_category_id": "gcid:kebab_restaurant"
+                    }
+                ],
+                "additional_categories": [
+                    "Catering Hizmeti",
+                    "Etkinlik Mekanı",
+                    "Düğün Organizasyonu"
+                ]
+            },
+            "business_hours": {
+                "regular_hours": {
+                    "monday": {
+                        "open": "11:00",
+                        "close": "23:00",
+                        "is_closed": false
+                    },
+                    "tuesday": {
+                        "open": "11:00",
+                        "close": "23:00",
+                        "is_closed": false
+                    },
+                    "wednesday": {
+                        "open": "11:00",
+                        "close": "23:00",
+                        "is_closed": false
+                    },
+                    "thursday": {
+                        "open": "11:00",
+                        "close": "23:30",
+                        "is_closed": false
+                    },
+                    "friday": {
+                        "open": "11:00",
+                        "close": "00:00",
+                        "is_closed": false
+                    },
+                    "saturday": {
+                        "open": "10:00",
+                        "close": "00:00",
+                        "is_closed": false
+                    },
+                    "sunday": {
+                        "open": "10:00",
+                        "close": "22:00",
+                        "is_closed": false
+                    }
+                },
+                "special_hours": [
+                    {
+                        "date": "2024-04-23",
+                        "is_closed": true,
+                        "description": "23 Nisan Ulusal Egemenlik ve Çocuk Bayramı"
+                    },
+                    {
+                        "date": "2024-04-10",
+                        "open": "18:00",
+                        "close": "02:00",
+                        "description": "Ramazan Bayramı Özel"
+                    }
+                ],
+                "more_hours": {
+                    "delivery_hours": {
+                        "monday": {
+                            "open": "12:00",
+                            "close": "22:00"
+                        },
+                        "tuesday": {
+                            "open": "12:00",
+                            "close": "22:00"
+                        },
+                        "wednesday": {
+                            "open": "12:00",
+                            "close": "22:00"
+                        },
+                        "thursday": {
+                            "open": "12:00",
+                            "close": "22:30"
+                        },
+                        "friday": {
+                            "open": "12:00",
+                            "close": "23:00"
+                        },
+                        "saturday": {
+                            "open": "11:00",
+                            "close": "23:00"
+                        },
+                        "sunday": {
+                            "open": "11:00",
+                            "close": "21:00"
+                        }
+                    },
+                    "kitchen_hours": {
+                        "monday": {
+                            "open": "11:00",
+                            "close": "22:00"
+                        },
+                        "tuesday": {
+                            "open": "11:00",
+                            "close": "22:00"
+                        }
+                    }
+                },
+                "timezone": "Europe/Istanbul"
+            },
+            "attributes": {
+                "accessibility": {
+                    "wheelchair_accessible_entrance": true,
+                    "wheelchair_accessible_seating": true,
+                    "wheelchair_accessible_restroom": true,
+                    "wheelchair_accessible_parking": true
+                },
+                "amenities": {
+                    "wifi": true,
+                    "wifi_free": true,
+                    "restroom": true,
+                    "parking": {
+                        "available": true,
+                        "type": [
+                            "free_parking",
+                            "valet"
+                        ],
+                        "details": "Ücretsiz vale parkı mevcuttur. Cadde üzerinde ücretli park alanı."
+                    },
+                    "outdoor_seating": true,
+                    "rooftop": false,
+                    "live_music": true,
+                    "tv": true,
+                    "fireplace": true
+                },
+                "dining_options": {
+                    "dine_in": true,
+                    "takeout": true,
+                    "delivery": true,
+                    "curbside_pickup": true,
+                    "no_contact_delivery": true,
+                    "catering": true,
+                    "reservations": {
+                        "accepts": true,
+                        "required": false,
+                        "url": "https://www.lezzetkonagi.com.tr/rezervasyon"
+                    }
+                },
+                "payments": {
+                    "cash": true,
+                    "credit_cards": true,
+                    "debit_cards": true,
+                    "contactless": true,
+                    "mobile_payments": [
+                        "Apple Pay",
+                        "Google Pay",
+                        "TR Karekod"
+                    ],
+                    "cryptocurrency": false
+                },
+                "crowd": {
+                    "lgbtq_friendly": true,
+                    "family_friendly": true,
+                    "pet_friendly": false,
+                    "groups": true
+                },
+                "highlights": {
+                    "women_led": false,
+                    "veteran_led": false,
+                    "family_owned": true
+                },
+                "planning": {
+                    "good_for_kids": true,
+                    "good_for_groups": true,
+                    "romantic": true,
+                    "business_meetings": true
+                }
+            },
+            "media": {
+                "logo": {
+                    "url": "https://cdn.lezzetkonagi.com.tr/logo.png",
+                    "alt_text": "Lezzet Konağı Logo"
+                },
+                "cover_photo": {
+                    "url": "https://cdn.lezzetkonagi.com.tr/cover.jpg",
+                    "alt_text": "Lezzet Konağı Dış Cephe"
+                },
+                "photos": [
+                    {
+                        "id": "photo_001",
+                        "url": "https://cdn.lezzetkonagi.com.tr/photos/ic-mekan-1.jpg",
+                        "category": "interior",
+                        "alt_text": "Restoran iç mekan görünümü",
+                        "is_primary": true
+                    },
+                    {
+                        "id": "photo_002",
+                        "url": "https://cdn.lezzetkonagi.com.tr/photos/kuzu-tandir.jpg",
+                        "category": "food_and_drink",
+                        "alt_text": "Özel Kuzu Tandır",
+                        "is_primary": false
+                    }
+                ]
+            },
+            "social_profiles": {
+                "facebook": {
+                    "url": "https://facebook.com/lezzetkonagi",
+                    "verified": true
+                },
+                "instagram": {
+                    "url": "https://instagram.com/lezzetkonagi",
+                    "verified": true
+                },
+                "twitter": {
+                    "url": "https://twitter.com/lezzetkonagi"
+                },
+                "youtube": {
+                    "url": "https://youtube.com/c/lezzetkonagi"
+                },
+                "tiktok": {
+                    "url": "https://tiktok.com/@lezzetkonagi"
+                }
+            }
+        },
+        "directory_listings": {
+            "sync_settings": {
+                "auto_sync_enabled": true,
+                "sync_frequency": "realtime"
+            },
+            "platforms": {
+                "google_business_profile": {
+                    "platform_id": "gbp",
+                    "platform_name": "Google Business Profile",
+                    "importance": "critical",
+                    "enabled": true,
+                    "status": "verified",
+                    "place_id": "ChIJxxxxxxxxxxxxxxx",
+                    "account_id": "accounts/123456789",
+                    "location_id": "locations/987654321"
+                },
+                "tripadvisor": {
+                    "platform_id": "tripadvisor",
+                    "platform_name": "TripAdvisor",
+                    "importance": "critical",
+                    "enabled": true,
+                    "status": "claimed",
+                    "location_id": "TA_LOC_123456"
+                },
+                "yelp": {
+                    "platform_id": "yelp",
+                    "platform_name": "Yelp",
+                    "importance": "high",
+                    "enabled": true,
+                    "status": "claimed",
+                    "business_id": "lezzet-konagi-istanbul"
+                },
+                "facebook": {
+                    "platform_id": "facebook",
+                    "platform_name": "Facebook Business",
+                    "importance": "high",
+                    "enabled": true,
+                    "status": "verified",
+                    "page_id": "123456789012345"
+                },
+                "yemeksepeti": {
+                    "platform_id": "yemeksepeti",
+                    "platform_name": "Yemeksepeti",
+                    "importance": "critical",
+                    "enabled": true,
+                    "status": "active",
+                    "restaurant_id": "YS_REST_789"
+                },
+                "getir_yemek": {
+                    "platform_id": "getir_yemek",
+                    "platform_name": "Getir Yemek",
+                    "importance": "high",
+                    "enabled": true,
+                    "status": "active"
+                }
+            }
+        },
+        "review_management": {
+            "settings": {
+                "monitoring_enabled": true,
+                "auto_response_enabled": true,
+                "notification_settings": {
+                    "email_notifications": true,
+                    "notify_on_negative_review": true,
+                    "negative_threshold": 3
+                },
+                "response_time_goal_hours": 12
+            },
+            "aggregate_stats": {
+                "total_reviews_all_platforms": 1847,
+                "average_rating_all_platforms": 4.6,
+                "reviews_last_30_days": 89,
+                "response_rate": 96.5,
+                "average_response_time_hours": 3.2
+            }
+        },
+        "ai_automation": {
+            "enabled": true,
+            "ai_provider": "openai",
+            "model": "gpt-4o",
+            "review_response_ai": {
+                "enabled": true,
+                "settings": {
+                    "auto_respond_positive": true,
+                    "auto_respond_neutral": true,
+                    "auto_respond_negative": false,
+                    "min_rating_for_auto_response": 4,
+                    "languages": [
+                        "tr",
+                        "en",
+                        "de",
+                        "ar"
+                    ]
+                },
+                "response_personality": {
+                    "tone": "professional_friendly",
+                    "emoji_usage": "moderate",
+                    "signature": "Lezzet Konağı Ailesi 🙏",
+                    "custom_instructions": "Her zaman misafire ismiyle hitap et. Türk misafirperverliğini ve sıcaklığını yansıt. Mümkünse yorumda bahsedilen belirli yemek veya deneyime değin."
+                },
+                "blacklist_responses_containing": [
+                    "indirim",
+                    "ücretsiz",
+                    "tazminat",
+                    "yasal",
+                    "şikayet"
+                ]
+            }
+        },
+        "notifications": {
+            "channels": {
+                "email": {
+                    "enabled": true,
+                    "recipients": [
+                        "yonetim@lezzetkonagi.com.tr",
+                        "pazarlama@lezzetkonagi.com.tr"
+                    ]
+                },
+                "slack": {
+                    "enabled": true,
+                    "webhook_url": "https://hooks.slack.com/services/xxx/yyy/zzz",
+                    "channel": "#yorumlar"
+                },
+                "whatsapp": {
+                    "enabled": true,
+                    "phone": "+90 532 123 45 67"
+                }
+            },
+            "triggers": {
+                "new_review": {
+                    "enabled": true,
+                    "channels": [
+                        "slack"
+                    ]
+                },
+                "negative_review": {
+                    "enabled": true,
+                    "channels": [
+                        "email",
+                        "slack",
+                        "whatsapp"
+                    ]
+                },
+                "weekly_report": {
+                    "enabled": true,
+                    "day": "monday",
+                    "time": "09:00",
+                    "channels": [
+                        "email"
+                    ]
+                }
+            }
+        }
+    }
+}

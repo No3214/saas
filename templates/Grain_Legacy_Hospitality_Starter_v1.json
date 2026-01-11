@@ -1,0 +1,243 @@
+{
+  "name": "Grain Legacy - Hospitality Starter Pack v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legacy-hospitality-booking",
+        "options": {}
+      },
+      "id": "webhook-booking",
+      "name": "Webhook - New Booking",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 200],
+      "webhookId": "grain-legacy-hospitality-booking"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-morning",
+      "name": "Schedule - Morning Briefing",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process booking request\nconst booking = $input.first().json;\n\nconst checkIn = new Date(booking.check_in || booking.checkin_date);\nconst checkOut = new Date(booking.check_out || booking.checkout_date);\nconst nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));\n\nreturn [{\n  json: {\n    booking_id: booking.booking_id || `BK-${Date.now()}`,\n    guest_name: booking.guest_name || booking.customer_name || 'Misafir',\n    guest_phone: booking.guest_phone || booking.phone || '',\n    guest_email: booking.guest_email || booking.email || '',\n    room_type: booking.room_type || 'Standart',\n    check_in: checkIn.toISOString().split('T')[0],\n    check_out: checkOut.toISOString().split('T')[0],\n    nights: nights,\n    guests: booking.guests || booking.guest_count || 2,\n    total: booking.total || (nights * (booking.room_price || 500)),\n    currency: booking.currency || 'TRY',\n    status: 'confirmed',\n    source: booking.source || 'website',\n    special_requests: booking.special_requests || booking.notes || '',\n    created_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-process-booking",
+      "name": "Process Booking Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "bookings",
+        "columns": "booking_id, guest_name, guest_phone, room_type, check_in, check_out, nights, total_price, status, created_at",
+        "values": "={{ $json.booking_id }}, {{ $json.guest_name }}, {{ $json.guest_phone }}, {{ $json.room_type }}, {{ $json.check_in }}, {{ $json.check_out }}, {{ $json.nights }}, {{ $json.total }}, {{ $json.status }}, {{ $json.created_at }}"
+      },
+      "id": "postgres-save-booking",
+      "name": "Save Booking to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $json.guest_phone }}",
+        "textBody": "Merhaba {{ $json.guest_name }}!\n\nRezervasyonunuz onaylandi.\n\nRezervasyon No: {{ $json.booking_id }}\nOda: {{ $json.room_type }}\nGiris: {{ $json.check_in }}\nCikis: {{ $json.check_out }}\nGece: {{ $json.nights }}\nTutar: {{ $json.total }} {{ $json.currency }}\n\nSizi agirlamaktan mutluluk duyariz!\n\nIyi yolculuklar!",
+        "options": {}
+      },
+      "id": "whatsapp-guest",
+      "name": "WhatsApp - Booking Confirmation",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [850, 100],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.HOTEL_RECEPTION_PHONE }}",
+        "textBody": "YENI REZERVASYON!\n\nNo: {{ $json.booking_id }}\nMisafir: {{ $json.guest_name }}\nOda: {{ $json.room_type }}\nGiris: {{ $json.check_in }}\nGece: {{ $json.nights }}\nKisi: {{ $json.guests }}\n\nOzel Istekler:\n{{ $json.special_requests || 'Yok' }}",
+        "options": {}
+      },
+      "id": "whatsapp-reception",
+      "name": "WhatsApp - Notify Reception",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  COUNT(CASE WHEN check_in = CURRENT_DATE THEN 1 END) as arriving_today,\n  COUNT(CASE WHEN check_out = CURRENT_DATE THEN 1 END) as departing_today,\n  COUNT(CASE WHEN check_in <= CURRENT_DATE AND check_out > CURRENT_DATE THEN 1 END) as in_house,\n  STRING_AGG(CASE WHEN check_in = CURRENT_DATE THEN guest_name || ' - ' || room_type END, ', ') as arrival_names\nFROM bookings \nWHERE status = 'confirmed'",
+        "options": {}
+      },
+      "id": "postgres-morning-stats",
+      "name": "Get Morning Statistics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [450, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.HOTEL_RECEPTION_PHONE }}",
+        "textBody": "SABAH BRIFING\n{{ $now.format('DD.MM.YYYY') }}\n\nBugun Giris: {{ $json.arriving_today }}\nBugun Cikis: {{ $json.departing_today }}\nEvde: {{ $json.in_house }}\n\nGelenler:\n{{ $json.arrival_names || 'Yok' }}\n\nIyi calismalar!",
+        "options": {}
+      },
+      "id": "whatsapp-morning",
+      "name": "WhatsApp - Morning Briefing",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [650, 400],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, booking_id: $json.booking_id }) }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Return Booking Confirmation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "errorMessage": "Hospitality starter error"
+      },
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 550]
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.HOTEL_MANAGER_PHONE }}",
+        "textBody": "SISTEM HATASI!\n\nRezervasyon sistemi hatasi.\nLutfen kontrol edin.\n\n{{ $json.error?.message || 'Bilinmeyen hata' }}",
+        "options": {}
+      },
+      "id": "whatsapp-error",
+      "name": "WhatsApp - Error Alert",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [450, 550],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - New Booking": {
+      "main": [
+        [{ "node": "Process Booking Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Booking Data": {
+      "main": [
+        [{ "node": "Save Booking to Database", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Booking to Database": {
+      "main": [
+        [
+          { "node": "WhatsApp - Booking Confirmation", "type": "main", "index": 0 },
+          { "node": "WhatsApp - Notify Reception", "type": "main", "index": 0 },
+          { "node": "Return Booking Confirmation", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Schedule - Morning Briefing": {
+      "main": [
+        [{ "node": "Get Morning Statistics", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Morning Statistics": {
+      "main": [
+        [{ "node": "WhatsApp - Morning Briefing", "type": "main", "index": 0 }]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "WhatsApp - Error Alert", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "meta": {
+    "grain_module": "legacy_products",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_product_type": "standalone",
+    "grain_vertical": "hospitality",
+    "grain_features": [
+      "booking-management",
+      "whatsapp-notifications",
+      "morning-briefing",
+      "guest-confirmation",
+      "reception-alerts"
+    ],
+    "grain_pricing_tier": "starter",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "legacy-product" },
+    { "name": "hospitality" },
+    { "name": "starter" }
+  ]
+}

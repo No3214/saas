@@ -1,0 +1,564 @@
+{
+  "name": "Grain Trendyol Order Sync v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "trendyol_seller_id",
+              "value": "={{ $vars.TRENDYOL_SELLER_ID }}"
+            },
+            {
+              "name": "trendyol_api_key",
+              "value": "={{ $vars.TRENDYOL_API_KEY }}"
+            },
+            {
+              "name": "trendyol_api_secret",
+              "value": "={{ $vars.TRENDYOL_API_SECRET }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [-200, 0],
+      "notesInFlow": true,
+      "notes": "🔧 Trendyol Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🛒 Trendyol Order Sync v1\n\n**Features:**\n- Webhook ile sipariş alma\n- Otomatik stok güncelleme\n- Kargo durumu takibi\n- WhatsApp bildirim\n- Türkçe dil desteği\n\n**Trendyol API Docs:** developers.trendyol.com",
+        "height": 180,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [60, -100]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Her 5 Dakika",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trendyol/order-webhook",
+        "options": {
+          "responseMode": "responseNode"
+        }
+      },
+      "id": "webhook-order",
+      "name": "Trendyol Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 400],
+      "webhookId": "trendyol-order"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.trendyol.com/sapigw/suppliers/{{ $node.GRAIN_CONFIG.json.trendyol_seller_id }}/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "Created"
+            },
+            {
+              "name": "orderByField",
+              "value": "CreatedDate"
+            },
+            {
+              "name": "orderByDirection",
+              "value": "DESC"
+            },
+            {
+              "name": "size",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-orders",
+      "name": "Trendyol Siparişleri Al",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [350, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "trendyol-api",
+          "name": "Trendyol API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Webhook'tan gelen veriyi parse et\nconst webhookData = $input.item.json;\n\n// Eğer webhook'tan geliyorsa direkt kullan\nif (webhookData.body && webhookData.body.orderId) {\n  return {\n    json: {\n      source: 'webhook',\n      order: webhookData.body\n    }\n  };\n}\n\n// Eğer body array ise (Trendyol format)\nif (webhookData.body && Array.isArray(webhookData.body)) {\n  return webhookData.body.map(order => ({\n    json: {\n      source: 'webhook',\n      order: order\n    }\n  }));\n}\n\nreturn { json: webhookData };"
+      },
+      "id": "parse-webhook",
+      "name": "Webhook Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [350, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Trendyol API response'unu parse et\nconst response = $input.item.json;\nconst orders = response.content || [];\n\nif (orders.length === 0) {\n  return { json: { message: 'Yeni sipariş yok', count: 0 } };\n}\n\nreturn orders.map(order => ({\n  json: {\n    source: 'api_poll',\n    order: {\n      orderId: order.orderNumber,\n      orderDate: order.orderDate,\n      status: order.status,\n      customer: {\n        name: `${order.shipmentAddress.firstName} ${order.shipmentAddress.lastName}`,\n        phone: order.shipmentAddress.phone || '',\n        city: order.shipmentAddress.city,\n        district: order.shipmentAddress.district,\n        address: order.shipmentAddress.fullAddress\n      },\n      items: order.lines.map(line => ({\n        productId: line.productId,\n        barcode: line.barcode,\n        productName: line.productName,\n        quantity: line.quantity,\n        price: line.price,\n        discount: line.discount || 0\n      })),\n      totalPrice: order.grossAmount,\n      cargoCompany: order.cargoProviderName,\n      cargoTrackingNumber: order.cargoTrackingNumber\n    }\n  }\n}));"
+      },
+      "id": "parse-api-response",
+      "name": "API Response Parse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 200]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "order.orderId",
+              "field2": "order.orderId"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "merge-orders",
+      "name": "Siparişleri Birleştir",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [600, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-new",
+              "leftValue": "={{ $json.order.status }}",
+              "rightValue": "Created",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-new",
+      "name": "Yeni Sipariş?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "schemaId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": "orders",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "order_id": "={{ $json.order.orderId }}",
+            "customer_name": "={{ $json.order.customer.name }}",
+            "customer_phone": "={{ $json.order.customer.phone }}",
+            "customer_city": "={{ $json.order.customer.city }}",
+            "total_price": "={{ $json.order.totalPrice }}",
+            "status": "={{ $json.order.status }}",
+            "cargo_company": "={{ $json.order.cargoCompany }}",
+            "created_at": "={{ new Date().toISOString() }}",
+            "source": "trendyol"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-order",
+      "name": "Siparişi Kaydet",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1100, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Her ürün için stok güncelleme hazırla\nconst order = $input.item.json.order;\nconst stockUpdates = [];\n\nfor (const item of order.items) {\n  stockUpdates.push({\n    json: {\n      barcode: item.barcode,\n      productId: item.productId,\n      productName: item.productName,\n      quantitySold: item.quantity,\n      orderId: order.orderId\n    }\n  });\n}\n\nreturn stockUpdates;"
+      },
+      "id": "prepare-stock",
+      "name": "Stok Güncelleme Hazırla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE products SET stock = stock - {{ $json.quantitySold }} WHERE barcode = '{{ $json.barcode }}' RETURNING barcode, stock as new_stock",
+        "options": {}
+      },
+      "id": "update-stock",
+      "name": "Stok Güncelle",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1350, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "low-stock",
+              "leftValue": "={{ $json.new_stock }}",
+              "rightValue": "10",
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-low-stock",
+      "name": "Düşük Stok?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1600, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#stok-uyarilari",
+        "text": "=⚠️ *Düşük Stok Uyarısı*\n\nÜrün: {{ $json.barcode }}\nKalan Stok: {{ $json.new_stock }} adet\n\nLütfen tedarik sürecini başlatın.",
+        "otherOptions": {}
+      },
+      "id": "slack-low-stock",
+      "name": "Slack Düşük Stok",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1850, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-main",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "=Türkçe sipariş onay mesajı yaz. Samimi ve profesyonel ol.\n\nMüşteri: {{ $json.order.customer.name }}\nSipariş No: {{ $json.order.orderId }}\nÜrünler: {{ $json.order.items.map(i => i.productName).join(', ') }}\nToplam: {{ $json.order.totalPrice }} TL\nKargo: {{ $json.order.cargoCompany }}\n\nMesaj 160 karakteri geçmesin. Emoji kullan."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ai-message",
+      "name": "AI Mesaj Oluştur",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1350, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-main",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "phoneNumberId": "={{ $vars.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $json.order.customer.phone }}",
+        "textBody": "={{ $node['AI Mesaj Oluştur'].json.message.content }}"
+      },
+      "id": "whatsapp-notify",
+      "name": "WhatsApp Bildirim",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1600, 200],
+      "credentials": {
+        "whatsAppApi": {
+          "id": "whatsapp-main",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Sipariş alındı', orderId: $json.order?.orderId }) }}"
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [1100, 600]
+    },
+    {
+      "parameters": {
+        "channel": "#trendyol-hatalar",
+        "text": "=🚨 *Trendyol Sync Hatası*\n\nWorkflow: {{ $workflow.name }}\nHata: {{ $json.execution.error.message }}\nZaman: {{ new Date().toLocaleString('tr-TR') }}\n\nExecution ID: {{ $execution.id }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Hata Bildirimi",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1350, 600],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-main",
+          "name": "Slack"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Her 5 Dakika": {
+      "main": [
+        [
+          {
+            "node": "Trendyol Siparişleri Al",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trendyol Webhook": {
+      "main": [
+        [
+          {
+            "node": "Webhook Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trendyol Siparişleri Al": {
+      "main": [
+        [
+          {
+            "node": "API Response Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API Response Parse": {
+      "main": [
+        [
+          {
+            "node": "Siparişleri Birleştir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Parse": {
+      "main": [
+        [
+          {
+            "node": "Siparişleri Birleştir",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Siparişleri Birleştir": {
+      "main": [
+        [
+          {
+            "node": "Yeni Sipariş?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yeni Sipariş?": {
+      "main": [
+        [
+          {
+            "node": "Siparişi Kaydet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Stok Güncelleme Hazırla",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Mesaj Oluştur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stok Güncelleme Hazırla": {
+      "main": [
+        [
+          {
+            "node": "Stok Güncelle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stok Güncelle": {
+      "main": [
+        [
+          {
+            "node": "Düşük Stok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Düşük Stok?": {
+      "main": [
+        [
+          {
+            "node": "Slack Düşük Stok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Mesaj Oluştur": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Bildirim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Bildirim": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Hata Bildirimi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "grain_module": "ecommerce",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_description": "Trendyol sipariş senkronizasyonu - webhook + polling",
+    "grain_features": [
+      "Trendyol API entegrasyonu",
+      "Otomatik stok güncelleme",
+      "WhatsApp sipariş bildirimi",
+      "Düşük stok uyarısı",
+      "PostgreSQL kayıt",
+      "Türkçe AI mesajları"
+    ],
+    "grain_dependencies": [
+      "PostgreSQL",
+      "OpenAI",
+      "WhatsApp Business API",
+      "Slack"
+    ]
+  }
+}

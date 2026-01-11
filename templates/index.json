@@ -1,0 +1,719 @@
+{
+    "suite": "Grain SaaS Automation Suite",
+    "version": "5.8.0",
+    "last_updated": "2026-01-11T12:00:00Z",
+    "total_workflows": 73,
+    "enterprise_ready": true,
+    "mcp_enabled": true,
+    "architecture": {
+        "core_system": "Master Orchestrator + MCP + Self-Healing",
+        "data_layer": "Intelligent CDP + RAG",
+        "ai_engine": "Agentic AI v2 Pro"
+    },
+    "verticals": [
+        "General SaaS",
+        "E-commerce",
+        "Hospitality",
+        "Real Estate",
+        "Local Business (Turkey)"
+    ],
+    "modules": {
+        "core": {
+            "description": "System infrastructure and orchestration",
+            "workflows": [
+                {
+                    "name": "Master Orchestrator v1",
+                    "file": "Grain_Master_Orchestrator_v1.json",
+                    "tier": "Critical",
+                    "role": "Central workflow coordinator"
+                },
+                {
+                    "name": "MCP Client Connector v1",
+                    "file": "Grain_MCP_Client_Connector_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "MCP Workflow Monitor v1",
+                    "file": "Grain_MCP_Workflow_Monitor_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Self Healing Pipeline v1",
+                    "file": "Grain_Self_Healing_Pipeline_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Workflow Backup System v1",
+                    "file": "Grain_Workflow_Backup_System_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "ai_engine": {
+            "description": "AI-powered automation and intelligence",
+            "workflows": [
+                {
+                    "name": "Agentic AI Orchestrator v2 Pro",
+                    "file": "Grain_Agentic_AI_Orchestrator_v2_Pro.json",
+                    "tier": "Critical",
+                    "role": "Multi-agent AI coordinator"
+                },
+                {
+                    "name": "AI Chatbot with Web Search v1",
+                    "file": "Grain_AI_Chatbot_Web_Search_v1.json",
+                    "tier": "Critical",
+                    "features": ["SerpAPI", "GPT-4o", "Turkish support"]
+                },
+                {
+                    "name": "RAG Company Chatbot v1",
+                    "file": "Grain_RAG_Company_Chatbot_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Knowledge Base AI Search v1",
+                    "file": "Grain_Knowledge_Base_AI_Search_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "AI Copywriting Studio v1",
+                    "file": "Grain_AI_Copywriting_Studio_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "AI Visual Content Generator v1",
+                    "file": "Grain_AI_Visual_Content_Generator_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "AI Meeting Notes v1",
+                    "file": "Grain_AI_Meeting_Notes_v1.json",
+                    "tier": "Medium"
+                },
+                {
+                    "name": "AI Token Cost Tracker v1",
+                    "file": "Grain_AI_Token_Cost_Tracker_v1.json",
+                    "tier": "Medium"
+                }
+            ]
+        },
+        "data_intelligence": {
+            "description": "Data processing and analytics",
+            "workflows": [
+                {
+                    "name": "Intelligent CDP v1",
+                    "file": "Grain_Intelligent_CDP_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Web Scraper Agent v1",
+                    "file": "Grain_Web_Scraper_Agent_v1.json",
+                    "tier": "High",
+                    "features": ["Multi-mode extraction", "AI analysis", "Turkish support"]
+                },
+                {
+                    "name": "Unified Analytics Dashboard v1",
+                    "file": "Grain_Unified_Analytics_Dashboard_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Document OCR Processing v1",
+                    "file": "Grain_Document_OCR_Processing_v1.json",
+                    "tier": "Medium"
+                },
+                {
+                    "name": "Multi Language Translation v1",
+                    "file": "Grain_Multi_Language_Translation_v1.json",
+                    "tier": "Medium"
+                }
+            ]
+        },
+        "customer_success": {
+            "description": "Customer lifecycle and support",
+            "workflows": [
+                {
+                    "name": "Customer Onboarding Automation v1",
+                    "file": "Grain_Customer_Onboarding_Automation_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Customer Support Automation v1",
+                    "file": "Grain_Customer_Support_Automation_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Churn Prediction Prevention v1",
+                    "file": "Grain_Churn_Prediction_Prevention_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "NPS Feedback Collection v1",
+                    "file": "Grain_NPS_Feedback_Collection_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Ticket Escalation Manager v1",
+                    "file": "Grain_Ticket_Escalation_Manager_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Subscription Lifecycle Manager v1",
+                    "file": "Grain_Subscription_Lifecycle_Manager_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "sales_revenue": {
+            "description": "Sales pipeline and revenue operations",
+            "workflows": [
+                {
+                    "name": "RevOps Hub v1",
+                    "file": "Grain_RevOps_Hub_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Lead Conversion Funnel v1",
+                    "file": "Grain_Lead_Conversion_Funnel_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Dynamic Pricing Engine v1",
+                    "file": "Grain_Dynamic_Pricing_Engine_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Contract Review Compliance v1",
+                    "file": "Grain_Contract_Review_Compliance_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "marketing": {
+            "description": "Marketing automation and content",
+            "workflows": [
+                {
+                    "name": "Multi Platform Publisher v2",
+                    "file": "Grain_Multi_Platform_Publisher_v2.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Email Marketing Automation v1",
+                    "file": "Grain_Email_Marketing_Automation_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Content Repurposing Engine v1",
+                    "file": "Grain_Content_Repurposing_Engine_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Campaign Performance Monitor v1",
+                    "file": "Grain_Campaign_Performance_Monitor_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "AB Testing Engine v1",
+                    "file": "Grain_AB_Testing_Engine_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Podcast Production Pipeline v1",
+                    "file": "Grain_Podcast_Production_Pipeline_v1.json",
+                    "tier": "Medium"
+                }
+            ]
+        },
+        "seo": {
+            "description": "Search engine optimization",
+            "workflows": [
+                {
+                    "name": "SEO Engine v1",
+                    "file": "Grain_SEO_Engine_v1.json",
+                    "tier": "Critical",
+                    "role": "Master SEO coordinator"
+                },
+                {
+                    "name": "SEO Site Audit v1",
+                    "file": "Grain_SEO_Site_Audit_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "GSC Hub v1",
+                    "file": "Grain_GSC_Hub_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Competitive Intelligence v1",
+                    "file": "Grain_Competitive_Intelligence_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "local_seo_turkey": {
+            "description": "Turkish market local business automation",
+            "workflows": [
+                {
+                    "name": "Turkish Local Business Manager v1",
+                    "file": "Grain_Turkish_Local_Business_Manager_v1.json",
+                    "tier": "Critical",
+                    "features": ["Multi-platform reviews", "AI Turkish responses", "Health score"]
+                },
+                {
+                    "name": "Turkish GBP Optimizer v1",
+                    "file": "Grain_Turkish_GBP_Optimizer_v1.json",
+                    "tier": "High",
+                    "features": ["Auto post generation", "Seasonal themes", "Multi-city"]
+                },
+                {
+                    "name": "Local Business Listing Manager v1",
+                    "file": "Grain_Local_Business_Listing_Manager_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Review Management AI v1",
+                    "file": "Grain_Review_Management_AI_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "hospitality": {
+            "description": "Hotel and restaurant operations",
+            "workflows": [
+                {
+                    "name": "Restaurant Reservation v1",
+                    "file": "Grain_Restaurant_Reservation_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Guest Communication Journey v1",
+                    "file": "Grain_Guest_Communication_Journey_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Housekeeping Operations v1",
+                    "file": "Grain_Housekeeping_Operations_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "real_estate": {
+            "description": "Property and land management",
+            "workflows": [
+                {
+                    "name": "Real Estate Land Showcase v1",
+                    "file": "Grain_Real_Estate_Land_Showcase_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Mapbox satellite imagery (3 zoom levels)",
+                        "GPT-4o marketing text generation",
+                        "Google Earth KML export",
+                        "Multi-platform map links",
+                        "Professional HTML report with QR code",
+                        "TKGM Parsel integration"
+                    ]
+                }
+            ]
+        },
+        "ecommerce": {
+            "description": "E-commerce operations",
+            "workflows": [
+                {
+                    "name": "Ecommerce Orchestrator v1",
+                    "file": "Grain_Ecommerce_Orchestrator_v1.json",
+                    "tier": "Critical"
+                },
+                {
+                    "name": "Trendyol Order Sync v1",
+                    "file": "Grain_Trendyol_Order_Sync_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Trendyol API integration",
+                        "Automatic stock update",
+                        "WhatsApp notifications",
+                        "Low stock alerts",
+                        "Turkish AI messages"
+                    ]
+                },
+                {
+                    "name": "Trendyol Stock Manager v1",
+                    "file": "Grain_Trendyol_Stock_Manager_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Stock synchronization",
+                        "Daily stock reports",
+                        "Critical stock alerts",
+                        "Bulk price updates",
+                        "PostgreSQL integration"
+                    ]
+                },
+                {
+                    "name": "Hepsiburada Order Sync v1",
+                    "file": "Grain_Hepsiburada_Order_Sync_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Hepsiburada API integration",
+                        "Dual-trigger sync",
+                        "Stock management",
+                        "WhatsApp notifications",
+                        "Turkish AI messages"
+                    ]
+                }
+            ]
+        },
+        "voice_ai": {
+            "description": "AI Voice agents and conversational AI",
+            "workflows": [
+                {
+                    "name": "ElevenLabs WhatsApp Voice Agent v1",
+                    "file": "Grain_ElevenLabs_WhatsApp_Voice_Agent_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "ElevenLabs Conversational AI",
+                        "WhatsApp Business integration",
+                        "Voice message responses",
+                        "Multi-intent detection",
+                        "Turkish language support",
+                        "Real-time voice synthesis"
+                    ]
+                }
+            ]
+        },
+        "agency_tools": {
+            "description": "White-label agency and client management",
+            "workflows": [
+                {
+                    "name": "WhiteLabel Agency Dashboard v1",
+                    "file": "Grain_WhiteLabel_Agency_Dashboard_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Multi-client reporting",
+                        "Custom branding (logo, colors, domain)",
+                        "Google Analytics integration",
+                        "Search Console data",
+                        "Instagram insights",
+                        "AI-powered recommendations"
+                    ]
+                },
+                {
+                    "name": "AI Appointment Booking v1",
+                    "file": "Grain_AI_Appointment_Booking_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Smart availability checking",
+                        "Multi-staff scheduling",
+                        "WhatsApp confirmations",
+                        "Automated reminders",
+                        "Service catalog management",
+                        "Turkish language templates"
+                    ]
+                },
+                {
+                    "name": "Reputation Management Suite v1",
+                    "file": "Grain_Reputation_Management_Suite_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Multi-platform review monitoring",
+                        "AI response generation",
+                        "Review request campaigns",
+                        "Reputation health scoring",
+                        "Sentiment analysis",
+                        "Urgent alert system"
+                    ]
+                }
+            ]
+        },
+        "hr_operations": {
+            "description": "Human resources",
+            "workflows": [
+                {
+                    "name": "Recruitment AI Agent v1",
+                    "file": "Grain_Recruitment_AI_Agent_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "finance": {
+            "description": "Financial operations",
+            "workflows": [
+                {
+                    "name": "Invoice Billing Automation v1",
+                    "file": "Grain_Invoice_Billing_Automation_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Expense Management v1",
+                    "file": "Grain_Expense_Management_v1.json",
+                    "tier": "Medium"
+                }
+            ]
+        },
+        "communication": {
+            "description": "Team communication and reporting",
+            "workflows": [
+                {
+                    "name": "Slack Teams Bot v1",
+                    "file": "Grain_Slack_Teams_Bot_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Social Inbox Manager v1",
+                    "file": "Grain_Social_Inbox_Manager_v1.json",
+                    "tier": "High"
+                },
+                {
+                    "name": "Client Reporting Dashboard v1",
+                    "file": "Grain_Client_Reporting_Dashboard_v1.json",
+                    "tier": "High"
+                }
+            ]
+        },
+        "notion": {
+            "description": "Notion workspace integration and automation",
+            "workflows": [
+                {
+                    "name": "Notion Lead Capture v1",
+                    "file": "Grain_Notion_Lead_Capture_v1.json",
+                    "tier": "High",
+                    "features": ["webhook", "crm", "lead-capture"]
+                },
+                {
+                    "name": "Notion Content Hub v1",
+                    "file": "Grain_Notion_Content_Hub_v1.json",
+                    "tier": "High",
+                    "features": ["content-management", "markdown", "publishing"]
+                },
+                {
+                    "name": "Notion Task Sync v1",
+                    "file": "Grain_Notion_Task_Sync_v1.json",
+                    "tier": "Medium",
+                    "features": ["task-management", "notifications", "reporting"]
+                }
+            ]
+        },
+        "vibe_marketing": {
+            "description": "Vibe Marketing - AI-powered video-first social media marketing",
+            "workflows": [
+                {
+                    "name": "Vibe Marketing Competitor Research v1",
+                    "file": "Grain_Vibe_Marketing_Competitor_Research_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Competitor website scraping",
+                        "Instagram profile analysis",
+                        "AI-powered SWOT generation",
+                        "Engagement metrics",
+                        "Hashtag analysis"
+                    ]
+                },
+                {
+                    "name": "Vibe Marketing Reels Creator v1",
+                    "file": "Grain_Vibe_Marketing_Reels_Creator_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Hook-Content-CTA scripting",
+                        "Multi-duration formats (15/30/60s)",
+                        "Alternative hooks generation",
+                        "Hashtag recommendations",
+                        "Notion integration"
+                    ]
+                },
+                {
+                    "name": "Vibe Marketing Trend Monitor v1",
+                    "file": "Grain_Vibe_Marketing_Trend_Monitor_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "TikTok trending sounds",
+                        "Google Trends analysis",
+                        "Twitter/X trends Turkey",
+                        "AI opportunity insights",
+                        "Urgent trend alerts"
+                    ]
+                },
+                {
+                    "name": "Vibe Marketing Entity Profiler v1",
+                    "file": "Grain_Vibe_Marketing_Entity_Profiler_v1.json",
+                    "tier": "Critical",
+                    "source": "vibemarketingflow",
+                    "features": [
+                        "Website scraping & analysis",
+                        "AI persona generation",
+                        "Brand archetype detection",
+                        "Content pillars identification",
+                        "Communication style mapping"
+                    ]
+                },
+                {
+                    "name": "Vibe Marketing Content Calendar v1",
+                    "file": "Grain_Vibe_Marketing_Content_Calendar_v1.json",
+                    "tier": "Critical",
+                    "source": "vibemarketingflow",
+                    "features": [
+                        "Multi-week content planning",
+                        "Multi-platform support",
+                        "AI content generation",
+                        "Hook & CTA suggestions",
+                        "Content pillar distribution"
+                    ]
+                }
+            ]
+        },
+        "playwright_automation": {
+            "description": "Browser automation with Playwright MCP for web scraping and monitoring",
+            "workflows": [
+                {
+                    "name": "Playwright Competitor Scraper v1",
+                    "file": "Grain_Playwright_Competitor_Scraper_v1.json",
+                    "tier": "High",
+                    "mcp_enabled": true,
+                    "features": [
+                        "Playwright browser automation",
+                        "Full-page screenshots",
+                        "AI competitor analysis",
+                        "PostgreSQL storage",
+                        "Slack alerts"
+                    ]
+                },
+                {
+                    "name": "Playwright Social Monitor v1",
+                    "file": "Grain_Playwright_Social_Monitor_v1.json",
+                    "tier": "High",
+                    "mcp_enabled": true,
+                    "features": [
+                        "Social media profile tracking",
+                        "Follower growth monitoring",
+                        "Engagement analysis",
+                        "Growth alerts",
+                        "Multi-platform support"
+                    ]
+                }
+            ]
+        },
+        "legacy_products": {
+            "description": "Standalone starter packs for vertical markets",
+            "workflows": [
+                {
+                    "name": "Legacy E-commerce Starter v1",
+                    "file": "Grain_Legacy_Ecommerce_Starter_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Order webhook processing",
+                        "Customer WhatsApp notifications",
+                        "Store owner alerts",
+                        "Daily sales reports",
+                        "PostgreSQL integration"
+                    ]
+                },
+                {
+                    "name": "Legacy Hospitality Starter v1",
+                    "file": "Grain_Legacy_Hospitality_Starter_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Booking management",
+                        "Guest confirmations",
+                        "Reception alerts",
+                        "Morning briefing",
+                        "Occupancy tracking"
+                    ]
+                },
+                {
+                    "name": "Legacy Local Business Starter v1",
+                    "file": "Grain_Legacy_LocalBiz_Starter_v1.json",
+                    "tier": "Critical",
+                    "features": [
+                        "Lead capture & alerts",
+                        "Review monitoring",
+                        "Negative review urgency",
+                        "Weekly performance summary",
+                        "Conversion tracking"
+                    ]
+                }
+            ]
+        }
+    },
+    "statistics": {
+        "total_workflows": 73,
+        "critical_tier": 33,
+        "high_tier": 32,
+        "medium_tier": 8,
+        "modules": 20
+    },
+    "changelog": {
+        "v5.8.0": {
+            "date": "2026-01-11",
+            "changes": [
+                "NEW: Playwright MCP integration for browser automation",
+                "NEW: Playwright Competitor Scraper - AI-powered website analysis with screenshots",
+                "NEW: Playwright Social Monitor - Multi-platform profile tracking with growth alerts",
+                "NEW: Docker service for Playwright MCP (grain-playwright)",
+                "NEW: MCP server configuration (mcp-servers.json)",
+                "Added playwright_automation module",
+                "Total workflows: 73 across 20 modules"
+            ]
+        },
+        "v5.7.0": {
+            "date": "2026-01-11",
+            "changes": [
+                "NEW: Entity Profiler - AI persona & brand archetype generation (from vibemarketingflow)",
+                "NEW: Content Calendar Generator - Multi-week, multi-platform planning",
+                "NEW: 5 Marketing Agents (TikTok Strategist, Growth Hacker, Content Creator, Instagram Curator, Reddit Builder)",
+                "External resources integrated from Willsuarez85/Agents and vibemarketingflow repos",
+                "Total workflows: 71 across 19 modules"
+            ]
+        },
+        "v5.6.0": {
+            "date": "2026-01-10",
+            "changes": [
+                "NEW: Vibe Marketing module with 3 Critical workflows",
+                "NEW: Competitor Research - AI-powered SWOT, Instagram analysis",
+                "NEW: Reels Creator - Hook-Content-CTA scripting, multi-duration",
+                "NEW: Trend Monitor - TikTok, Google Trends, Twitter/X tracking",
+                "NEW: Legacy Products module with 3 starter packs",
+                "NEW: E-commerce Starter - Order management, WhatsApp notifications",
+                "NEW: Hospitality Starter - Booking management, morning briefing",
+                "NEW: Local Business Starter - Lead capture, review monitoring",
+                "Added CMO Agent and Vibe Marketing Claude Code skills",
+                "Total workflows: 69 across 19 modules"
+            ]
+        },
+        "v5.5.0": {
+            "date": "2026-01-10",
+            "changes": [
+                "NEW: Hepsiburada Order Sync - Türkiye'nin 2. büyük e-ticaret platformu",
+                "E-commerce module now supports both Trendyol and Hepsiburada",
+                "Improved workflow validation with best practices",
+                "State machine documentation for all critical workflows"
+            ]
+        },
+        "v5.4.0": {
+            "date": "2026-01-10",
+            "changes": [
+                "NEW: Trendyol Order Sync - Sipariş webhook, stok güncelleme, WhatsApp bildirim",
+                "NEW: Trendyol Stock Manager - Stok senkronizasyonu, günlük raporlar, kritik uyarılar",
+                "E-commerce module expanded with 2 new Critical-tier workflows",
+                "Added Turkish language support for all Trendyol workflows",
+                "Strategic roadmap documentation added"
+            ]
+        },
+        "v5.1.0": {
+            "date": "2026-01-09",
+            "changes": [
+                "NEW: ElevenLabs WhatsApp Voice Agent - AI voice conversations via WhatsApp",
+                "NEW: White-Label Agency Dashboard - Multi-client reporting with custom branding",
+                "NEW: AI Appointment Booking System - Smart scheduling with WhatsApp notifications",
+                "NEW: Reputation Management Suite - Multi-platform review monitoring and AI responses",
+                "Added 2 new modules: voice_ai, agency_tools",
+                "4 new Critical-tier workflows added"
+            ]
+        },
+        "v5.0.0": {
+            "date": "2026-01-09",
+            "changes": [
+                "Major cleanup: Removed 69 redundant/legacy files",
+                "Reorganized into 14 logical modules",
+                "Removed all Turkish-named legacy files",
+                "Removed all placeholder/skeleton files",
+                "Consolidated duplicate v1/v2 versions",
+                "Preserved Real Estate Land Showcase (Parsel/Earth/Mapbox)"
+            ]
+        }
+    }
+}

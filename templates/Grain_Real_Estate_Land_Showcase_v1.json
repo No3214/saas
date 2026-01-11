@@ -1,0 +1,368 @@
+{
+  "name": "Grain Real Estate Land Showcase v1",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Arazi Konum Bilgileri",
+        "formDescription": "Parsel bilgilerini girin. Sistem otomatik olarak uydu görüntüleri, harita linkleri ve pazarlama metni oluşturacak.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "İl / Province",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {"option": "İstanbul"},
+                  {"option": "Ankara"},
+                  {"option": "İzmir"},
+                  {"option": "Antalya"},
+                  {"option": "Bursa"},
+                  {"option": "Aydın"},
+                  {"option": "Muğla"},
+                  {"option": "Mersin"},
+                  {"option": "Adana"},
+                  {"option": "Konya"},
+                  {"option": "Diğer / Other"}
+                ]
+              }
+            },
+            {
+              "fieldLabel": "İlçe / District",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "Örn: Didim, Beşiktaş, Kemer"
+            },
+            {
+              "fieldLabel": "Mahalle/Köy / Neighborhood",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "Örn: Altınkum Mahallesi"
+            },
+            {
+              "fieldLabel": "Ada No / Block Number",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "Örn: 245"
+            },
+            {
+              "fieldLabel": "Parsel No / Parcel Number",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "Örn: 12"
+            },
+            {
+              "fieldLabel": "Koordinat (Opsiyonel) / Coordinates",
+              "fieldType": "text",
+              "requiredField": false,
+              "placeholder": "37.3851, 27.2606 (lat, lon)"
+            },
+            {
+              "fieldLabel": "Arazi Türü / Land Type",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {"option": "Arsa (Residential Plot)"},
+                  {"option": "Tarla (Agricultural Land)"},
+                  {"option": "Bağ/Bahçe (Vineyard/Garden)"},
+                  {"option": "Zeytinlik (Olive Grove)"},
+                  {"option": "Orman (Forest)"},
+                  {"option": "İmarlı Arsa (Zoned Land)"},
+                  {"option": "Ticari Alan (Commercial)"}
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Arazi Alanı (m²)",
+              "fieldType": "text",
+              "placeholder": "Örn: 5000"
+            },
+            {
+              "fieldLabel": "Fiyat (TL veya USD)",
+              "fieldType": "text",
+              "placeholder": "Örn: 2,500,000 TL"
+            },
+            {
+              "fieldLabel": "Müşteri Email / Client Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Emlakçı Adı / Agent Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Emlakçı Telefon / Agent Phone",
+              "fieldType": "text",
+              "placeholder": "+90 5XX XXX XX XX"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "form-trigger",
+      "name": "Parsel Bilgi Formu",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://nominatim.openstreetmap.org/search?q={{ encodeURIComponent($json['Mahalle/Köy / Neighborhood'] + ', ' + $json['İlçe / District'] + ', ' + $json['İl / Province'] + ', Turkey') }}&format=json&limit=1",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Grain-RealEstate-Automation/1.0"
+            }
+          ]
+        }
+      },
+      "id": "geocode-location",
+      "name": "Geocode - Koordinat Bul",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const formData = $('Parsel Bilgi Formu').first().json;\nconst geoData = $input.first().json;\n\nlet lat, lon;\n\n// Manuel koordinat varsa onu kullan\nif (formData['Koordinat (Opsiyonel) / Coordinates']) {\n  const coords = formData['Koordinat (Opsiyonel) / Coordinates'].split(',');\n  lat = parseFloat(coords[0].trim());\n  lon = parseFloat(coords[1].trim());\n} else if (geoData && geoData[0]) {\n  lat = parseFloat(geoData[0].lat);\n  lon = parseFloat(geoData[0].lon);\n} else {\n  throw new Error('Koordinat bulunamadı! Lütfen manuel koordinat girin.');\n}\n\nconst referansNo = `GRN-${Date.now().toString(36).toUpperCase()}`;\n\nreturn [{\n  json: {\n    formData: formData,\n    coordinates: { lat, lon },\n    parsel: {\n      il: formData['İl / Province'],\n      ilce: formData['İlçe / District'],\n      mahalle: formData['Mahalle/Köy / Neighborhood'],\n      ada: formData['Ada No / Block Number'],\n      parsel: formData['Parsel No / Parcel Number']\n    },\n    propertyInfo: {\n      type: formData['Arazi Türü / Land Type'],\n      area: formData['Arazi Alanı (m²)'],\n      price: formData['Fiyat (TL veya USD)']\n    },\n    agent: {\n      name: formData['Emlakçı Adı / Agent Name'],\n      phone: formData['Emlakçı Telefon / Agent Phone'],\n      email: formData['Müşteri Email / Client Email']\n    },\n    referansNo: referansNo,\n    mapUrls: {\n      googleMaps: `https://www.google.com/maps/@${lat},${lon},17z/data=!3m1!1e3`,\n      googleEarth: `https://earth.google.com/web/@${lat},${lon},500a,1000d,35y,0h,45t,0r`,\n      yandexMaps: `https://yandex.com/maps/?ll=${lon},${lat}&z=17&l=sat`,\n      bingMaps: `https://www.bing.com/maps?cp=${lat}~${lon}&lvl=17&style=a`,\n      openStreetMap: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`,\n      tkgmParselSorgu: `https://parselsorgu.tkgm.gov.tr/`\n    }\n  }\n}];"
+      },
+      "id": "process-data",
+      "name": "Veri İşle & URL Oluştur",
+      "type": "n8n-nodes-base.code",
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{{ $json.coordinates.lon }},{{ $json.coordinates.lat }},15,0/1280x720@2x?access_token={{ $env.MAPBOX_ACCESS_TOKEN }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "satellite-wide",
+      "name": "Uydu Görüntüsü - Geniş (Zoom 15)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [960, 150]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{{ $json.coordinates.lon }},{{ $json.coordinates.lat }},17,0/1280x720@2x?access_token={{ $env.MAPBOX_ACCESS_TOKEN }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "satellite-medium",
+      "name": "Uydu Görüntüsü - Orta (Zoom 17)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{{ $json.coordinates.lon }},{{ $json.coordinates.lat }},19,0/1280x720@2x?access_token={{ $env.MAPBOX_ACCESS_TOKEN }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "satellite-close",
+      "name": "Uydu Görüntüsü - Yakın (Zoom 19)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [960, 450]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/{{ $json.coordinates.lon }},{{ $json.coordinates.lat }},14,0/1280x720@2x?access_token={{ $env.MAPBOX_ACCESS_TOKEN }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "street-map",
+      "name": "Sokak Haritası (Çevre)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [960, 600]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Sen profesyonel bir emlak pazarlama uzmanısın. Türkiye'deki arazi ve gayrimenkul pazarını çok iyi biliyorsun. Verilen konum bilgilerine göre detaylı, ikna edici ve profesyonel pazarlama metni hazırlıyorsun. Her zaman Türkçe yaz."
+            },
+            {
+              "role": "user",
+              "content": "=Aşağıdaki arazi için profesyonel bir tanıtım raporu hazırla:\n\n**KONUM BİLGİLERİ:**\n- İl: {{ $json.parsel.il }}\n- İlçe: {{ $json.parsel.ilce }}\n- Mahalle/Köy: {{ $json.parsel.mahalle }}\n- Ada/Parsel: {{ $json.parsel.ada }}/{{ $json.parsel.parsel }}\n- Koordinatlar: {{ $json.coordinates.lat }}, {{ $json.coordinates.lon }}\n\n**ARAZİ BİLGİLERİ:**\n- Tür: {{ $json.propertyInfo.type }}\n- Alan: {{ $json.propertyInfo.area }} m²\n- Fiyat: {{ $json.propertyInfo.price }}\n\n**Google Maps Link:** {{ $json.mapUrls.googleMaps }}\n\nRapor şunları içermeli:\n\n1. **KONUM ANALİZİ** (Bölgenin genel özellikleri, avantajları)\n2. **ULAŞIM** (Ana yollar, havaalanı, şehir merkezi mesafeleri - tahmin et)\n3. **ÇEVRE ANALİZİ** (Yakın çevredeki önemli noktalar, turistik yerler, plaj vb.)\n4. **YATIRIM POTANSİYELİ** (Bölgenin gelecek projeksiyonu)\n5. **ÖNERİLEN KULLANIM** (Bu arazi için en uygun kullanım senaryoları)\n6. **SONUÇ** (Neden bu araziyi almalı - ikna edici özet)\n\nProfesyonel, akıcı ve ikna edici bir dil kullan. Emoji kullanma."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        }
+      },
+      "id": "gpt-marketing",
+      "name": "GPT Pazarlama Metni",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Veri İşle & URL Oluştur').first().json;\nconst marketingText = $('GPT Pazarlama Metni').first().json.message.content;\n\n// Google Earth Studio proje dosyası (manuel render için)\nconst earthStudioProject = {\n  version: '1.0',\n  project: {\n    name: `Arazi_${data.referansNo}`,\n    duration: 15,\n    fps: 30,\n    resolution: { width: 1920, height: 1080 }\n  },\n  camera: {\n    keyframes: [\n      {\n        time: 0,\n        position: { lat: data.coordinates.lat, lon: data.coordinates.lon, altitude: 3000 },\n        rotation: { heading: 0, tilt: 30, roll: 0 }\n      },\n      {\n        time: 5,\n        position: { lat: data.coordinates.lat, lon: data.coordinates.lon, altitude: 1500 },\n        rotation: { heading: 90, tilt: 45, roll: 0 }\n      },\n      {\n        time: 10,\n        position: { lat: data.coordinates.lat, lon: data.coordinates.lon, altitude: 500 },\n        rotation: { heading: 180, tilt: 60, roll: 0 }\n      },\n      {\n        time: 15,\n        position: { lat: data.coordinates.lat, lon: data.coordinates.lon, altitude: 300 },\n        rotation: { heading: 360, tilt: 75, roll: 0 }\n      }\n    ]\n  },\n  overlays: [\n    {\n      type: 'text',\n      content: `${data.parsel.il} - ${data.parsel.ilce} | Ada: ${data.parsel.ada} Parsel: ${data.parsel.parsel}`,\n      position: 'bottom-left'\n    }\n  ]\n};\n\n// KML dosyası (Google Earth Pro için)\nconst kmlContent = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n  <Document>\n    <name>Arazi - ${data.referansNo}</name>\n    <description>${data.parsel.il}, ${data.parsel.ilce} - Ada: ${data.parsel.ada}, Parsel: ${data.parsel.parsel}</description>\n    <Style id=\"landStyle\">\n      <IconStyle>\n        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon>\n        <scale>1.2</scale>\n      </IconStyle>\n      <LabelStyle><scale>1.2</scale></LabelStyle>\n    </Style>\n    <Placemark>\n      <name>${data.propertyInfo.type}</name>\n      <description><![CDATA[\n        <h3>${data.parsel.il} - ${data.parsel.ilce}</h3>\n        <p><strong>Ada/Parsel:</strong> ${data.parsel.ada}/${data.parsel.parsel}</p>\n        <p><strong>Alan:</strong> ${data.propertyInfo.area} m²</p>\n        <p><strong>Fiyat:</strong> ${data.propertyInfo.price}</p>\n        <p><strong>Emlakçı:</strong> ${data.agent.name}</p>\n        <p><strong>Tel:</strong> ${data.agent.phone}</p>\n      ]]></description>\n      <styleUrl>#landStyle</styleUrl>\n      <LookAt>\n        <longitude>${data.coordinates.lon}</longitude>\n        <latitude>${data.coordinates.lat}</latitude>\n        <altitude>0</altitude>\n        <heading>0</heading>\n        <tilt>45</tilt>\n        <range>1500</range>\n        <altitudeMode>relativeToGround</altitudeMode>\n      </LookAt>\n      <Point>\n        <coordinates>${data.coordinates.lon},${data.coordinates.lat},0</coordinates>\n      </Point>\n    </Placemark>\n  </Document>\n</kml>`;\n\nreturn [{\n  json: {\n    ...data,\n    marketingText,\n    earthStudioProject: JSON.stringify(earthStudioProject, null, 2),\n    kmlContent\n  }\n}];"
+      },
+      "id": "generate-files",
+      "name": "Dosya İçerikleri Oluştur",
+      "type": "n8n-nodes-base.code",
+      "position": [1440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nconst htmlReport = `<!DOCTYPE html>\n<html lang=\"tr\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Arazi Raporu - ${data.referansNo}</title>\n    <style>\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }\n        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }\n        .header { background: rgba(255,255,255,0.95); border-radius: 20px; padding: 40px; text-align: center; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }\n        .header h1 { color: #2c3e50; font-size: 2.5em; margin-bottom: 10px; }\n        .header .ref { color: #7f8c8d; font-size: 1.1em; }\n        .card { background: rgba(255,255,255,0.95); border-radius: 15px; padding: 30px; margin-bottom: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); }\n        .card h2 { color: #34495e; border-bottom: 3px solid #3498db; padding-bottom: 15px; margin-bottom: 20px; }\n        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 25px 0; }\n        .info-item { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 12px; text-align: center; }\n        .info-item .label { font-size: 0.9em; opacity: 0.9; }\n        .info-item .value { font-size: 1.5em; font-weight: bold; margin-top: 8px; }\n        .coords { background: #2c3e50; color: #ecf0f1; padding: 20px; border-radius: 10px; font-family: 'Courier New', monospace; font-size: 1.1em; text-align: center; margin: 20px 0; }\n        .map-links { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 25px 0; }\n        .map-link { display: inline-flex; align-items: center; gap: 8px; padding: 14px 24px; border-radius: 8px; text-decoration: none; color: white; font-weight: 600; transition: all 0.3s ease; }\n        .map-link:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }\n        .map-link.google { background: #4285F4; }\n        .map-link.earth { background: #34A853; }\n        .map-link.yandex { background: #FC3F1D; }\n        .map-link.bing { background: #00809d; }\n        .map-link.tkgm { background: #c0392b; }\n        .marketing-text { line-height: 1.9; color: #2c3e50; }\n        .marketing-text p { margin-bottom: 18px; }\n        .marketing-text h3, .marketing-text h4 { color: #34495e; margin: 25px 0 15px 0; }\n        .marketing-text ul, .marketing-text ol { margin-left: 25px; margin-bottom: 15px; }\n        .marketing-text li { margin-bottom: 8px; }\n        .agent-card { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: white; border-radius: 15px; padding: 30px; text-align: center; }\n        .agent-card h3 { font-size: 1.5em; margin-bottom: 15px; }\n        .agent-card p { margin: 10px 0; font-size: 1.1em; }\n        .agent-card a { color: #3498db; }\n        .qr-section { text-align: center; padding: 30px; }\n        .qr-section img { border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }\n        .embed-map { border-radius: 15px; overflow: hidden; margin: 25px 0; box-shadow: 0 5px 20px rgba(0,0,0,0.2); }\n        .footer { text-align: center; padding: 30px; color: rgba(255,255,255,0.8); }\n        @media print { body { background: white; } .card { box-shadow: none; border: 1px solid #ddd; } }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"header\">\n            <h1>Arazi Konum ve Analiz Raporu</h1>\n            <p class=\"ref\">Referans No: ${data.referansNo}</p>\n        </div>\n\n        <div class=\"card\">\n            <h2>Konum Bilgileri</h2>\n            <div class=\"info-grid\">\n                <div class=\"info-item\">\n                    <div class=\"label\">İl</div>\n                    <div class=\"value\">${data.parsel.il}</div>\n                </div>\n                <div class=\"info-item\">\n                    <div class=\"label\">İlçe</div>\n                    <div class=\"value\">${data.parsel.ilce}</div>\n                </div>\n                <div class=\"info-item\">\n                    <div class=\"label\">Ada No</div>\n                    <div class=\"value\">${data.parsel.ada}</div>\n                </div>\n                <div class=\"info-item\">\n                    <div class=\"label\">Parsel No</div>\n                    <div class=\"value\">${data.parsel.parsel}</div>\n                </div>\n            </div>\n            <div class=\"coords\">Koordinatlar: ${data.coordinates.lat.toFixed(6)}, ${data.coordinates.lon.toFixed(6)}</div>\n        </div>\n\n        <div class=\"card\">\n            <h2>Arazi Detayları</h2>\n            <div class=\"info-grid\">\n                <div class=\"info-item\">\n                    <div class=\"label\">Arazi Türü</div>\n                    <div class=\"value\">${data.propertyInfo.type || 'Belirtilmedi'}</div>\n                </div>\n                <div class=\"info-item\">\n                    <div class=\"label\">Alan</div>\n                    <div class=\"value\">${data.propertyInfo.area || '-'} m²</div>\n                </div>\n                <div class=\"info-item\">\n                    <div class=\"label\">Fiyat</div>\n                    <div class=\"value\">${data.propertyInfo.price || 'Sorunuz'}</div>\n                </div>\n            </div>\n        </div>\n\n        <div class=\"card\">\n            <h2>Harita Görünümleri</h2>\n            <div class=\"embed-map\">\n                <iframe \n                    src=\"https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d3000!2d${data.coordinates.lon}!3d${data.coordinates.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1str!2str\" \n                    width=\"100%\" height=\"450\" style=\"border:0;\" allowfullscreen=\"\" loading=\"lazy\">\n                </iframe>\n            </div>\n            <div class=\"map-links\">\n                <a href=\"${data.mapUrls.googleMaps}\" target=\"_blank\" class=\"map-link google\">Google Maps</a>\n                <a href=\"${data.mapUrls.googleEarth}\" target=\"_blank\" class=\"map-link earth\">Google Earth 3D</a>\n                <a href=\"${data.mapUrls.yandexMaps}\" target=\"_blank\" class=\"map-link yandex\">Yandex Uydu</a>\n                <a href=\"${data.mapUrls.bingMaps}\" target=\"_blank\" class=\"map-link bing\">Bing Maps</a>\n                <a href=\"${data.mapUrls.tkgmParselSorgu}\" target=\"_blank\" class=\"map-link tkgm\">TKGM Parsel Sorgu</a>\n            </div>\n        </div>\n\n        <div class=\"card\">\n            <h2>Profesyonel Arazi Analizi</h2>\n            <div class=\"marketing-text\">\n                ${data.marketingText.split('\\n').map(p => p.trim() ? '<p>' + p + '</p>' : '').join('')}\n            </div>\n        </div>\n\n        <div class=\"card agent-card\">\n            <h3>İletişim</h3>\n            <p><strong>${data.agent.name}</strong></p>\n            <p>Tel: ${data.agent.phone || 'Belirtilmedi'}</p>\n            <p>Email: <a href=\"mailto:${data.agent.email}\">${data.agent.email}</a></p>\n        </div>\n\n        <div class=\"card qr-section\">\n            <h2>QR Kod ile Haritaya Eriş</h2>\n            <p style=\"margin-bottom: 20px; color: #7f8c8d;\">Telefonunuzla tarayarak haritayı açın</p>\n            <img src=\"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.mapUrls.googleMaps)}\" alt=\"QR Code\">\n        </div>\n\n        <div class=\"footer\">\n            <p>Bu rapor Grain Real Estate Automation tarafından otomatik oluşturulmuştur.</p>\n            <p>Oluşturma Tarihi: ${new Date().toLocaleDateString('tr-TR')} ${new Date().toLocaleTimeString('tr-TR')}</p>\n        </div>\n    </div>\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    ...data,\n    htmlReport\n  }\n}];"
+      },
+      "id": "create-html-report",
+      "name": "HTML Rapor Oluştur",
+      "type": "n8n-nodes-base.code",
+      "position": [1680, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.agent.email }}",
+        "subject": "=Arazi Konum Raporu - {{ $json.referansNo }} | {{ $json.parsel.il }} {{ $json.parsel.ilce }}",
+        "emailType": "html",
+        "message": "={{ $json.htmlReport }}",
+        "options": {
+          "attachments": ""
+        }
+      },
+      "id": "send-email",
+      "name": "Email Gönder",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [1920, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#real-estate-reports",
+        "text": "=*Yeni Arazi Raporu Oluşturuldu*\n\n*Referans:* {{ $json.referansNo }}\n*Konum:* {{ $json.parsel.il }}, {{ $json.parsel.ilce }}, {{ $json.parsel.mahalle }}\n*Ada/Parsel:* {{ $json.parsel.ada }}/{{ $json.parsel.parsel }}\n*Tür:* {{ $json.propertyInfo.type }}\n*Alan:* {{ $json.propertyInfo.area }} m²\n\n*Harita:* <{{ $json.mapUrls.googleMaps }}|Google Maps>\n*Earth 3D:* <{{ $json.mapUrls.googleEarth }}|Google Earth>\n\n*Emlakçı:* {{ $json.agent.name }}\n*Email:* {{ $json.agent.email }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Slack Bildirim",
+      "type": "n8n-nodes-base.slack",
+      "position": [1920, 450],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.REAL_ESTATE_SHEET_ID }}" },
+        "sheetName": "Raporlar",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Tarih": "={{ new Date().toISOString() }}",
+            "Referans": "={{ $json.referansNo }}",
+            "İl": "={{ $json.parsel.il }}",
+            "İlçe": "={{ $json.parsel.ilce }}",
+            "Ada/Parsel": "={{ $json.parsel.ada }}/{{ $json.parsel.parsel }}",
+            "Tür": "={{ $json.propertyInfo.type }}",
+            "Alan (m²)": "={{ $json.propertyInfo.area }}",
+            "Fiyat": "={{ $json.propertyInfo.price }}",
+            "Koordinat": "={{ $json.coordinates.lat }}, {{ $json.coordinates.lon }}",
+            "Google Maps": "={{ $json.mapUrls.googleMaps }}",
+            "Emlakçı": "={{ $json.agent.name }}",
+            "Email": "={{ $json.agent.email }}"
+          }
+        }
+      },
+      "id": "log-to-sheets",
+      "name": "Google Sheets Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1920, 150],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Parsel Bilgi Formu": {
+      "main": [[{"node": "Geocode - Koordinat Bul", "type": "main", "index": 0}]]
+    },
+    "Geocode - Koordinat Bul": {
+      "main": [[{"node": "Veri İşle & URL Oluştur", "type": "main", "index": 0}]]
+    },
+    "Veri İşle & URL Oluştur": {
+      "main": [
+        [
+          {"node": "Uydu Görüntüsü - Geniş (Zoom 15)", "type": "main", "index": 0},
+          {"node": "Uydu Görüntüsü - Orta (Zoom 17)", "type": "main", "index": 0},
+          {"node": "Uydu Görüntüsü - Yakın (Zoom 19)", "type": "main", "index": 0},
+          {"node": "Sokak Haritası (Çevre)", "type": "main", "index": 0},
+          {"node": "GPT Pazarlama Metni", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "GPT Pazarlama Metni": {
+      "main": [[{"node": "Dosya İçerikleri Oluştur", "type": "main", "index": 0}]]
+    },
+    "Dosya İçerikleri Oluştur": {
+      "main": [[{"node": "HTML Rapor Oluştur", "type": "main", "index": 0}]]
+    },
+    "HTML Rapor Oluştur": {
+      "main": [
+        [
+          {"node": "Email Gönder", "type": "main", "index": 0},
+          {"node": "Google Sheets Log", "type": "main", "index": 0},
+          {"node": "Slack Bildirim", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "category": "real_estate",
+    "description": "Emlakçılar için arazi tanıtım otomasyonu. Parsel bilgilerinden otomatik uydu görüntüsü, harita linkleri, KML dosyası ve AI-powered pazarlama metni oluşturur.",
+    "roi": "Yerinde ziyaret gerektirmeden profesyonel arazi sunumu",
+    "tags": ["real-estate", "emlak", "arazi", "satellite", "maps", "gpt", "marketing", "turkey"],
+    "features": [
+      "OpenStreetMap Geocoding",
+      "Mapbox Satellite Images (3 zoom levels)",
+      "Google Earth Studio Project File",
+      "KML Export for Google Earth Pro",
+      "GPT-4 Marketing Content",
+      "Professional HTML Report",
+      "QR Code Generation",
+      "Multi-platform Map Links",
+      "Google Sheets Logging",
+      "Slack Notifications"
+    ],
+    "requirements": {
+      "apis": ["Mapbox", "OpenAI GPT-4", "SMTP", "Google Sheets (optional)", "Slack (optional)"],
+      "env_vars": ["MAPBOX_ACCESS_TOKEN", "REAL_ESTATE_SHEET_ID"]
+    },
+    "version": "1.0.0"
+  }
+}

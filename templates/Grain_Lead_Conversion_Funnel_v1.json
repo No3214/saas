@@ -1,0 +1,240 @@
+{
+  "name": "Grain Lead Conversion Funnel v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-237j4v2o4",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "new-lead",
+        "options": {}
+      },
+      "id": "webhook-lead",
+      "name": "New Lead Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "grain-lead-funnel"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $input.item.json;\n// Mock Enrichment (Normally use Clearbit/Apollo API here)\nreturn {\n  json: {\n    ...lead,\n    enrichment: {\n      company_size: \"50-200\",\n      industry: \"SaaS\",\n      tech_stack: [\"HubSpot\", \"Slack\", \"AWS\"],\n      linkedin_url: `https://linkedin.com/in/${lead.email.split('@')[0]}`\n    }\n  }\n};"
+      },
+      "id": "enrich-lead",
+      "name": "Enrich Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a Sales Qualification AI. Score this lead (0-100) and segment them (HOT/WARM/COLD) based on their profile.\n\nCriteria:\n- Match Industry: SaaS, Agency (High Score)\n- Tech Stack overlaps (High Score)\n- Size Match\n\nOutput JSON:\n{\n  \"score\": 85,\n  \"segment\": \"HOT\",\n  \"personalization_points\": [\"Uses HubSpot\", \"Scaling phase\"]\n}"
+            },
+            {
+              "role": "user",
+              "content": "Lead Profile: {{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "ai-lead-score",
+      "name": "AI Score Lead",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.segment }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "HOT",
+              "output": 0
+            },
+            {
+              "value2": "WARM",
+              "output": 1
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "id": "segment-router",
+      "name": "Segment Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Write a personalized cold email for a HOT lead. Keep it under 150 words. Focus on pain points related to {{ $json.enrichment.industry }}. Use a friendly, professional tone."
+            },
+            {
+              "role": "user",
+              "content": "Lead Data: {{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "jsonOutput": false
+      },
+      "id": "gen-email-hot",
+      "name": "Analyze & Write (Hot)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Question about your automation stack",
+        "message": "={{ $json.message.content }}",
+        "options": {}
+      },
+      "id": "gmail-send",
+      "name": "Send Email (Draft)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1400,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "crm-updates",
+        "text": "=🧊 **Cold Lead Archived**\nLead: {{ $json.email }}\nScore: {{ $json.score }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify-cold",
+      "name": "Notify Archive",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1150,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "New Lead Trigger": {
+      "main": [
+        [
+          {
+            "node": "Enrich Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Lead Data": {
+      "main": [
+        [
+          {
+            "node": "AI Score Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Score Lead": {
+      "main": [
+        [
+          {
+            "node": "Segment Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segment Router": {
+      "main": [
+        [
+          {
+            "node": "Analyze & Write (Hot)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [
+          {
+            "node": "Notify Archive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze & Write (Hot)": {
+      "main": [
+        [
+          {
+            "node": "Send Email (Draft)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

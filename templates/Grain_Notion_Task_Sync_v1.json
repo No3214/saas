@@ -1,0 +1,313 @@
+{
+  "name": "Grain_Notion_Task_Sync_v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "15 Dakikada Bir",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "509f6ed8fe9349d8937c586ae6fe407c"
+        },
+        "returnAll": false,
+        "limit": 50,
+        "filterType": "manual",
+        "filters": {
+          "or": [
+            {
+              "conditions": [
+                {
+                  "key": "Durum|status",
+                  "condition": "equals",
+                  "statusValue": "Yapilacak"
+                }
+              ]
+            },
+            {
+              "conditions": [
+                {
+                  "key": "Durum|status",
+                  "condition": "equals",
+                  "statusValue": "Devam Ediyor"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-tasks",
+      "name": "Aktif Tasklari Al",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [500, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "due-check",
+              "leftValue": "={{ $json.properties['Bitis Tarihi']?.date?.start }}",
+              "rightValue": "={{ $now.toISODate() }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-due-today",
+      "name": "Bugun Bitecekler",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [750, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "overdue-check",
+              "leftValue": "={{ $json.properties['Bitis Tarihi']?.date?.start }}",
+              "rightValue": "={{ $now.toISODate() }}",
+              "operator": {
+                "type": "string",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-overdue",
+      "name": "Geciken Tasklar",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-today",
+      "name": "Bugunku Ozet",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-overdue",
+      "name": "Geciken Ozet",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const todayTasks = $('Bugunku Ozet').first().json.data || [];\nconst overdueTasks = $('Geciken Ozet').first().json.data || [];\n\nlet message = '📋 *Gunluk Task Raporu*\\n\\n';\n\nif (todayTasks.length > 0) {\n  message += '🎯 *Bugun Bitecekler:*\\n';\n  todayTasks.forEach(task => {\n    const title = task.properties?.Baslik?.title?.[0]?.plain_text || 'Basliksiz';\n    const assignee = task.properties?.Atanan?.people?.[0]?.name || 'Atanmamis';\n    message += `- ${title} (${assignee})\\n`;\n  });\n  message += '\\n';\n}\n\nif (overdueTasks.length > 0) {\n  message += '⚠️ *Geciken Tasklar:*\\n';\n  overdueTasks.forEach(task => {\n    const title = task.properties?.Baslik?.title?.[0]?.plain_text || 'Basliksiz';\n    const dueDate = task.properties?.['Bitis Tarihi']?.date?.start || 'Tarih yok';\n    message += `- ${title} (${dueDate})\\n`;\n  });\n}\n\nif (todayTasks.length === 0 && overdueTasks.length === 0) {\n  message += '✅ Bugun icin bekleyen task yok!';\n}\n\nreturn [{\n  json: {\n    message,\n    today_count: todayTasks.length,\n    overdue_count: overdueTasks.length,\n    total_active: todayTasks.length + overdueTasks.length\n  }\n}];"
+      },
+      "id": "prepare-report",
+      "name": "Rapor Hazirla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-tasks",
+              "leftValue": "={{ $json.total_active }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-has-tasks",
+      "name": "Task Var mi?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "send-notification",
+      "name": "Bildirim Gonder",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1750, 300]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Hata Yakalayici",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [750, 600]
+    }
+  ],
+  "connections": {
+    "15 Dakikada Bir": {
+      "main": [
+        [
+          {
+            "node": "Aktif Tasklari Al",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aktif Tasklari Al": {
+      "main": [
+        [
+          {
+            "node": "Bugun Bitecekler",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Geciken Tasklar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bugun Bitecekler": {
+      "main": [
+        [
+          {
+            "node": "Bugunku Ozet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geciken Tasklar": {
+      "main": [
+        [
+          {
+            "node": "Geciken Ozet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bugunku Ozet": {
+      "main": [
+        [
+          {
+            "node": "Rapor Hazirla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geciken Ozet": {
+      "main": [
+        [
+          {
+            "node": "Rapor Hazirla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rapor Hazirla": {
+      "main": [
+        [
+          {
+            "node": "Task Var mi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Var mi?": {
+      "main": [
+        [
+          {
+            "node": "Bildirim Gonder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "grain_module": "notion",
+    "grain_tier": "Medium",
+    "grain_version": "1.0.0",
+    "grain_features": ["task-management", "notifications", "reporting"],
+    "grain_integrations": ["Notion"],
+    "grain_language": "tr"
+  }
+}

@@ -1,0 +1,243 @@
+{
+  "name": "Grain Legacy - E-commerce Starter Pack v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legacy-ecommerce-order",
+        "options": {}
+      },
+      "id": "webhook-order",
+      "name": "Webhook - New Order",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 200],
+      "webhookId": "grain-legacy-ecommerce-order"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-daily",
+      "name": "Schedule - Daily Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process incoming order\nconst order = $input.first().json;\n\nreturn [{\n  json: {\n    order_id: order.order_id || `ORD-${Date.now()}`,\n    customer_name: order.customer_name || order.customer?.name || 'Misafir',\n    customer_phone: order.customer_phone || order.customer?.phone || '',\n    customer_email: order.customer_email || order.customer?.email || '',\n    items: order.items || order.line_items || [],\n    total: order.total || order.total_price || 0,\n    currency: order.currency || 'TRY',\n    status: 'new',\n    source: order.source || 'website',\n    created_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-process-order",
+      "name": "Process Order Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "orders",
+        "columns": "order_id, customer_name, customer_phone, total_price, status, created_at",
+        "values": "={{ $json.order_id }}, {{ $json.customer_name }}, {{ $json.customer_phone }}, {{ $json.total }}, {{ $json.status }}, {{ $json.created_at }}"
+      },
+      "id": "postgres-save-order",
+      "name": "Save Order to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $json.customer_phone }}",
+        "textBody": "Merhaba {{ $json.customer_name }}!\n\nSiparisini aldik.\n\nSiparis No: {{ $json.order_id }}\nTutar: {{ $json.total }} {{ $json.currency }}\n\nHazir olunca sizi bilgilendiririz.\n\nTesekkurler!",
+        "options": {}
+      },
+      "id": "whatsapp-customer",
+      "name": "WhatsApp - Order Confirmation",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [850, 100],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.STORE_OWNER_PHONE }}",
+        "textBody": "YENI SIPARIS!\n\nSiparis No: {{ $json.order_id }}\nMusteri: {{ $json.customer_name }}\nTutar: {{ $json.total }} {{ $json.currency }}\n\nHemen hazirlayalim!",
+        "options": {}
+      },
+      "id": "whatsapp-owner",
+      "name": "WhatsApp - Notify Store Owner",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  COUNT(*) as total_orders,\n  SUM(total_price) as total_revenue,\n  COUNT(CASE WHEN status = 'new' THEN 1 END) as pending_orders,\n  COUNT(CASE WHEN status = 'shipped' THEN 1 END) as shipped_orders\nFROM orders \nWHERE created_at >= CURRENT_DATE",
+        "options": {}
+      },
+      "id": "postgres-daily-stats",
+      "name": "Get Daily Statistics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [450, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.STORE_OWNER_PHONE }}",
+        "textBody": "GUNLUK RAPOR\n{{ $now.format('DD.MM.YYYY') }}\n\nToplam Siparis: {{ $json.total_orders }}\nCiro: {{ $json.total_revenue }} TRY\nBekleyen: {{ $json.pending_orders }}\nKargolanan: {{ $json.shipped_orders }}\n\nIyi gunler!",
+        "options": {}
+      },
+      "id": "whatsapp-daily-report",
+      "name": "WhatsApp - Daily Report",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [650, 400],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, order_id: $json.order_id }) }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Return Order Confirmation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "errorMessage": "E-commerce starter error"
+      },
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 550]
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "={{ $env.WHATSAPP_PHONE_ID }}",
+        "recipientPhoneNumber": "={{ $env.STORE_OWNER_PHONE }}",
+        "textBody": "SISTEM HATASI!\n\nE-commerce sistemi hatasi.\nLutfen kontrol edin.\n\n{{ $json.error?.message || 'Bilinmeyen hata' }}",
+        "options": {}
+      },
+      "id": "whatsapp-error",
+      "name": "WhatsApp - Error Alert",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [450, 550],
+      "credentials": {
+        "whatsAppBusinessCloudApi": {
+          "id": "whatsapp-creds",
+          "name": "WhatsApp Business"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - New Order": {
+      "main": [
+        [{ "node": "Process Order Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Order Data": {
+      "main": [
+        [{ "node": "Save Order to Database", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Order to Database": {
+      "main": [
+        [
+          { "node": "WhatsApp - Order Confirmation", "type": "main", "index": 0 },
+          { "node": "WhatsApp - Notify Store Owner", "type": "main", "index": 0 },
+          { "node": "Return Order Confirmation", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Schedule - Daily Report": {
+      "main": [
+        [{ "node": "Get Daily Statistics", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Daily Statistics": {
+      "main": [
+        [{ "node": "WhatsApp - Daily Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "WhatsApp - Error Alert", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "meta": {
+    "grain_module": "legacy_products",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_product_type": "standalone",
+    "grain_vertical": "ecommerce",
+    "grain_features": [
+      "order-management",
+      "whatsapp-notifications",
+      "daily-reports",
+      "customer-alerts",
+      "owner-alerts"
+    ],
+    "grain_pricing_tier": "starter",
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "legacy-product" },
+    { "name": "ecommerce" },
+    { "name": "starter" }
+  ]
+}

@@ -1,0 +1,252 @@
+{
+  "name": "Grain Email Marketing Automation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-otd5nklb4",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-trigger",
+        "options": {}
+      },
+      "id": "webhook-new-sub",
+      "name": "New Subscriber",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "email-marketing"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "daily-drip",
+      "name": "Daily Drip Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sub = $input.item.json;\nconst daysSinceSignup = Math.floor((Date.now() - new Date(sub.signup_date).getTime()) / (1000 * 60 * 60 * 24));\nreturn {\n  json: {\n    ...sub,\n    days_since_signup: daysSinceSignup,\n    drip_stage: daysSinceSignup <= 1 ? 'welcome' : daysSinceSignup <= 3 ? 'education' : daysSinceSignup <= 7 ? 'offer' : 'nurture'\n  }\n};"
+      },
+      "id": "calc-drip-stage",
+      "name": "Calculate Drip Stage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Generate a personalized email subject line and body for a {{ $json.drip_stage }} stage email.\nTone: Friendly, engaging.\nGoal: {{ $json.drip_stage === 'welcome' ? 'Welcome and build trust' : $json.drip_stage === 'education' ? 'Educate on product value' : $json.drip_stage === 'offer' ? 'Present a limited-time offer' : 'Maintain engagement' }}\n\nOutput JSON: { \"subject\": \"...\", \"body\": \"...\" }"
+            },
+            {
+              "role": "user",
+              "content": "Subscriber: {{ $json.name }}\nProduct: {{ $json.product }}\nStage: {{ $json.drip_stage }}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "ai-email-gen",
+      "name": "AI Generate Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Email_Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $json.email }}",
+            "last_email_sent": "={{ $now.toISO() }}",
+            "stage": "={{ $json.drip_stage }}"
+          }
+        }
+      },
+      "id": "log-email",
+      "name": "Log to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        750,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "email-alerts",
+        "text": "=🚨 Email Automation Error\n\nSubscriber: {{ $json.email }}\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-alert",
+      "name": "Alert Error",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        950,
+        600
+      ]
+    }
+  ],
+  "connections": {
+    "New Subscriber": {
+      "main": [
+        [
+          {
+            "node": "Calculate Drip Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Drip Check": {
+      "main": [
+        [
+          {
+            "node": "Calculate Drip Stage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Drip Stage": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Email": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Log to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Alert Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

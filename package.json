@@ -1,0 +1,68 @@
+{
+  "name": "@grain/saas-automation",
+  "version": "5.2.0",
+  "description": "Grain SaaS Automation Suite - 57 AI-powered n8n workflow templates",
+  "main": "index.js",
+  "bin": {
+    "grain": "bin/cli.js"
+  },
+  "scripts": {
+    "start": "npx n8n start",
+    "n8n": "npx n8n",
+    "import": "node scripts/import-workflows.js",
+    "import:dry": "node scripts/import-workflows.js --dry-run",
+    "setup": "bash scripts/setup.sh",
+    "mcp": "node mcp-server/index.js",
+    "list": "node bin/cli.js list",
+    "validate": "node scripts/validate-workflows.js",
+    "bundle": "node scripts/bundler_v2.js",
+    "test": "echo 'Tests not configured yet'"
+  },
+  "keywords": [
+    "n8n",
+    "workflow",
+    "automation",
+    "ai",
+    "saas",
+    "mcp",
+    "real-estate",
+    "marketing",
+    "seo"
+  ],
+  "author": "Grain Automation",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.0.0",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "node-fetch": "^2.6.7"
+  },
+  "optionalDependencies": {
+    "n8n-nodes-evolution-api": "*",
+    "n8n-nodes-elevenlabs": "*",
+    "n8n-nodes-perplexity": "*",
+    "n8n-nodes-scrapeninja": "*",
+    "n8n-nodes-tesseractjs": "*"
+  },
+  "n8n": {
+    "communityNodes": [
+      "n8n-nodes-evolution-api",
+      "n8n-nodes-elevenlabs",
+      "n8n-nodes-perplexity",
+      "n8n-nodes-scrapeninja",
+      "n8n-nodes-tesseractjs"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/No3214/saas.git"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "devDependencies": {},
+  "bugs": {
+    "url": "https://github.com/No3214/saas/issues"
+  },
+  "homepage": "https://github.com/No3214/saas#readme"
+}

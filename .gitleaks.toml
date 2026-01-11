@@ -1,0 +1,68 @@
+# Grain SaaS - Gitleaks Configuration
+# This file configures Gitleaks to ignore false positives and example credentials
+
+title = "Grain SaaS Gitleaks Config"
+
+[allowlist]
+description = "Allowlist for false positives"
+
+# Ignore example/placeholder credentials
+regexes = [
+    '''sk-\.\.\.''',
+    '''sk-ant-\.\.\.''',
+    '''xoxb-\.\.\.''',
+    '''YOUR_[A-Z_]+''',
+    '''change-me''',
+    '''your-api-key''',
+    '''example''',
+    '''placeholder''',
+    '''whsec_\.\.\.''',
+    '''sk_live_\.\.\.''',
+]
+
+# Ignore specific files that contain examples
+paths = [
+    '''.env.example''',
+    '''docker/.env.example''',
+    '''scripts/CLOUD-IMPORT.md''',
+    '''docs/**/*.md''',
+    '''**/*.example''',
+    '''**/example*''',
+]
+
+# Ignore commits before security cleanup
+# commits = [
+#     "c9bccd4",  # Security fix commit
+# ]
+
+# Stopwords - common false positive triggers
+stopwords = [
+    "example",
+    "sample",
+    "test",
+    "fake",
+    "mock",
+    "dummy",
+    "placeholder",
+    "change-me",
+    "your-",
+    "YOUR_",
+]
+
+# Ignore test files
+[allowlist.paths]
+paths = [
+    '''test/**''',
+    '''tests/**''',
+    '''__tests__/**''',
+    '''*.test.*''',
+    '''*.spec.*''',
+]
+
+# Custom rules to reduce false positives
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key - relaxed for example files"
+regex = '''(?i)(api[_-]?key|apikey|secret)['":\s]*[=:]\s*['"]([a-zA-Z0-9_\-]{20,})['"]'''
+entropy = 3.5
+allowlist = { regexes = ['''YOUR_''', '''change-me''', '''example''', '''\.\.\.'''] }

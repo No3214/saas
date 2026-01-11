@@ -1,0 +1,292 @@
+{
+  "name": "Grain SEO Engine v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-wp9ba2wdh",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {},
+      "id": "webhook-seo",
+      "name": "SEO Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        400
+      ],
+      "webhookId": "seo-engine"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-audit",
+      "name": "Weekly Audit",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        200,
+        600
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"q\": \"{{ $json.keyword }}\", \"gl\": \"{{ $json.country || 'tr' }}\", \"num\": 20}"
+      },
+      "id": "serp-check",
+      "name": "SERP Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        450,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.item.json;\nconst domain = $env.PRIMARY_DOMAIN || 'example.com';\nconst organic = results.organic || [];\n\nconst ourRank = organic.findIndex(r => r.link?.includes(domain)) + 1;\nconst competitors = organic.slice(0, 10).map((r, i) => ({\n  rank: i + 1,\n  title: r.title,\n  domain: new URL(r.link).hostname,\n  snippet: r.snippet\n}));\n\nreturn {\n  json: {\n    keyword: results.searchParameters?.q,\n    our_position: ourRank || 'Not ranking',\n    top_competitors: competitors,\n    related_searches: results.relatedSearches?.map(r => r.query) || [],\n    people_also_ask: results.peopleAlsoAsk?.map(p => p.question) || []\n  }\n};"
+      },
+      "id": "analyze-serp",
+      "name": "Analyze SERP",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        650,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "SEO uzmanısın. SERP verilerini analiz et ve JSON döndür:\n{\"seo_score\": 0-100, \"opportunities\": [], \"content_recommendations\": [], \"quick_wins\": []}"
+            },
+            {
+              "role": "user",
+              "content": "=Keyword: {{ $json.keyword }}\nPosition: {{ $json.our_position }}\nCompetitors: {{ JSON.stringify($json.top_competitors.slice(0, 5)) }}\nRelated: {{ $json.related_searches.join(', ') }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-seo-analysis",
+      "name": "AI SEO Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        850,
+        400
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "SEO_Tracking"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "keyword": "={{ $json.keyword }}",
+            "position": "={{ $json.our_position }}",
+            "checked_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "save-results",
+      "name": "Save Results",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        1050,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "channel": "#seo-alerts",
+        "text": "=📊 *SEO Report*\n\nKeyword: {{ $json.keyword }}\nPosition: {{ $json.our_position }}\n\n*Top Competitors:*\n{{ $json.top_competitors.slice(0, 3).map(c => c.rank + '. ' + c.domain).join('\\n') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-report",
+      "name": "Slack Report",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1250,
+        400
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "content": "## 🔍 SEO Engine\nWeekly SERP tracking with AI-powered recommendations. Uses Serper API for search data.",
+        "height": 100,
+        "width": 300,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        250
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        650,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 SEO Engine Error\n\nNode: {{ $json.execution.lastNodeExecuted }}\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        850,
+        650
+      ]
+    }
+  ],
+  "connections": {
+    "SEO Request": {
+      "main": [
+        [
+          {
+            "node": "SERP Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Audit": {
+      "main": [
+        [
+          {
+            "node": "SERP Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SERP Check": {
+      "main": [
+        [
+          {
+            "node": "Analyze SERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze SERP": {
+      "main": [
+        [
+          {
+            "node": "AI SEO Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI SEO Analysis": {
+      "main": [
+        [
+          {
+            "node": "Save Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Results": {
+      "main": [
+        [
+          {
+            "node": "Slack Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "seo"
+    },
+    {
+      "name": "marketing"
+    }
+  ]
+}

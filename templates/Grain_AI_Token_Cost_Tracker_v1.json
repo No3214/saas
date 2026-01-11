@@ -1,0 +1,198 @@
+{
+  "name": "Grain AI Token Cost Tracker v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Hourly Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_HOST }}/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "qs": {
+            "status": "success",
+            "lastId": "={{ $getWorkflowStaticData('global').lastExecutionId || 0 }}"
+          }
+        }
+      },
+      "id": "get-executions",
+      "name": "Get Recent Executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "split-executions",
+      "name": "Split Executions",
+      "type": "n8n-nodes-base.splitOut",
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const execution = $input.item.json;\nconst tokens = {\n  prompt_tokens: 0,\n  completion_tokens: 0,\n  total_tokens: 0\n};\n\n// Extract token usage from AI nodes\nif (execution.data && execution.data.resultData) {\n  const nodeData = execution.data.resultData.runData || {};\n  \n  for (const nodeName in nodeData) {\n    const nodeRuns = nodeData[nodeName];\n    for (const run of nodeRuns) {\n      if (run.data && run.data.main) {\n        for (const output of run.data.main) {\n          for (const item of output || []) {\n            if (item.json && item.json.usage) {\n              tokens.prompt_tokens += item.json.usage.prompt_tokens || 0;\n              tokens.completion_tokens += item.json.usage.completion_tokens || 0;\n              tokens.total_tokens += item.json.usage.total_tokens || 0;\n            }\n          }\n        }\n      }\n    }\n  }\n}\n\n// Calculate estimated cost (GPT-4o-mini pricing)\nconst inputCost = (tokens.prompt_tokens / 1000000) * 0.15;\nconst outputCost = (tokens.completion_tokens / 1000000) * 0.60;\nconst totalCost = inputCost + outputCost;\n\nreturn {\n  json: {\n    execution_id: execution.id,\n    workflow_name: execution.workflowData?.name || 'Unknown',\n    workflow_id: execution.workflowId,\n    started_at: execution.startedAt,\n    prompt_tokens: tokens.prompt_tokens,\n    completion_tokens: tokens.completion_tokens,\n    total_tokens: tokens.total_tokens,\n    estimated_cost_usd: totalCost.toFixed(6),\n    model: 'gpt-4o-mini'\n  }\n};"
+      },
+      "id": "extract-tokens",
+      "name": "Extract Token Usage",
+      "type": "n8n-nodes-base.code",
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.total_tokens }}",
+              "operation": "gt",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "filter-ai-usage",
+      "name": "Has AI Usage?",
+      "type": "n8n-nodes-base.if",
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.COST_TRACKING_SHEET_ID }}" },
+        "sheetName": "Token Usage",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ new Date().toISOString() }}",
+            "Workflow": "={{ $json.workflow_name }}",
+            "Execution ID": "={{ $json.execution_id }}",
+            "Prompt Tokens": "={{ $json.prompt_tokens }}",
+            "Completion Tokens": "={{ $json.completion_tokens }}",
+            "Total Tokens": "={{ $json.total_tokens }}",
+            "Est. Cost (USD)": "={{ $json.estimated_cost_usd }}",
+            "Model": "={{ $json.model }}"
+          }
+        }
+      },
+      "id": "log-to-sheets",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-daily",
+      "name": "Aggregate Daily",
+      "type": "n8n-nodes-base.aggregate",
+      "position": [1540, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet totalCost = 0;\nlet totalTokens = 0;\n\nfor (const item of items) {\n  totalCost += parseFloat(item.json.estimated_cost_usd) || 0;\n  totalTokens += item.json.total_tokens || 0;\n}\n\nconst dailyBudget = parseFloat($env.DAILY_AI_BUDGET || '10');\nconst usagePercent = (totalCost / dailyBudget) * 100;\n\nreturn {\n  json: {\n    daily_total_tokens: totalTokens,\n    daily_cost_usd: totalCost.toFixed(4),\n    daily_budget_usd: dailyBudget,\n    usage_percent: usagePercent.toFixed(1),\n    alert: usagePercent > 80\n  }\n};"
+      },
+      "id": "calculate-daily",
+      "name": "Calculate Daily Total",
+      "type": "n8n-nodes-base.code",
+      "position": [1760, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.alert }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-budget",
+      "name": "Over Budget?",
+      "type": "n8n-nodes-base.if",
+      "position": [1980, 200]
+    },
+    {
+      "parameters": {
+        "channel": "#ai-costs",
+        "text": ":warning: *AI Cost Alert*\n\nDaily usage at *{{ $json.usage_percent }}%* of budget\n- Tokens used: {{ $json.daily_total_tokens.toLocaleString() }}\n- Cost: ${{ $json.daily_cost_usd }}\n- Budget: ${{ $json.daily_budget_usd }}",
+        "otherOptions": {}
+      },
+      "id": "slack-alert",
+      "name": "Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [2200, 100]
+    }
+  ],
+  "connections": {
+    "Hourly Check": {
+      "main": [
+        [{ "node": "Get Recent Executions", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Recent Executions": {
+      "main": [
+        [{ "node": "Split Executions", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Executions": {
+      "main": [
+        [{ "node": "Extract Token Usage", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Token Usage": {
+      "main": [
+        [{ "node": "Has AI Usage?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has AI Usage?": {
+      "main": [
+        [{ "node": "Log to Google Sheets", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [{ "node": "Aggregate Daily", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate Daily": {
+      "main": [
+        [{ "node": "Calculate Daily Total", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calculate Daily Total": {
+      "main": [
+        [{ "node": "Over Budget?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Over Budget?": {
+      "main": [
+        [{ "node": "Slack Alert", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "category": "ai_cost_optimization",
+    "description": "Track AI agent token usage across all workflows and estimate costs in Google Sheets. Includes budget alerts via Slack when spending exceeds thresholds.",
+    "roi": "Full visibility into AI costs",
+    "tags": ["cost-tracking", "tokens", "budget", "google-sheets", "monitoring"],
+    "version": "1.0.0"
+  }
+}

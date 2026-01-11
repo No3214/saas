@@ -1,0 +1,477 @@
+{
+  "name": "Grain AI Chatbot with Web Search v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grain-chatbot-search",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger-001",
+      "name": "Chat Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [-200, 300],
+      "webhookId": "grain-chatbot-search-webhook",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-query",
+              "name": "user_query",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            },
+            {
+              "id": "set-session",
+              "name": "session_id",
+              "value": "={{ $json.body.session_id || $json.headers['x-session-id'] || $now.toMillis() }}",
+              "type": "string"
+            },
+            {
+              "id": "set-search-enabled",
+              "name": "search_enabled",
+              "value": "={{ $json.body.enable_search !== false }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-variables-001",
+      "name": "Extract Query Parameters",
+      "type": "n8n-nodes-base.set",
+      "position": [20, 300],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Analyze this user query and determine if it requires real-time web search to answer accurately. Consider:\n- Current events, news, or recent information\n- Specific facts that may have changed\n- Product prices, availability, or reviews\n- Weather, sports scores, or stock prices\n- Any information that could be outdated\n\nUser Query: {{ $json.user_query }}\n\nRespond with JSON only:\n{\n  \"needs_search\": true/false,\n  \"search_query\": \"optimized search query if needed\",\n  \"reason\": \"brief explanation\"\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "analyze-query-001",
+      "name": "Analyze Query Intent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [240, 300],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-search-needed",
+              "leftValue": "={{ JSON.parse($json.message.content).needs_search && $('Extract Query Parameters').item.json.search_enabled }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-search-001",
+      "name": "Needs Web Search?",
+      "type": "n8n-nodes-base.if",
+      "position": [460, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ JSON.parse($('Analyze Query Intent').item.json.message.content).search_query }}"
+            },
+            {
+              "name": "engine",
+              "value": "google"
+            },
+            {
+              "name": "num",
+              "value": "5"
+            },
+            {
+              "name": "gl",
+              "value": "tr"
+            },
+            {
+              "name": "hl",
+              "value": "tr"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "serp-search-001",
+      "name": "SerpAPI Web Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [680, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const searchResults = $input.first().json;\nconst organicResults = searchResults.organic_results || [];\nconst knowledgeGraph = searchResults.knowledge_graph || null;\nconst answerBox = searchResults.answer_box || null;\n\nlet context = \"## Web Search Results\\n\\n\";\n\n// Add answer box if available\nif (answerBox) {\n  context += `### Quick Answer\\n${answerBox.answer || answerBox.snippet || ''}\\n\\n`;\n}\n\n// Add knowledge graph if available\nif (knowledgeGraph) {\n  context += `### Knowledge Panel: ${knowledgeGraph.title || ''}\\n`;\n  if (knowledgeGraph.description) {\n    context += `${knowledgeGraph.description}\\n`;\n  }\n  context += \"\\n\";\n}\n\n// Add organic results\ncontext += \"### Search Results\\n\";\norganicResults.slice(0, 5).forEach((result, index) => {\n  context += `\\n**${index + 1}. ${result.title}**\\n`;\n  context += `Source: ${result.displayed_link || result.link}\\n`;\n  context += `${result.snippet || ''}\\n`;\n});\n\nreturn {\n  search_context: context,\n  result_count: organicResults.length,\n  has_answer_box: !!answerBox,\n  has_knowledge_graph: !!knowledgeGraph\n};"
+      },
+      "id": "format-results-001",
+      "name": "Format Search Results",
+      "type": "n8n-nodes-base.code",
+      "position": [900, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are Grain AI Assistant, a helpful and knowledgeable chatbot with access to real-time web search results. Your goal is to provide accurate, up-to-date, and helpful responses.\n\n## Guidelines:\n1. Use the provided search results to give accurate, current information\n2. Cite sources when providing factual information\n3. If search results are insufficient, acknowledge limitations\n4. Be conversational but professional\n5. Format responses for readability (use markdown if helpful)\n6. If the user's language is Turkish, respond in Turkish\n\n## Web Search Context:\n{{ $json.search_context }}\n\n## User Question:\n{{ $('Extract Query Parameters').item.json.user_query }}\n\nProvide a comprehensive, accurate response based on the search results above."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1500,
+          "temperature": 0.7
+        }
+      },
+      "id": "generate-response-search-001",
+      "name": "Generate Response (With Search)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1120, 200],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are Grain AI Assistant, a helpful and knowledgeable chatbot. Your goal is to provide accurate and helpful responses based on your training knowledge.\n\n## Guidelines:\n1. Be conversational but professional\n2. Format responses for readability\n3. If you're unsure about current/recent information, recommend the user enable web search\n4. If the user's language is Turkish, respond in Turkish\n\n## User Question:\n{{ $('Extract Query Parameters').item.json.user_query }}\n\nProvide a helpful, informative response."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1500,
+          "temperature": 0.7
+        }
+      },
+      "id": "generate-response-no-search-001",
+      "name": "Generate Response (No Search)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [680, 400],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-responses-001",
+      "name": "Merge Responses",
+      "type": "n8n-nodes-base.merge",
+      "position": [1340, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-response",
+              "name": "response",
+              "value": "={{ $json.message?.content || $json.choices?.[0]?.message?.content || 'Üzgünüm, bir hata oluştu.' }}",
+              "type": "string"
+            },
+            {
+              "id": "set-session-out",
+              "name": "session_id",
+              "value": "={{ $('Extract Query Parameters').item.json.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "set-search-used",
+              "name": "search_used",
+              "value": "={{ $('Needs Web Search?').item.json !== undefined }}",
+              "type": "boolean"
+            },
+            {
+              "id": "set-timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-response-001",
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.set",
+      "position": [1560, 300],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, response: $json.response, session_id: $json.session_id, search_used: $json.search_used, timestamp: $json.timestamp }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-webhook-001",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1780, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "log_type",
+              "value": "chatbot_interaction"
+            },
+            {
+              "name": "user_query",
+              "value": "={{ $('Extract Query Parameters').item.json.user_query }}"
+            },
+            {
+              "name": "response_preview",
+              "value": "={{ $json.response.substring(0, 200) }}..."
+            },
+            {
+              "name": "search_used",
+              "value": "={{ $json.search_used }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-interaction-001",
+      "name": "Log Interaction",
+      "type": "n8n-nodes-base.set",
+      "position": [2000, 300],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ $json.error?.message || 'Bilinmeyen hata' }}"
+      },
+      "id": "error-handler-001",
+      "name": "Handle Errors",
+      "type": "n8n-nodes-base.stopAndError",
+      "position": [1780, 500],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Chat Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Query Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Query Parameters": {
+      "main": [
+        [
+          {
+            "node": "Analyze Query Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Query Intent": {
+      "main": [
+        [
+          {
+            "node": "Needs Web Search?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Web Search?": {
+      "main": [
+        [
+          {
+            "node": "SerpAPI Web Search",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Response (No Search)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI Web Search": {
+      "main": [
+        [
+          {
+            "node": "Format Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Search Results": {
+      "main": [
+        [
+          {
+            "node": "Generate Response (With Search)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Response (With Search)": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Response (No Search)": {
+      "main": [
+        [
+          {
+            "node": "Merge Responses",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Responses": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Response": {
+      "main": [
+        [
+          {
+            "node": "Log Interaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "AI",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Chatbot",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Web Search",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-09T00:00:00.000Z",
+  "versionId": "grain-chatbot-search-v1"
+}

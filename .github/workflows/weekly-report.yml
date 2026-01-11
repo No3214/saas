@@ -1,0 +1,55 @@
+name: Weekly Analytics Report
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Repository Stats
+        id: stats
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            
+            const { data: traffic } = await github.rest.repos.getClones({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per: 'week'
+            });
+            
+            return {
+              stars: repo.stargazers_count,
+              forks: repo.forks_count,
+              clones: traffic.count,
+              unique_clones: traffic.uniques
+            };
+
+      - name: Send to Slack
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "📊 Grain Weekly Report",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*🌾 Grain Workflow Suite - Weekly Stats*\n\n⭐ Stars: ${{ fromJson(steps.stats.outputs.result).stars }}\n🍴 Forks: ${{ fromJson(steps.stats.outputs.result).forks }}\n📥 Clones: ${{ fromJson(steps.stats.outputs.result).clones }}\n👥 Unique: ${{ fromJson(steps.stats.outputs.result).unique_clones }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

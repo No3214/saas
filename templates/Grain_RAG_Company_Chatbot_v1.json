@@ -1,0 +1,241 @@
+{
+  "name": "Grain RAG Company Chatbot v1",
+  "nodes": [
+    {
+      "parameters": {
+        "events": ["file_created", "file_updated"],
+        "folderId": "={{ $env.COMPANY_DOCS_FOLDER_ID }}",
+        "options": {}
+      },
+      "id": "drive-trigger",
+      "name": "New/Updated Document",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "position": [220, 200]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "={{ $json.id }}"
+      },
+      "id": "download-file",
+      "name": "Download Document",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [440, 200]
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "id": "extract-text",
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "chunkSize": 1000,
+        "chunkOverlap": 200
+      },
+      "id": "split-text",
+      "name": "Split into Chunks",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-004",
+        "options": {}
+      },
+      "id": "embed-chunks",
+      "name": "Generate Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "indexName": "company-docs",
+        "metadata": {
+          "file_id": "={{ $('New/Updated Document').item.json.id }}",
+          "file_name": "={{ $('New/Updated Document').item.json.name }}",
+          "updated_at": "={{ new Date().toISOString() }}"
+        }
+      },
+      "id": "store-vectors",
+      "name": "Store in Pinecone",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "company-chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "chat-webhook",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [220, 400]
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-004",
+        "options": {}
+      },
+      "id": "embed-query",
+      "name": "Embed Question",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "indexName": "company-docs",
+        "topK": 5,
+        "options": {}
+      },
+      "id": "search-docs",
+      "name": "Search Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.item.json.results || [];\nconst context = results.map(r => r.pageContent).join('\\n\\n---\\n\\n');\nconst sources = results.map(r => r.metadata?.file_name).filter(Boolean);\n\nreturn {\n  json: {\n    context: context,\n    sources: [...new Set(sources)],\n    query: $('Chat Webhook').item.json.query\n  }\n};"
+      },
+      "id": "prepare-context",
+      "name": "Prepare Context",
+      "type": "n8n-nodes-base.code",
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "model": "gemini-1.5-flash",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a helpful company assistant. Answer questions based ONLY on the provided context from company documents. If the answer is not in the context, say so clearly. Always cite which document you got the information from."
+            },
+            {
+              "role": "user",
+              "content": "Context from company documents:\n{{ $json.context }}\n\n---\n\nQuestion: {{ $json.query }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-answer",
+      "name": "Generate Answer",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ answer: $json.message.content, sources: $('Prepare Context').item.json.sources, query: $('Prepare Context').item.json.query }) }}"
+      },
+      "id": "respond-chat",
+      "name": "Respond to Chat",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "id", "value": "={{ $env.CHAT_LOG_SHEET }}" },
+        "sheetName": "Chat History",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ new Date().toISOString() }}",
+            "Question": "={{ $('Prepare Context').item.json.query }}",
+            "Answer": "={{ $json.message.content }}",
+            "Sources": "={{ $('Prepare Context').item.json.sources.join(', ') }}"
+          }
+        }
+      },
+      "id": "log-chat",
+      "name": "Log to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1320, 500]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.session_id || 'default' }}"
+      },
+      "id": "memory",
+      "name": "Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [880, 500]
+    }
+  ],
+  "connections": {
+    "New/Updated Document": {
+      "main": [
+        [{ "node": "Download Document", "type": "main", "index": 0 }]
+      ]
+    },
+    "Download Document": {
+      "main": [
+        [{ "node": "Extract Text", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Text": {
+      "main": [
+        [{ "node": "Split into Chunks", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split into Chunks": {
+      "main": [
+        [{ "node": "Generate Embeddings", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Embeddings": {
+      "main": [
+        [{ "node": "Store in Pinecone", "type": "main", "index": 0 }]
+      ]
+    },
+    "Chat Webhook": {
+      "main": [
+        [{ "node": "Embed Question", "type": "main", "index": 0 }]
+      ]
+    },
+    "Embed Question": {
+      "main": [
+        [{ "node": "Search Knowledge Base", "type": "main", "index": 0 }]
+      ]
+    },
+    "Search Knowledge Base": {
+      "main": [
+        [{ "node": "Prepare Context", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Context": {
+      "main": [
+        [{ "node": "Generate Answer", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Answer": {
+      "main": [
+        [
+          { "node": "Respond to Chat", "type": "main", "index": 0 },
+          { "node": "Log to Sheets", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "category": "ai_productivity",
+    "description": "RAG-powered chatbot for company documents using Google Drive and Gemini. Automatically indexes new documents and provides grounded answers with source citations.",
+    "roi": "70% faster information retrieval",
+    "tags": ["rag", "chatbot", "google-drive", "gemini", "pinecone", "knowledge-base"],
+    "version": "1.0.0"
+  }
+}

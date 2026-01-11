@@ -1,0 +1,513 @@
+{
+  "name": "Grain Turkish Local Business Manager v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [-400, 300],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grain-local-business",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger-001",
+      "name": "Manual Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [-400, 500],
+      "webhookId": "grain-local-business-webhook",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-triggers-001",
+      "name": "Merge Triggers",
+      "type": "n8n-nodes-base.merge",
+      "position": [-180, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turkish Local Business Configuration\nconst businesses = [\n  {\n    id: 'business_1',\n    name: 'İşletme Adı',\n    category: 'restaurant', // restaurant, hotel, retail, service, healthcare\n    google_place_id: '',\n    tripadvisor_id: '',\n    yandex_id: '',\n    facebook_page_id: '',\n    instagram_handle: '',\n    phone: '+90 XXX XXX XX XX',\n    address: 'Adres, İlçe, İl',\n    city: 'İstanbul',\n    district: 'Kadıköy',\n    coordinates: { lat: 0, lng: 0 },\n    working_hours: {\n      monday: '09:00-18:00',\n      tuesday: '09:00-18:00',\n      wednesday: '09:00-18:00',\n      thursday: '09:00-18:00',\n      friday: '09:00-18:00',\n      saturday: '10:00-16:00',\n      sunday: 'Kapalı'\n    },\n    services: [],\n    keywords: []\n  }\n];\n\nconst platforms = [\n  { name: 'Google Business Profile', key: 'google', priority: 1 },\n  { name: 'Yandex Business', key: 'yandex', priority: 2 },\n  { name: 'TripAdvisor', key: 'tripadvisor', priority: 3 },\n  { name: 'Facebook', key: 'facebook', priority: 4 },\n  { name: 'Foursquare', key: 'foursquare', priority: 5 },\n  { name: 'Yelp', key: 'yelp', priority: 6 },\n  { name: 'Şikayetvar', key: 'sikayetvar', priority: 7 },\n  { name: 'Enuygun', key: 'enuygun', priority: 8 }\n];\n\nreturn {\n  businesses,\n  platforms,\n  check_timestamp: new Date().toISOString(),\n  turkish_holidays: [\n    '2026-01-01', // Yılbaşı\n    '2026-04-23', // Ulusal Egemenlik ve Çocuk Bayramı\n    '2026-05-01', // İşçi Bayramı\n    '2026-05-19', // Atatürk'ü Anma, Gençlik ve Spor Bayramı\n    '2026-07-15', // Demokrasi ve Milli Birlik Günü\n    '2026-08-30', // Zafer Bayramı\n    '2026-10-29'  // Cumhuriyet Bayramı\n  ]\n};"
+      },
+      "id": "config-001",
+      "name": "Load Business Configuration",
+      "type": "n8n-nodes-base.code",
+      "position": [40, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-businesses-001",
+      "name": "Split Businesses",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [260, 400],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/place/details/json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "place_id",
+              "value": "={{ $json.google_place_id }}"
+            },
+            {
+              "name": "fields",
+              "value": "name,rating,user_ratings_total,reviews,opening_hours,formatted_phone_number,formatted_address,website,photos"
+            },
+            {
+              "name": "language",
+              "value": "tr"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-google-001",
+      "name": "Fetch Google Business Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 300],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "https://api.yelp.com/v3/businesses/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "term",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "location",
+              "value": "={{ $json.city }}, Turkey"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-yelp-001",
+      "name": "Fetch Yelp Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [480, 500],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const googleData = $('Fetch Google Business Data').first().json;\nconst yelpData = $('Fetch Yelp Data').first().json;\nconst businessConfig = $('Split Businesses').first().json;\n\nconst reviews = [];\n\n// Process Google reviews\nif (googleData.result?.reviews) {\n  googleData.result.reviews.forEach(review => {\n    reviews.push({\n      platform: 'Google',\n      author: review.author_name,\n      rating: review.rating,\n      text: review.text,\n      time: new Date(review.time * 1000).toISOString(),\n      language: review.language || 'tr',\n      profile_photo: review.profile_photo_url,\n      needs_response: review.rating <= 3 && !review.replied\n    });\n  });\n}\n\n// Aggregate stats\nconst stats = {\n  business_id: businessConfig.id,\n  business_name: businessConfig.name,\n  google: {\n    rating: googleData.result?.rating || 0,\n    total_reviews: googleData.result?.user_ratings_total || 0,\n    recent_reviews: googleData.result?.reviews?.length || 0\n  },\n  yelp: {\n    rating: yelpData.businesses?.[0]?.rating || 0,\n    total_reviews: yelpData.businesses?.[0]?.review_count || 0\n  },\n  combined_rating: 0,\n  total_reviews: 0,\n  sentiment_analysis_needed: [],\n  urgent_responses_needed: []\n};\n\n// Calculate combined metrics\nconst ratings = [stats.google.rating, stats.yelp.rating].filter(r => r > 0);\nstats.combined_rating = ratings.length > 0 \n  ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2) \n  : 0;\nstats.total_reviews = stats.google.total_reviews + stats.yelp.total_reviews;\n\n// Identify reviews needing response\nreviews.filter(r => r.needs_response).forEach(r => {\n  stats.urgent_responses_needed.push({\n    platform: r.platform,\n    author: r.author,\n    rating: r.rating,\n    preview: r.text.substring(0, 100)\n  });\n});\n\nreturn {\n  stats,\n  reviews,\n  raw_google: googleData,\n  raw_yelp: yelpData\n};"
+      },
+      "id": "aggregate-reviews-001",
+      "name": "Aggregate Review Data",
+      "type": "n8n-nodes-base.code",
+      "position": [700, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-urgent",
+              "leftValue": "={{ $json.stats.urgent_responses_needed.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-urgent-001",
+      "name": "Urgent Reviews?",
+      "type": "n8n-nodes-base.if",
+      "position": [920, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Sen profesyonel bir işletme yanıt yazarısın. Aşağıdaki olumsuz müşteri yorumlarına Türkçe olarak profesyonel, empatik ve çözüm odaklı yanıtlar oluştur.\n\nİşletme: {{ $json.stats.business_name }}\n\nYanıtlanması Gereken Yorumlar:\n{{ JSON.stringify($json.stats.urgent_responses_needed, null, 2) }}\n\nYanıt Kuralları:\n1. Her zaman müşteriye ismiyle hitap et\n2. Yaşanan sorun için samimi özür dile\n3. Somut çözüm öner veya iletişim bilgisi paylaş\n4. Olumlu bir notla bitir\n5. Maksimum 150 kelime kullan\n6. Profesyonel ama samimi ol\n\nJSON formatında yanıt ver:\n{\n  \"responses\": [\n    {\n      \"platform\": \"\",\n      \"author\": \"\",\n      \"original_rating\": 0,\n      \"response_text\": \"\",\n      \"tone\": \"apologetic|grateful|professional\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "maxTokens": 2000,
+          "temperature": 0.7
+        }
+      },
+      "id": "generate-responses-001",
+      "name": "Generate AI Responses (Turkish)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1140, 300],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "channel": "#local-business-alerts",
+        "text": "=🚨 *Acil Yorum Yanıtı Gerekli*\n\n*İşletme:* {{ $json.stats.business_name }}\n*Platform:* {{ $json.stats.urgent_responses_needed[0].platform }}\n*Puan:* {{ $json.stats.urgent_responses_needed[0].rating }}/5 ⭐\n\n*Yorum Özeti:*\n{{ $json.stats.urgent_responses_needed[0].preview }}...\n\n_Lütfen en kısa sürede yanıtlayın._",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "slack-alert-001",
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "position": [1140, 500],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const stats = $('Aggregate Review Data').first().json.stats;\n\n// Calculate health score (0-100)\nlet healthScore = 0;\n\n// Rating component (40 points)\nconst avgRating = parseFloat(stats.combined_rating) || 0;\nhealthScore += (avgRating / 5) * 40;\n\n// Review volume component (30 points)\nconst reviewScore = Math.min(stats.total_reviews / 100, 1) * 30;\nhealthScore += reviewScore;\n\n// Response rate component (30 points)\nconst urgentCount = stats.urgent_responses_needed.length;\nconst responseScore = urgentCount === 0 ? 30 : Math.max(0, 30 - (urgentCount * 5));\nhealthScore += responseScore;\n\n// Determine status\nlet status = 'excellent';\nif (healthScore < 50) status = 'critical';\nelse if (healthScore < 70) status = 'needs_attention';\nelse if (healthScore < 85) status = 'good';\n\n// Turkish status labels\nconst statusLabels = {\n  excellent: 'Mükemmel',\n  good: 'İyi',\n  needs_attention: 'İlgi Gerekli',\n  critical: 'Kritik'\n};\n\nreturn {\n  business_id: stats.business_id,\n  business_name: stats.business_name,\n  health_score: Math.round(healthScore),\n  status: status,\n  status_label: statusLabels[status],\n  breakdown: {\n    rating_score: Math.round((avgRating / 5) * 40),\n    volume_score: Math.round(reviewScore),\n    response_score: responseScore\n  },\n  metrics: {\n    combined_rating: avgRating,\n    total_reviews: stats.total_reviews,\n    pending_responses: urgentCount\n  },\n  recommendations: [],\n  generated_at: new Date().toISOString()\n};"
+      },
+      "id": "calculate-health-001",
+      "name": "Calculate Health Score",
+      "type": "n8n-nodes-base.code",
+      "position": [1360, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Sen bir yerel işletme danışmanısın. Aşağıdaki işletme verilerine göre Türkçe öneriler oluştur.\n\nİşletme: {{ $json.business_name }}\nSağlık Puanı: {{ $json.health_score }}/100\nDurum: {{ $json.status_label }}\n\nMetrikler:\n- Ortalama Puan: {{ $json.metrics.combined_rating }}\n- Toplam Yorum: {{ $json.metrics.total_reviews }}\n- Bekleyen Yanıtlar: {{ $json.metrics.pending_responses }}\n\nPuan Dağılımı:\n- Değerlendirme: {{ $json.breakdown.rating_score }}/40\n- Hacim: {{ $json.breakdown.volume_score }}/30\n- Yanıt: {{ $json.breakdown.response_score }}/30\n\n3-5 adet somut, uygulanabilir öneri ver. JSON formatında:\n{\n  \"recommendations\": [\n    {\n      \"priority\": \"high|medium|low\",\n      \"category\": \"reviews|visibility|engagement|content\",\n      \"action\": \"Yapılması gereken eylem\",\n      \"expected_impact\": \"Beklenen etki\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "maxTokens": 800
+        }
+      },
+      "id": "generate-recommendations-001",
+      "name": "Generate Recommendations",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1580, 400],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "jsCode": "const healthData = $('Calculate Health Score').first().json;\nconst aiRecs = $input.first().json;\n\nlet recommendations = [];\ntry {\n  const parsed = JSON.parse(aiRecs.message?.content || '{}');\n  recommendations = parsed.recommendations || [];\n} catch(e) {\n  recommendations = [{ action: 'AI öneri oluşturulamadı', priority: 'low' }];\n}\n\nreturn {\n  ...healthData,\n  recommendations,\n  report_type: 'local_business_health',\n  report_generated: new Date().toISOString()\n};"
+      },
+      "id": "merge-report-001",
+      "name": "Create Final Report",
+      "type": "n8n-nodes-base.code",
+      "position": [1800, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "resource": "spreadsheet",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Health Reports"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "business_name": "={{ $json.business_name }}",
+            "health_score": "={{ $json.health_score }}",
+            "status": "={{ $json.status_label }}",
+            "combined_rating": "={{ $json.metrics.combined_rating }}",
+            "total_reviews": "={{ $json.metrics.total_reviews }}",
+            "pending_responses": "={{ $json.metrics.pending_responses }}",
+            "generated_at": "={{ $json.report_generated }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-report-001",
+      "name": "Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2020, 400],
+      "disabled": true,
+      "typeVersion": 4.5
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, report: $json }) }}",
+        "options": {}
+      },
+      "id": "respond-webhook-001",
+      "name": "Respond Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [2020, 600],
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Merge Triggers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Merge Triggers",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Triggers": {
+      "main": [
+        [
+          {
+            "node": "Load Business Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Business Configuration": {
+      "main": [
+        [
+          {
+            "node": "Split Businesses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Businesses": {
+      "main": [
+        [
+          {
+            "node": "Fetch Google Business Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Yelp Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Google Business Data": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Review Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Yelp Data": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Review Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Review Data": {
+      "main": [
+        [
+          {
+            "node": "Urgent Reviews?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Urgent Reviews?": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Responses (Turkish)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Calculate Health Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Responses (Turkish)": {
+      "main": [
+        [
+          {
+            "node": "Calculate Health Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Alert": {
+      "main": [
+        [
+          {
+            "node": "Calculate Health Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Health Score": {
+      "main": [
+        [
+          {
+            "node": "Generate Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Recommendations": {
+      "main": [
+        [
+          {
+            "node": "Create Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Final Report": {
+      "main": [
+        [
+          {
+            "node": "Save to Google Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Local Business",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Turkish",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Reviews",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "AI",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-09T00:00:00.000Z",
+  "versionId": "grain-turkish-local-business-v1"
+}

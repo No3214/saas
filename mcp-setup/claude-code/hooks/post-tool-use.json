@@ -1,0 +1,22 @@
+{
+  "PostToolUse": [
+    {
+      "matcher": "Write|Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node -e \"try{JSON.parse(require('fs').readFileSync('$FILE'))}catch(e){console.log('JSON Error:',e.message)}\" || true",
+          "description": "JSON syntax check for workflow files"
+        }
+      ],
+      "filePattern": "templates/*.json"
+    }
+  ],
+  "PreCommit": [
+    {
+      "type": "command",
+      "command": "node scripts/validate-workflows.js || true",
+      "description": "Validate all workflows before commit"
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "name": "Grain MCP Workflow Monitor v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mcp-monitor",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "mcp-webhook",
+      "name": "MCP Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equals",
+              "value2": "get_workflow_health"
+            }
+          ]
+        }
+      },
+      "id": "route-action",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.switch",
+      "position": [440, 300],
+      "typeVersion": 2,
+      "onFallback": "noOp"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_HOST }}/api/v1/executions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "qs": {
+            "limit": 100
+          }
+        }
+      },
+      "id": "get-executions",
+      "name": "Get Recent Executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const executions = $input.item.json.data || [];\n\n// Calculate KPIs\nconst total = executions.length;\nconst successful = executions.filter(e => e.finished && !e.stoppedAt).length;\nconst failed = executions.filter(e => e.stoppedAt).length;\nconst running = executions.filter(e => !e.finished).length;\n\nconst successRate = total > 0 ? ((successful / total) * 100).toFixed(1) : 0;\n\n// Group failures by workflow\nconst failuresByWorkflow = {};\nexecutions.filter(e => e.stoppedAt).forEach(e => {\n  const name = e.workflowData?.name || 'Unknown';\n  failuresByWorkflow[name] = (failuresByWorkflow[name] || 0) + 1;\n});\n\n// Find most problematic workflows\nconst problemWorkflows = Object.entries(failuresByWorkflow)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 5)\n  .map(([name, count]) => ({ name, failures: count }));\n\n// Calculate average execution time\nconst completedWithTime = executions.filter(e => e.startedAt && e.stoppedAt);\nconst avgTime = completedWithTime.length > 0\n  ? completedWithTime.reduce((sum, e) => {\n      return sum + (new Date(e.stoppedAt) - new Date(e.startedAt));\n    }, 0) / completedWithTime.length / 1000\n  : 0;\n\nreturn {\n  json: {\n    health_status: successRate >= 95 ? 'healthy' : successRate >= 80 ? 'degraded' : 'critical',\n    metrics: {\n      total_executions: total,\n      successful: successful,\n      failed: failed,\n      running: running,\n      success_rate: `${successRate}%`,\n      avg_execution_time_sec: avgTime.toFixed(2)\n    },\n    problem_workflows: problemWorkflows,\n    alerts: successRate < 80 ? [`Critical: Success rate at ${successRate}%`] : []\n  }\n};"
+      },
+      "id": "calculate-health",
+      "name": "Calculate Health KPIs",
+      "type": "n8n-nodes-base.code",
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_HOST }}/api/v1/executions?status=error&limit=10",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-errors",
+      "name": "Get Error Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const errors = $input.item.json.data || [];\n\nconst errorAnalysis = errors.map(e => {\n  const errorNode = e.data?.resultData?.error?.node || 'Unknown';\n  const errorMessage = e.data?.resultData?.error?.message || 'No message';\n  \n  return {\n    workflow: e.workflowData?.name || 'Unknown',\n    workflow_id: e.workflowId,\n    execution_id: e.id,\n    failed_node: errorNode,\n    error_message: errorMessage.substring(0, 200),\n    timestamp: e.stoppedAt\n  };\n});\n\n// Group by error type\nconst errorPatterns = {};\nerrorAnalysis.forEach(e => {\n  const pattern = e.error_message.split(':')[0];\n  errorPatterns[pattern] = (errorPatterns[pattern] || 0) + 1;\n});\n\nreturn {\n  json: {\n    recent_errors: errorAnalysis,\n    error_patterns: Object.entries(errorPatterns)\n      .sort((a, b) => b[1] - a[1])\n      .slice(0, 5)\n      .map(([pattern, count]) => ({ pattern, count }))\n  }\n};"
+      },
+      "id": "analyze-errors",
+      "name": "Analyze Errors",
+      "type": "n8n-nodes-base.code",
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ...($('Calculate Health KPIs').item.json), ...($('Analyze Errors').item.json) }) }}"
+      },
+      "id": "respond",
+      "name": "Respond to MCP",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1320, 300]
+    }
+  ],
+  "connections": {
+    "MCP Webhook": {
+      "main": [
+        [{ "node": "Route Action", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route Action": {
+      "main": [
+        [
+          { "node": "Get Recent Executions", "type": "main", "index": 0 },
+          { "node": "Get Error Details", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Get Recent Executions": {
+      "main": [
+        [{ "node": "Calculate Health KPIs", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Error Details": {
+      "main": [
+        [{ "node": "Analyze Errors", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calculate Health KPIs": {
+      "main": [
+        [{ "node": "Merge Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze Errors": {
+      "main": [
+        [{ "node": "Merge Results", "type": "main", "index": 1 }]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [{ "node": "Respond to MCP", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "category": "devops",
+    "description": "MCP server integration for Claude AI to monitor and debug n8n workflows. Query workflow health, execution logs, and error patterns using natural language.",
+    "roi": "AI-powered workflow debugging",
+    "tags": ["mcp", "claude", "monitoring", "debugging", "ai-assistant"],
+    "version": "1.0.0"
+  }
+}

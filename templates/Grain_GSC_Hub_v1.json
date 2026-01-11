@@ -1,0 +1,260 @@
+{
+  "name": "Grain Google Search Console Hub v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-abzm7pdtr",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 📊 Google Search Console Hub\nFree SEO data directly from GSC: impressions, clicks, CTR, position tracking.",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-trigger",
+      "name": "Weekly Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://searchconsole.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($env.GSC_SITE_URL) }}/searchAnalytics/query",
+        "authentication": "oAuth2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"startDate\": \"{{ $now.minus({days: 28}).toFormat('yyyy-MM-dd') }}\",\n  \"endDate\": \"{{ $now.minus({days: 1}).toFormat('yyyy-MM-dd') }}\",\n  \"dimensions\": [\"query\"],\n  \"rowLimit\": 100,\n  \"dataState\": \"final\"\n}"
+      },
+      "id": "gsc-queries",
+      "name": "Get Top Queries",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://searchconsole.googleapis.com/webmasters/v3/sites/{{ encodeURIComponent($env.GSC_SITE_URL) }}/searchAnalytics/query",
+        "authentication": "oAuth2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"startDate\": \"{{ $now.minus({days: 28}).toFormat('yyyy-MM-dd') }}\",\n  \"endDate\": \"{{ $now.minus({days: 1}).toFormat('yyyy-MM-dd') }}\",\n  \"dimensions\": [\"page\"],\n  \"rowLimit\": 50,\n  \"dataState\": \"final\"\n}"
+      },
+      "id": "gsc-pages",
+      "name": "Get Top Pages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const queries = $('Get Top Queries').first().json.rows || [];\nconst pages = $('Get Top Pages').first().json.rows || [];\n\nconst topQueries = queries.slice(0, 20).map(q => ({\n  keyword: q.keys[0],\n  clicks: q.clicks,\n  impressions: q.impressions,\n  ctr: (q.ctr * 100).toFixed(2) + '%',\n  position: q.position.toFixed(1)\n}));\n\nconst lowHangingFruit = queries.filter(q => q.position >= 5 && q.position <= 20 && q.impressions > 100)\n  .slice(0, 10)\n  .map(q => ({ keyword: q.keys[0], position: q.position.toFixed(1), impressions: q.impressions }));\n\nconst topPages = pages.slice(0, 10).map(p => ({\n  url: p.keys[0],\n  clicks: p.clicks,\n  impressions: p.impressions,\n  ctr: (p.ctr * 100).toFixed(2) + '%'\n}));\n\nconst totalClicks = queries.reduce((a, b) => a + b.clicks, 0);\nconst totalImpressions = queries.reduce((a, b) => a + b.impressions, 0);\n\nreturn {\n  json: {\n    summary: { total_clicks: totalClicks, total_impressions: totalImpressions, avg_ctr: ((totalClicks / totalImpressions) * 100).toFixed(2) + '%' },\n    top_queries: topQueries,\n    low_hanging_fruit: lowHangingFruit,\n    top_pages: topPages\n  }\n};"
+      },
+      "id": "analyze-gsc",
+      "name": "Analyze GSC Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an SEO analyst. Based on GSC data, provide:\n\n1. Top 3 quick wins (keywords to optimize)\n2. Content gaps to address\n3. Pages that need CTR improvement\n4. Weekly action items\n\nBe specific and actionable."
+            },
+            {
+              "role": "user",
+              "content": "GSC Summary:\n{{ JSON.stringify($json.summary) }}\n\nLow Hanging Fruit (Position 5-20):\n{{ JSON.stringify($json.low_hanging_fruit) }}\n\nTop Pages:\n{{ JSON.stringify($json.top_pages) }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-recommendations",
+      "name": "AI Recommendations",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#seo-weekly",
+        "text": "=📊 **Weekly GSC Report**\n\n📈 Summary:\n• Clicks: {{ $('Analyze GSC Data').first().json.summary.total_clicks }}\n• Impressions: {{ $('Analyze GSC Data').first().json.summary.total_impressions }}\n• Avg CTR: {{ $('Analyze GSC Data').first().json.summary.avg_ctr }}\n\n🎯 Low Hanging Fruit (Pos 5-20):\n{{ $('Analyze GSC Data').first().json.low_hanging_fruit.slice(0, 5).map(k => '• ' + k.keyword + ' (Pos: ' + k.position + ')').join('\\n') }}\n\n💡 AI Recommendations:\n{{ $json.message.content }}",
+        "otherOptions": {}
+      },
+      "id": "slack-report",
+      "name": "Send Weekly Report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1250,
+        500
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        500,
+        750
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#seo-alerts",
+        "text": "=🚨 GSC Hub Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        750,
+        750
+      ]
+    }
+  ],
+  "connections": {
+    "Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Get Top Queries",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Top Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Top Queries": {
+      "main": [
+        [
+          {
+            "node": "Analyze GSC Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Top Pages": {
+      "main": [
+        [
+          {
+            "node": "Analyze GSC Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze GSC Data": {
+      "main": [
+        [
+          {
+            "node": "AI Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Recommendations": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

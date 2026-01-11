@@ -1,0 +1,687 @@
+{
+  "name": "Grain Trendyol Stock Manager v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "trendyol_seller_id",
+              "value": "={{ $vars.TRENDYOL_SELLER_ID }}"
+            },
+            {
+              "name": "low_stock_threshold",
+              "value": "={{ $vars.LOW_STOCK_THRESHOLD || 10 }}"
+            },
+            {
+              "name": "critical_stock_threshold",
+              "value": "={{ $vars.CRITICAL_STOCK_THRESHOLD || 3 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [-200, 0],
+      "notesInFlow": true,
+      "notes": "🔧 Stock Manager Config"
+    },
+    {
+      "parameters": {
+        "content": "## 📦 Trendyol Stock Manager v1\n\n**Features:**\n- Stok senkronizasyonu (Trendyol ↔ DB)\n- Düşük stok uyarıları\n- Toplu stok güncelleme\n- Fiyat senkronizasyonu\n- Günlük stok raporu\n\n**Sync:** Her 15 dakikada bir",
+        "height": 180,
+        "width": 350,
+        "color": 5
+      },
+      "id": "note-overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [60, -100]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-sync",
+      "name": "Her 15 Dakika",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 200]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "daily-report",
+      "name": "Günlük Rapor (09:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 600]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trendyol/stock-update",
+        "options": {
+          "responseMode": "responseNode"
+        }
+      },
+      "id": "webhook-manual",
+      "name": "Manuel Güncelleme",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 400],
+      "webhookId": "trendyol-stock"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.trendyol.com/sapigw/suppliers/{{ $node.GRAIN_CONFIG.json.trendyol_seller_id }}/products",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "approved",
+              "value": "true"
+            },
+            {
+              "name": "size",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-trendyol-products",
+      "name": "Trendyol Ürünleri Al",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [350, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "trendyol-api",
+          "name": "Trendyol API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT barcode, product_name, stock, price, last_sync FROM products WHERE source = 'trendyol' OR marketplace = 'trendyol'",
+        "options": {}
+      },
+      "id": "get-local-products",
+      "name": "Yerel Ürünleri Al",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [350, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Trendyol ürünlerini parse et\nconst response = $input.item.json;\nconst products = response.content || [];\n\nreturn products.map(p => ({\n  json: {\n    barcode: p.barcode,\n    productId: p.id,\n    title: p.title,\n    trendyol_stock: p.quantity,\n    trendyol_price: p.salePrice,\n    listPrice: p.listPrice,\n    brand: p.brand,\n    categoryName: p.categoryName,\n    approved: p.approved,\n    onSale: p.onSale\n  }\n}));"
+      },
+      "id": "parse-trendyol",
+      "name": "Parse Trendyol",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 200]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByKey",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "barcode",
+              "field2": "barcode"
+            }
+          ]
+        },
+        "joinMode": "enrichInput1",
+        "options": {}
+      },
+      "id": "compare-stock",
+      "name": "Stok Karşılaştır",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Stok farklılıklarını bul\nconst items = $input.all();\nconst differences = [];\n\nfor (const item of items) {\n  const data = item.json;\n  const trendyolStock = data.trendyol_stock || 0;\n  const localStock = data.stock || 0;\n  \n  if (trendyolStock !== localStock) {\n    differences.push({\n      json: {\n        barcode: data.barcode,\n        productName: data.title || data.product_name,\n        trendyol_stock: trendyolStock,\n        local_stock: localStock,\n        difference: localStock - trendyolStock,\n        action: localStock > trendyolStock ? 'increase' : 'decrease',\n        needs_update: true\n      }\n    });\n  }\n}\n\nif (differences.length === 0) {\n  return [{ json: { message: 'Tüm stoklar senkron', needs_update: false } }];\n}\n\nreturn differences;"
+      },
+      "id": "find-differences",
+      "name": "Farkları Bul",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needs-update",
+              "leftValue": "={{ $json.needs_update }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-updates",
+      "name": "Güncelleme Gerekli?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Trendyol API için stok güncelleme payload hazırla\nconst items = $input.all();\nconst updateItems = items.map(item => ({\n  barcode: item.json.barcode,\n  quantity: item.json.local_stock,\n  salePrice: item.json.price || item.json.trendyol_price,\n  listPrice: item.json.listPrice\n}));\n\nreturn {\n  json: {\n    items: updateItems,\n    count: updateItems.length\n  }\n};"
+      },
+      "id": "prepare-update-payload",
+      "name": "Update Payload Hazırla",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.trendyol.com/sapigw/suppliers/{{ $node.GRAIN_CONFIG.json.trendyol_seller_id }}/products/price-and-inventory",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ items: $json.items }) }}",
+        "options": {}
+      },
+      "id": "update-trendyol",
+      "name": "Trendyol'u Güncelle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 200],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "trendyol-api",
+          "name": "Trendyol API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "low-stock",
+              "leftValue": "={{ $json.local_stock }}",
+              "rightValue": "={{ $node.GRAIN_CONFIG.json.low_stock_threshold }}",
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-low-stock",
+      "name": "Düşük Stok?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1350, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "critical",
+              "leftValue": "={{ $json.local_stock }}",
+              "rightValue": "={{ $node.GRAIN_CONFIG.json.critical_stock_threshold }}",
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-critical",
+      "name": "Kritik Stok?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1600, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#stok-uyarilari",
+        "text": "=🔴 *KRİTİK STOK UYARISI*\n\nÜrün: {{ $json.productName }}\nBarkod: {{ $json.barcode }}\nKalan: *{{ $json.local_stock }} adet*\n\n⚡ ACİL TEDARİK GEREKLİ!",
+        "otherOptions": {}
+      },
+      "id": "critical-alert",
+      "name": "Kritik Uyarı",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1850, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-main",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  COUNT(*) as total_products,\n  SUM(CASE WHEN stock <= 3 THEN 1 ELSE 0 END) as critical_count,\n  SUM(CASE WHEN stock <= 10 AND stock > 3 THEN 1 ELSE 0 END) as low_count,\n  SUM(CASE WHEN stock > 10 THEN 1 ELSE 0 END) as healthy_count,\n  SUM(stock) as total_stock,\n  AVG(stock)::int as avg_stock\nFROM products WHERE marketplace = 'trendyol'",
+        "options": {}
+      },
+      "id": "get-stats",
+      "name": "Stok İstatistikleri",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [350, 600],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT barcode, product_name, stock FROM products WHERE marketplace = 'trendyol' AND stock <= 10 ORDER BY stock ASC LIMIT 20",
+        "options": {}
+      },
+      "id": "get-low-stock-list",
+      "name": "Düşük Stok Listesi",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [600, 600],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Günlük rapor oluştur\nconst stats = $('Stok İstatistikleri').first().json;\nconst lowStockItems = $('Düşük Stok Listesi').all();\n\nconst today = new Date().toLocaleDateString('tr-TR', {\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n});\n\nlet lowStockText = '';\nif (lowStockItems.length > 0) {\n  lowStockText = '\\n\\n📋 *Düşük Stoklu Ürünler:*\\n';\n  lowStockItems.forEach((item, i) => {\n    lowStockText += `${i+1}. ${item.json.product_name} - *${item.json.stock} adet*\\n`;\n  });\n}\n\nreturn {\n  json: {\n    report: `📊 *Trendyol Günlük Stok Raporu*\\n${today}\\n\\n` +\n      `🏪 Toplam Ürün: ${stats.total_products}\\n` +\n      `📦 Toplam Stok: ${stats.total_stock} adet\\n` +\n      `📈 Ortalama Stok: ${stats.avg_stock} adet/ürün\\n\\n` +\n      `✅ Sağlıklı: ${stats.healthy_count}\\n` +\n      `⚠️ Düşük: ${stats.low_count}\\n` +\n      `🔴 Kritik: ${stats.critical_count}` +\n      lowStockText,\n    stats: stats,\n    lowStockCount: lowStockItems.length\n  }\n};"
+      },
+      "id": "generate-report",
+      "name": "Rapor Oluştur",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 600]
+    },
+    {
+      "parameters": {
+        "channel": "#trendyol-raporlar",
+        "text": "={{ $json.report }}",
+        "otherOptions": {}
+      },
+      "id": "send-daily-report",
+      "name": "Günlük Rapor Gönder",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1100, 600],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-main",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE products SET last_sync = NOW() WHERE barcode IN ({{ $json.items.map(i => `'${i.barcode}'`).join(',') }})",
+        "options": {}
+      },
+      "id": "update-sync-time",
+      "name": "Sync Zamanı Güncelle",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2100, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Main"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, updated: $json.count, timestamp: new Date().toISOString() }) }}"
+      },
+      "id": "webhook-response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2100, 400]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [1600, 750]
+    },
+    {
+      "parameters": {
+        "channel": "#trendyol-hatalar",
+        "text": "=🚨 *Stock Manager Hatası*\n\nWorkflow: {{ $workflow.name }}\nHata: {{ $json.execution.error.message }}\nZaman: {{ new Date().toLocaleString('tr-TR') }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Hata Bildirimi",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1850, 750],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-main",
+          "name": "Slack"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Her 15 Dakika": {
+      "main": [
+        [
+          {
+            "node": "Trendyol Ürünleri Al",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Yerel Ürünleri Al",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manuel Güncelleme": {
+      "main": [
+        [
+          {
+            "node": "Trendyol Ürünleri Al",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Yerel Ürünleri Al",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trendyol Ürünleri Al": {
+      "main": [
+        [
+          {
+            "node": "Parse Trendyol",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Trendyol": {
+      "main": [
+        [
+          {
+            "node": "Stok Karşılaştır",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yerel Ürünleri Al": {
+      "main": [
+        [
+          {
+            "node": "Stok Karşılaştır",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Stok Karşılaştır": {
+      "main": [
+        [
+          {
+            "node": "Farkları Bul",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Farkları Bul": {
+      "main": [
+        [
+          {
+            "node": "Güncelleme Gerekli?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Güncelleme Gerekli?": {
+      "main": [
+        [
+          {
+            "node": "Update Payload Hazırla",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Düşük Stok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Payload Hazırla": {
+      "main": [
+        [
+          {
+            "node": "Trendyol'u Güncelle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trendyol'u Güncelle": {
+      "main": [
+        [
+          {
+            "node": "Sync Zamanı Güncelle",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Düşük Stok?": {
+      "main": [
+        [
+          {
+            "node": "Kritik Stok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kritik Stok?": {
+      "main": [
+        [
+          {
+            "node": "Kritik Uyarı",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Günlük Rapor (09:00)": {
+      "main": [
+        [
+          {
+            "node": "Stok İstatistikleri",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Düşük Stok Listesi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stok İstatistikleri": {
+      "main": [
+        [
+          {
+            "node": "Rapor Oluştur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Düşük Stok Listesi": {
+      "main": [
+        [
+          {
+            "node": "Rapor Oluştur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rapor Oluştur": {
+      "main": [
+        [
+          {
+            "node": "Günlük Rapor Gönder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Hata Bildirimi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "grain_module": "ecommerce",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_description": "Trendyol stok yönetimi - senkronizasyon, uyarılar, raporlama",
+    "grain_features": [
+      "Trendyol API stok senkronizasyonu",
+      "Düşük/kritik stok uyarıları",
+      "Otomatik Trendyol güncelleme",
+      "Günlük stok raporu",
+      "Manuel webhook tetikleme",
+      "PostgreSQL entegrasyonu"
+    ],
+    "grain_dependencies": [
+      "PostgreSQL",
+      "Slack",
+      "Trendyol API"
+    ]
+  }
+}

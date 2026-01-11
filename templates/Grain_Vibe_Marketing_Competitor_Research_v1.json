@@ -1,0 +1,259 @@
+{
+  "name": "Grain Vibe Marketing - Competitor Research v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vibe-competitor-research",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Competitor Research Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "grain-vibe-competitor-research"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.competitor_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "http-scrape-website",
+      "name": "Scrape Competitor Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/apify~instagram-scraper/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "startUrls",
+              "value": "={{ [{ url: 'https://instagram.com/' + $json.instagram_handle }] }}"
+            },
+            {
+              "name": "resultsLimit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "apify-instagram",
+      "name": "Scrape Instagram Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract key website data\nconst html = $input.first().json.data || '';\n\n// Basic meta extraction\nconst titleMatch = html.match(/<title>([^<]*)<\\/title>/i);\nconst descMatch = html.match(/<meta name=\"description\" content=\"([^\"]*)\"/i);\nconst keywordsMatch = html.match(/<meta name=\"keywords\" content=\"([^\"]*)\"/i);\n\n// Social links extraction\nconst socialPatterns = {\n  instagram: /instagram\\.com\\/([\\w.-]+)/i,\n  linkedin: /linkedin\\.com\\/company\\/([\\w.-]+)/i,\n  twitter: /twitter\\.com\\/([\\w.-]+)/i,\n  facebook: /facebook\\.com\\/([\\w.-]+)/i\n};\n\nconst socialLinks = {};\nfor (const [platform, pattern] of Object.entries(socialPatterns)) {\n  const match = html.match(pattern);\n  if (match) socialLinks[platform] = match[1];\n}\n\n// Tech stack hints\nconst techIndicators = {\n  shopify: /cdn\\.shopify\\.com/i.test(html),\n  wordpress: /wp-content/i.test(html),\n  wix: /wix\\.com/i.test(html),\n  webflow: /webflow/i.test(html),\n  nextjs: /_next/i.test(html),\n  react: /react/i.test(html)\n};\n\nconst detectedTech = Object.entries(techIndicators)\n  .filter(([_, detected]) => detected)\n  .map(([tech]) => tech);\n\nreturn [{\n  json: {\n    title: titleMatch ? titleMatch[1] : 'Unknown',\n    description: descMatch ? descMatch[1] : '',\n    keywords: keywordsMatch ? keywordsMatch[1] : '',\n    social_links: socialLinks,\n    tech_stack: detectedTech,\n    scraped_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-parse-website",
+      "name": "Parse Website Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze Instagram data\nconst items = $input.all();\nconst posts = items.map(i => i.json);\n\nif (posts.length === 0) {\n  return [{ json: { error: 'No Instagram data available' } }];\n}\n\n// Calculate engagement metrics\nconst totalLikes = posts.reduce((sum, p) => sum + (p.likesCount || 0), 0);\nconst totalComments = posts.reduce((sum, p) => sum + (p.commentsCount || 0), 0);\nconst avgLikes = Math.round(totalLikes / posts.length);\nconst avgComments = Math.round(totalComments / posts.length);\n\n// Content type analysis\nconst contentTypes = {\n  image: posts.filter(p => p.type === 'Image').length,\n  video: posts.filter(p => p.type === 'Video').length,\n  carousel: posts.filter(p => p.type === 'Sidecar').length,\n  reels: posts.filter(p => p.isSponsored === false && p.type === 'Video').length\n};\n\n// Posting frequency\nconst dates = posts.map(p => new Date(p.timestamp)).sort((a, b) => b - a);\nconst daysBetweenPosts = dates.length > 1 \n  ? Math.round((dates[0] - dates[dates.length - 1]) / (1000 * 60 * 60 * 24) / posts.length)\n  : 0;\n\n// Hashtag analysis\nconst allHashtags = posts.flatMap(p => {\n  const caption = p.caption || '';\n  const matches = caption.match(/#[\\w\\u0080-\\uFFFF]+/g) || [];\n  return matches;\n});\n\nconst hashtagFreq = {};\nallHashtags.forEach(tag => {\n  hashtagFreq[tag] = (hashtagFreq[tag] || 0) + 1;\n});\n\nconst topHashtags = Object.entries(hashtagFreq)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 15)\n  .map(([tag, count]) => ({ tag, count }));\n\n// Best performing posts\nconst topPosts = posts\n  .sort((a, b) => (b.likesCount + b.commentsCount * 10) - (a.likesCount + a.commentsCount * 10))\n  .slice(0, 5)\n  .map(p => ({\n    caption: (p.caption || '').substring(0, 100) + '...',\n    likes: p.likesCount,\n    comments: p.commentsCount,\n    type: p.type\n  }));\n\nreturn [{\n  json: {\n    metrics: {\n      total_posts_analyzed: posts.length,\n      avg_likes: avgLikes,\n      avg_comments: avgComments,\n      engagement_rate: ((avgLikes + avgComments) / (posts[0]?.followersCount || 1) * 100).toFixed(2) + '%',\n      posting_frequency: `Every ${daysBetweenPosts} days`\n    },\n    content_strategy: contentTypes,\n    top_hashtags: topHashtags,\n    top_performing_posts: topPosts,\n    analyzed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-analyze-instagram",
+      "name": "Analyze Instagram Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "options": {}
+      },
+      "id": "merge-data",
+      "name": "Merge Analysis Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Sen bir CMO Agent'sin. Rakip analizi yapiyorsun.\n\nRakip Website Verileri:\n{{ JSON.stringify($json.website_data, null, 2) }}\n\nRakip Instagram Analizi:\n{{ JSON.stringify($json.instagram_analysis, null, 2) }}\n\nAsagidaki formatta detayli bir SWOT analizi ve strateji onerileri olustur:\n\n## Rakip Analizi Raporu\n\n### Genel Degerlendirme\n(2-3 cumle ozet)\n\n### SWOT Analizi\n\n#### Guclu Yonler\n- ...\n\n#### Zayif Yonler\n- ...\n\n#### Firsatlar\n- ...\n\n#### Tehditler\n- ...\n\n### Icerik Stratejisi Analizi\n(Rakibin icerik yaklasimini degerlendir)\n\n### Onerilen Aksiyon Plani\n1. ...\n2. ...\n3. ...\n\n### Diferansiasyon Firsatlari\n(Rakipten nasil ayrilabiliriz)\n\nTurkce yaz, profesyonel ve aksiyona yonelik ol."
+            }
+          ]
+        }
+      },
+      "id": "openai-analysis",
+      "name": "AI - Generate SWOT Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1050, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "competitor_analysis",
+        "columns": "competitor_url, competitor_name, website_data, instagram_data, swot_analysis, created_at",
+        "values": "={{ $json.competitor_url }}, {{ $json.competitor_name }}, {{ JSON.stringify($json.website_data) }}, {{ JSON.stringify($json.instagram_analysis) }}, {{ $json.swot_report }}, {{ $now.toISO() }}"
+      },
+      "id": "postgres-save",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#marketing-intel",
+        "text": "*Yeni Rakip Analizi Tamamlandi*\n\n*Rakip:* {{ $json.competitor_name }}\n*URL:* {{ $json.competitor_url }}\n\n*Ozet:*\n{{ $json.swot_summary }}\n\n_Tam rapor icin dashboard'a bakin._",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Team on Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "errorMessage": "Competitor research failed"
+      },
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#marketing-alerts",
+        "text": "*Rakip Analizi Hatasi*\n\nWorkflow: Vibe Marketing - Competitor Research\nHata: {{ $json.error.message }}\nZaman: {{ $now.format('DD.MM.YYYY HH:mm') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-error",
+      "name": "Error Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [450, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Competitor Research Request": {
+      "main": [
+        [
+          { "node": "Scrape Competitor Website", "type": "main", "index": 0 },
+          { "node": "Scrape Instagram Profile", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Scrape Competitor Website": {
+      "main": [
+        [{ "node": "Parse Website Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Scrape Instagram Profile": {
+      "main": [
+        [{ "node": "Analyze Instagram Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Website Data": {
+      "main": [
+        [{ "node": "Merge Analysis Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Analyze Instagram Data": {
+      "main": [
+        [{ "node": "Merge Analysis Data", "type": "main", "index": 1 }]
+      ]
+    },
+    "Merge Analysis Data": {
+      "main": [
+        [{ "node": "AI - Generate SWOT Analysis", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI - Generate SWOT Analysis": {
+      "main": [
+        [
+          { "node": "Save to Database", "type": "main", "index": 0 },
+          { "node": "Notify Team on Slack", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Error Notification", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "meta": {
+    "grain_module": "vibe_marketing",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_features": [
+      "competitor-analysis",
+      "swot-generation",
+      "instagram-scraping",
+      "ai-insights",
+      "slack-notifications"
+    ],
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "vibe-marketing" },
+    { "name": "competitor-research" },
+    { "name": "ai-powered" }
+  ]
+}

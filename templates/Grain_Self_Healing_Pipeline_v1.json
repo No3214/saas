@@ -1,0 +1,342 @@
+{
+  "name": "Grain Self-Healing Data Pipeline v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-ssua09zgx",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🏥 Self-Healing Data Pipeline\nAutonomous infrastructure that detects failures, attempts self-correction, and optimizes retry strategies.",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "monitor-trigger",
+      "name": "Health Monitor",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CORE_API_URL }}/health",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "check-api",
+      "name": "Check Core API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "200",
+              "operator": {
+                "type": "number",
+                "operation": "neq"
+              }
+            }
+          ]
+        }
+      },
+      "id": "is-failed",
+      "name": "Is Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        750,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const attempt = $json.retry_count || 0;\nconst maxRetries = 3;\n\nif (attempt < maxRetries) {\n  return { json: { action: 'retry', next_attempt: attempt + 1, wait_time: Math.pow(2, attempt) * 1000 } };\n} else {\n  return { json: { action: 'escalate' } };\n}"
+      },
+      "id": "healing-strategy",
+      "name": "Determine Strategy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.action }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "retry",
+              "output": 0
+            },
+            {
+              "value2": "escalate",
+              "output": 1
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "id": "execute-strategy",
+      "name": "Execute Strategy",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.wait_time }}",
+        "unit": "milliseconds"
+      },
+      "id": "wait-node",
+      "name": "Dynamic Backoff",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CORE_API_URL }}/restart-service",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.ADMIN_KEY }}"
+            }
+          ]
+        }
+      },
+      "id": "restart-service",
+      "name": "Self-Heal: Restart",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#devops-critical",
+        "text": "=🚨 **Self-Healing Failed**\n\nService: Core API\nRetries: 3\nAction: Manual Intervention Required",
+        "otherOptions": {}
+      },
+      "id": "escalate-alert",
+      "name": "Escalate to Human",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1500,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-logs",
+        "text": "=✅ **Self-Healing Action Taken**\n\nStrategy: Restart Service\nAttempt: {{ $json.next_attempt }}",
+        "otherOptions": {}
+      },
+      "id": "log-healing",
+      "name": "Log Healing",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        2000,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Self-Healing Loop Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1250,
+        650
+      ]
+    }
+  ],
+  "connections": {
+    "Health Monitor": {
+      "main": [
+        [
+          {
+            "node": "Check Core API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Core API": {
+      "main": [
+        [
+          {
+            "node": "Is Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Failed?": {
+      "main": [
+        [
+          {
+            "node": "Determine Strategy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Strategy": {
+      "main": [
+        [
+          {
+            "node": "Execute Strategy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Strategy": {
+      "main": [
+        [
+          {
+            "node": "Dynamic Backoff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Escalate to Human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dynamic Backoff": {
+      "main": [
+        [
+          {
+            "node": "Self-Heal: Restart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Self-Heal: Restart": {
+      "main": [
+        [
+          {
+            "node": "Log Healing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

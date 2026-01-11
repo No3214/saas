@@ -1,0 +1,262 @@
+{
+  "name": "Grain AI Meeting Notes v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meeting/recording",
+        "options": {}
+      },
+      "id": "recording-webhook",
+      "name": "Recording Uploaded",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "meeting-recording"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "meeting/zoom-webhook",
+        "options": {}
+      },
+      "id": "zoom-webhook",
+      "name": "Zoom Recording Ready",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "zoom-recording"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize meeting processing\nconst input = $input.first().json.body || $input.first().json;\n\nconst meeting = {\n  meetingId: `MTG-${Date.now().toString(36).toUpperCase()}`,\n  title: input.title || input.topic || 'Untitled Meeting',\n  recordingUrl: input.recordingUrl || input.download_url,\n  duration: input.duration,\n  startTime: input.startTime || input.start_time,\n  endTime: input.endTime || input.end_time,\n  host: input.host || input.host_email,\n  participants: input.participants || [],\n  platform: input.platform || 'zoom', // zoom, teams, meet, custom\n  metadata: {\n    meetingType: input.meetingType || 'general',\n    isRecurring: input.isRecurring || false,\n    externalId: input.id || input.meetingId\n  },\n  processingStatus: 'started',\n  createdAt: new Date().toISOString()\n};\n\nreturn [{ json: meeting }];"
+      },
+      "id": "init-meeting",
+      "name": "Initialize Meeting",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TRANSCRIPTION_API_URL }}/transcribe",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"audioUrl\": \"{{ $json.recordingUrl }}\",\n  \"language\": \"auto\",\n  \"speakerDiarization\": true,\n  \"speakerLabels\": true,\n  \"timestamps\": \"word\",\n  \"punctuation\": true,\n  \"formatting\": true\n}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "transcribe-meeting",
+      "name": "Transcribe Meeting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "transcription-api-key",
+          "name": "Transcription API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert meeting analyst. Analyze the meeting transcript and generate comprehensive meeting notes.\n\nGenerate a JSON response with:\n1. **summary**: Executive summary (2-3 paragraphs)\n2. **keyPoints**: Array of key discussion points (5-10 items)\n3. **decisions**: Array of decisions made with owner and context\n4. **actionItems**: Array of action items with:\n   - task: description\n   - assignee: person responsible (from transcript)\n   - dueDate: suggested due date or \"TBD\"\n   - priority: high/medium/low\n5. **questions**: Unresolved questions or topics needing follow-up\n6. **participants**: List of speakers with their main contributions\n7. **topics**: Main topics discussed with timestamps\n8. **sentiment**: Overall meeting sentiment and engagement level\n9. **nextSteps**: Recommended next steps\n10. **followUpMeeting**: Suggested follow-up meeting if needed",
+              "role": "system"
+            },
+            {
+              "content": "=Analyze this meeting:\n\n**Title:** {{ $('Initialize Meeting').first().json.title }}\n**Date:** {{ $('Initialize Meeting').first().json.startTime }}\n**Participants:** {{ $('Initialize Meeting').first().json.participants.join(', ') || 'See transcript' }}\n\n**Transcript:**\n{{ $json.transcript?.text || $json.text || 'Transcript unavailable' }}",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 4000
+        }
+      },
+      "id": "ai-analysis",
+      "name": "AI Meeting Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1000, 500],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile meeting notes document\nconst meeting = $('Initialize Meeting').first().json;\nconst transcript = $('Transcribe Meeting').first().json;\nconst analysis = $input.first().json;\n\nconst meetingNotes = {\n  meetingId: meeting.meetingId,\n  title: meeting.title,\n  date: meeting.startTime,\n  duration: meeting.duration,\n  host: meeting.host,\n  platform: meeting.platform,\n  \n  notes: {\n    summary: analysis.summary,\n    keyPoints: analysis.keyPoints || analysis.key_points,\n    decisions: analysis.decisions || [],\n    actionItems: analysis.actionItems || analysis.action_items || [],\n    questions: analysis.questions || [],\n    topics: analysis.topics || [],\n    sentiment: analysis.sentiment,\n    nextSteps: analysis.nextSteps || analysis.next_steps\n  },\n  \n  participants: analysis.participants || meeting.participants,\n  \n  transcript: {\n    full: transcript.transcript?.text || transcript.text,\n    speakers: transcript.speakers || [],\n    wordCount: (transcript.transcript?.text || transcript.text || '').split(' ').length\n  },\n  \n  followUp: {\n    suggestedMeeting: analysis.followUpMeeting || analysis.follow_up_meeting,\n    actionItemCount: (analysis.actionItems || analysis.action_items || []).length,\n    highPriorityItems: (analysis.actionItems || analysis.action_items || []).filter(a => a.priority === 'high').length\n  },\n  \n  exportUrls: {\n    pdf: `{{ $vars.EXPORT_URL }}/meetings/${meeting.meetingId}/pdf`,\n    docx: `{{ $vars.EXPORT_URL }}/meetings/${meeting.meetingId}/docx`,\n    markdown: `{{ $vars.EXPORT_URL }}/meetings/${meeting.meetingId}/md`\n  },\n  \n  completedAt: new Date().toISOString()\n};\n\nreturn [{ json: meetingNotes }];"
+      },
+      "id": "compile-notes",
+      "name": "Compile Meeting Notes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.MEETINGS_DB_URL }}/meetings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-notes",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "meetings-db-api",
+          "name": "Meetings DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "task",
+        "operation": "create",
+        "taskListId": "={{ $vars.TASK_LIST_ID }}",
+        "title": "={{ $json.task }}",
+        "additionalFields": {
+          "notes": "=From meeting: {{ $('Compile Meeting Notes').first().json.title }}\n\nAssigned to: {{ $json.assignee }}\nPriority: {{ $json.priority }}",
+          "dueDate": "={{ $json.dueDate !== 'TBD' ? $json.dueDate : '' }}"
+        }
+      },
+      "id": "create-tasks",
+      "name": "Create Tasks in Google Tasks",
+      "type": "n8n-nodes-base.googleTasks",
+      "typeVersion": 1,
+      "position": [1500, 600],
+      "credentials": {
+        "googleTasksOAuth2Api": {
+          "id": "google-tasks-credential",
+          "name": "Google Tasks OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.MEETINGS_SLACK_CHANNEL }}",
+        "text": "=📝 *Meeting Notes Ready*\n\n*Meeting:* {{ $json.title }}\n*Date:* {{ new Date($json.date).toLocaleDateString() }}\n*Duration:* {{ Math.round($json.duration / 60) }} minutes\n*Participants:* {{ $json.participants?.length || 'N/A' }}\n\n📋 *Summary:*\n{{ $json.notes.summary?.substring(0, 500) }}...\n\n✅ *Action Items:* {{ $json.followUp.actionItemCount }}\n{{ $json.notes.actionItems?.slice(0, 5).map(a => `• ${a.task} → ${a.assignee || 'Unassigned'}`).join('\\n') || 'None' }}\n\n🎯 *Decisions Made:* {{ $json.notes.decisions?.length || 0 }}\n❓ *Open Questions:* {{ $json.notes.questions?.length || 0 }}\n\n📥 <{{ $json.exportUrls.pdf }}|Download PDF> | <{{ $json.exportUrls.docx }}|Download DOCX>",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1750, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $vars.COMPANY_EMAIL }}",
+        "toEmail": "={{ $json.host }}",
+        "subject": "=📝 Meeting Notes: {{ $json.title }}",
+        "emailType": "html",
+        "html": "=<h2>Meeting Notes: {{ $json.title }}</h2>\n<p><strong>Date:</strong> {{ new Date($json.date).toLocaleDateString() }}<br/>\n<strong>Duration:</strong> {{ Math.round($json.duration / 60) }} minutes</p>\n\n<h3>Summary</h3>\n<p>{{ $json.notes.summary }}</p>\n\n<h3>Key Points</h3>\n<ul>\n{{ $json.notes.keyPoints?.map(p => `<li>${p}</li>`).join('') || '<li>No key points recorded</li>' }}\n</ul>\n\n<h3>Action Items ({{ $json.followUp.actionItemCount }})</h3>\n<table border=\"1\" cellpadding=\"8\">\n<tr><th>Task</th><th>Assignee</th><th>Priority</th><th>Due Date</th></tr>\n{{ $json.notes.actionItems?.map(a => `<tr><td>${a.task}</td><td>${a.assignee || 'TBD'}</td><td>${a.priority}</td><td>${a.dueDate || 'TBD'}</td></tr>`).join('') || '<tr><td colspan=\"4\">No action items</td></tr>' }}\n</table>\n\n<h3>Decisions Made</h3>\n<ul>\n{{ $json.notes.decisions?.map(d => `<li><strong>${d.decision || d}</strong></li>`).join('') || '<li>No decisions recorded</li>' }}\n</ul>\n\n<p><a href=\"{{ $json.exportUrls.pdf }}\">Download PDF</a> | <a href=\"{{ $json.exportUrls.docx }}\">Download DOCX</a></p>",
+        "options": {}
+      },
+      "id": "email-notes",
+      "name": "Email Meeting Notes",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1750, 600],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credential",
+          "name": "SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ meetingId: $json.meetingId, status: 'completed', exportUrls: $json.exportUrls }) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 500]
+    }
+  ],
+  "connections": {
+    "Recording Uploaded": {
+      "main": [
+        [{ "node": "Initialize Meeting", "type": "main", "index": 0 }]
+      ]
+    },
+    "Zoom Recording Ready": {
+      "main": [
+        [{ "node": "Initialize Meeting", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize Meeting": {
+      "main": [
+        [{ "node": "Transcribe Meeting", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transcribe Meeting": {
+      "main": [
+        [{ "node": "AI Meeting Analysis", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Meeting Analysis": {
+      "main": [
+        [{ "node": "Compile Meeting Notes", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Meeting Notes": {
+      "main": [
+        [
+          { "node": "Save to Database", "type": "main", "index": 0 },
+          { "node": "Create Tasks in Google Tasks", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Email Meeting Notes", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "meeting", "name": "meeting" },
+    { "id": "transcription", "name": "transcription" },
+    { "id": "ai", "name": "ai" },
+    { "id": "productivity", "name": "productivity" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-08T00:00:00.000Z",
+  "versionId": "1"
+}

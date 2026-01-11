@@ -1,0 +1,275 @@
+{
+  "name": "Grain Multi-Language Translation v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "translate",
+        "options": {}
+      },
+      "id": "translate-webhook",
+      "name": "Translation Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "translate-content"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "batch-schedule",
+      "name": "Batch Translation Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize translation job\nconst request = $input.first().json.body || $input.first().json;\n\nconst translationJob = {\n  jobId: `TRANS-${Date.now().toString(36).toUpperCase()}`,\n  content: request.content || request.text,\n  contentType: request.contentType || 'text', // text, html, markdown, json\n  sourceLanguage: request.sourceLanguage || 'auto',\n  targetLanguages: request.targetLanguages || ['es', 'fr', 'de', 'pt', 'it', 'ja', 'zh', 'ko', 'ar', 'tr'],\n  preserveFormatting: request.preserveFormatting !== false,\n  glossaryId: request.glossaryId || null,\n  tone: request.tone || 'professional', // professional, casual, formal\n  domain: request.domain || 'general', // general, technical, marketing, legal, medical\n  metadata: {\n    source: request.source || 'api',\n    projectId: request.projectId,\n    documentId: request.documentId,\n    priority: request.priority || 'normal'\n  },\n  startedAt: new Date().toISOString()\n};\n\n// Detect content segments for batch processing\nif (translationJob.contentType === 'html') {\n  // Extract text nodes for translation\n  translationJob.segmentCount = (translationJob.content.match(/>([^<]+)</g) || []).length;\n} else if (translationJob.contentType === 'json') {\n  translationJob.segmentCount = Object.keys(JSON.parse(translationJob.content)).length;\n} else {\n  // Split by sentences for text\n  translationJob.segmentCount = (translationJob.content.match(/[.!?]+/g) || []).length + 1;\n}\n\nreturn [{ json: translationJob }];"
+      },
+      "id": "init-job",
+      "name": "Initialize Translation Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TRANSLATION_API_URL }}/detect",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.content.substring(0, 500) }}\"\n}",
+        "options": {}
+      },
+      "id": "detect-language",
+      "name": "Detect Source Language",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "translation-api-key",
+          "name": "Translation API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.GLOSSARY_API_URL }}/glossaries/{{ $json.glossaryId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-glossary",
+      "name": "Fetch Custom Glossary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "glossary-api-key",
+          "name": "Glossary API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare translation requests for each target language\nconst job = $('Initialize Translation Job').first().json;\nconst detectedLang = $('Detect Source Language').first().json;\nconst glossary = $('Fetch Custom Glossary').first().json;\n\nconst sourceLanguage = job.sourceLanguage === 'auto' \n  ? detectedLang.detectedLanguage || 'en'\n  : job.sourceLanguage;\n\n// Filter out source language from targets\nconst targetLanguages = job.targetLanguages.filter(lang => lang !== sourceLanguage);\n\n// Create translation request for each target language\nconst translationRequests = targetLanguages.map(targetLang => ({\n  jobId: job.jobId,\n  content: job.content,\n  contentType: job.contentType,\n  sourceLanguage,\n  targetLanguage: targetLang,\n  preserveFormatting: job.preserveFormatting,\n  glossary: glossary.terms || {},\n  tone: job.tone,\n  domain: job.domain,\n  metadata: job.metadata\n}));\n\nreturn translationRequests.map(req => ({ json: req }));"
+      },
+      "id": "prepare-requests",
+      "name": "Prepare Translation Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a professional translator specializing in {{ $json.domain }} content. Translate the following content from {{ $json.sourceLanguage }} to {{ $json.targetLanguage }}.\n\nIMPORTANT RULES:\n1. Maintain the exact same formatting ({{ $json.contentType }})\n2. Use a {{ $json.tone }} tone\n3. Preserve any placeholders like {variable} or {{variable}}\n4. Keep brand names, product names, and technical terms unchanged unless in glossary\n5. Ensure cultural appropriateness for the target language\n6. Maintain SEO-friendly structure if applicable\n\n{{ Object.keys($json.glossary).length > 0 ? 'GLOSSARY (use these exact translations):\\n' + Object.entries($json.glossary).map(([k,v]) => k + ' → ' + v).join('\\n') : '' }}",
+              "role": "system"
+            },
+            {
+              "content": "=Translate this content:\n\n{{ $json.content }}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 4000
+        }
+      },
+      "id": "ai-translate",
+      "name": "AI Translation",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1250, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Quality check and post-processing\nconst request = $('Prepare Translation Requests').first().json;\nconst translation = $input.first().json;\n\nconst translatedContent = translation.message?.content || translation.content || translation.text;\n\n// Quality metrics\nconst qualityMetrics = {\n  sourceLength: request.content.length,\n  translatedLength: translatedContent.length,\n  lengthRatio: translatedContent.length / request.content.length,\n  preservedPlaceholders: true,\n  formatIntact: true\n};\n\n// Check placeholder preservation\nconst sourcePlaceholders = request.content.match(/\\{\\{?[^}]+\\}\\}?/g) || [];\nconst translatedPlaceholders = translatedContent.match(/\\{\\{?[^}]+\\}\\}?/g) || [];\nqualityMetrics.preservedPlaceholders = sourcePlaceholders.length === translatedPlaceholders.length;\n\n// Check format integrity\nif (request.contentType === 'html') {\n  const sourceTagCount = (request.content.match(/<[^>]+>/g) || []).length;\n  const translatedTagCount = (translatedContent.match(/<[^>]+>/g) || []).length;\n  qualityMetrics.formatIntact = sourceTagCount === translatedTagCount;\n}\n\n// Calculate confidence score\nconst confidenceScore = (\n  (qualityMetrics.preservedPlaceholders ? 25 : 0) +\n  (qualityMetrics.formatIntact ? 25 : 0) +\n  (qualityMetrics.lengthRatio > 0.5 && qualityMetrics.lengthRatio < 2 ? 25 : 0) +\n  25 // Base score for completion\n);\n\nreturn [{ json: {\n  jobId: request.jobId,\n  sourceLanguage: request.sourceLanguage,\n  targetLanguage: request.targetLanguage,\n  originalContent: request.content,\n  translatedContent,\n  contentType: request.contentType,\n  qualityMetrics,\n  confidenceScore,\n  metadata: request.metadata,\n  completedAt: new Date().toISOString()\n}}];"
+      },
+      "id": "quality-check",
+      "name": "Quality Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all translations for the job\nconst allTranslations = $input.all().map(item => item.json);\n\nif (allTranslations.length === 0) {\n  return [{ json: { error: 'No translations completed' } }];\n}\n\nconst jobId = allTranslations[0].jobId;\nconst sourceLanguage = allTranslations[0].sourceLanguage;\nconst originalContent = allTranslations[0].originalContent;\n\n// Group by target language\nconst translationsByLanguage = {};\nallTranslations.forEach(t => {\n  translationsByLanguage[t.targetLanguage] = {\n    content: t.translatedContent,\n    confidenceScore: t.confidenceScore,\n    qualityMetrics: t.qualityMetrics\n  };\n});\n\n// Calculate overall stats\nconst avgConfidence = Math.round(\n  allTranslations.reduce((a, b) => a + b.confidenceScore, 0) / allTranslations.length\n);\n\nconst result = {\n  jobId,\n  status: 'completed',\n  sourceLanguage,\n  originalContent,\n  translations: translationsByLanguage,\n  summary: {\n    totalLanguages: allTranslations.length,\n    avgConfidenceScore: avgConfidence,\n    completedAt: new Date().toISOString()\n  },\n  exportUrls: {\n    json: `{{ $vars.EXPORT_URL }}/translations/${jobId}/json`,\n    csv: `{{ $vars.EXPORT_URL }}/translations/${jobId}/csv`,\n    xliff: `{{ $vars.EXPORT_URL }}/translations/${jobId}/xliff`\n  }\n};\n\nreturn [{ json: result }];"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TRANSLATION_DB_URL }}/jobs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-results",
+      "name": "Save Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "translation-db-api",
+          "name": "Translation DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.CONTENT_SLACK_CHANNEL }}",
+        "text": "=🌍 *Translation Complete - Job {{ $json.jobId }}*\n\n*Source Language:* {{ $json.sourceLanguage }}\n*Languages Translated:* {{ $json.summary.totalLanguages }}\n*Confidence Score:* {{ $json.summary.avgConfidenceScore }}%\n\n*Translations:*\n{{ Object.keys($json.translations).map(lang => `• ${lang.toUpperCase()}: ${$json.translations[lang].confidenceScore}% confidence`).join('\\n') }}\n\n📥 <{{ $json.exportUrls.json }}|Download JSON> | <{{ $json.exportUrls.xliff }}|Download XLIFF>",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2000, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2000, 700]
+    }
+  ],
+  "connections": {
+    "Translation Request": {
+      "main": [
+        [{ "node": "Initialize Translation Job", "type": "main", "index": 0 }]
+      ]
+    },
+    "Batch Translation Schedule": {
+      "main": [
+        [{ "node": "Initialize Translation Job", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize Translation Job": {
+      "main": [
+        [
+          { "node": "Detect Source Language", "type": "main", "index": 0 },
+          { "node": "Fetch Custom Glossary", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Detect Source Language": {
+      "main": [
+        [{ "node": "Prepare Translation Requests", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Custom Glossary": {
+      "main": [
+        [{ "node": "Prepare Translation Requests", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Translation Requests": {
+      "main": [
+        [{ "node": "AI Translation", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Translation": {
+      "main": [
+        [{ "node": "Quality Check", "type": "main", "index": 0 }]
+      ]
+    },
+    "Quality Check": {
+      "main": [
+        [{ "node": "Aggregate Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          { "node": "Save Results", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "translation", "name": "translation" },
+    { "id": "localization", "name": "localization" },
+    { "id": "ai", "name": "ai" },
+    { "id": "content", "name": "content" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-08T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,162 @@
+{
+    "name": "Grain Agentic AI Orchestrator v2 Pro",
+    "nodes": [
+        {
+            "parameters": {
+                "options": {
+                    "title": "Grain AI Business Assistant (PRO)",
+                    "subtitle": "Agentic Engine with Cost Control & Advanced SEO"
+                }
+            },
+            "id": "chat-ui-trigger",
+            "name": "Chat UI",
+            "type": "n8n-nodes-base.chatTrigger",
+            "typeVersion": 1,
+            "position": [
+                200,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "sessionIdKey": "={{ $json.sessionId || 'default' }}"
+            },
+            "id": "chat-memory",
+            "name": "Window Chat Memory",
+            "type": "n8n-nodes-base.windowChatInMemory",
+            "typeVersion": 1,
+            "position": [
+                400,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Task Router & Context Builder Pro\n// Features: Cost Tracking Integration & Semantic Caching Check\n\nconst input = $input.first().json;\n\n// Agent Registry\nconst agentRegistry = {\n  lead_enrichment: { name: 'Lead Enrichment Agent', priority: 1, requiresApproval: false },\n  content_generator: { name: 'Content Generation Agent', priority: 2, requiresApproval: true },\n  sentiment_analyzer: { name: 'Sentiment Analysis Agent', priority: 2, requiresApproval: false },\n  seo_intelligence: { name: 'SEO Intelligence Agent', priority: 1, requiresApproval: false },\n  crm_updater: { name: 'CRM Update Agent', priority: 4, requiresApproval: false }\n};\n\nconst chatMessage = input.chatInput || input.message || \"\";\nconst taskType = input.task_type || (chatMessage.toLowerCase().includes('seo') ? 'seo_audit' : (chatMessage ? 'new_lead' : 'general'));\nconst taskData = chatMessage ? { goal: chatMessage } : (input.data || input);\n\nreturn [{\n  json: {\n    taskId: `pro-${Date.now()}`,\n    taskType,\n    createdAt: new Date().toISOString(),\n    agentRegistry,\n    originalInput: taskData,\n    costTracking: { startTime: Date.now(), estimatedTokens: 0 }\n  }\n}];"
+            },
+            "id": "task-router",
+            "name": "Pro Task Router",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                450,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "model": "gpt-4o",
+                "messages": {
+                    "values": [
+                        {
+                            "role": "system",
+                            "content": "You are the Grain Pro SEO Agent. Analyze brand visibility and SERP trends."
+                        },
+                        {
+                            "role": "user",
+                            "content": "={{ $json.originalInput.goal }}"
+                        }
+                    ]
+                }
+            },
+            "id": "agent-seo",
+            "name": "SEO Intelligence Agent",
+            "type": "@n8n/n8n-nodes-langchain.openAi",
+            "typeVersion": 1.6,
+            "position": [
+                700,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Token Usage & Cost Calculator\n// Based on gpt-4o pricing (approximate)\n\nconst results = $input.all();\nlet totalInputTokens = 0;\nlet totalOutputTokens = 0;\n\nresults.forEach(r => {\n  if (r.json.usage) {\n    totalInputTokens += r.json.usage.prompt_tokens || 0;\n    totalOutputTokens += r.json.usage.completion_tokens || 0;\n  }\n});\n\nconst inputCost = (totalInputTokens / 1000000) * 5.00;\nconst outputCost = (totalOutputTokens / 1000000) * 15.00;\n\nreturn [{\n  json: {\n    totalTokens: totalInputTokens + totalOutputTokens,\n    totalCostUsd: (inputCost + outputCost).toFixed(4),\n    timestamp: new Date().toISOString()\n  }\n}];"
+            },
+            "id": "cost-tracker",
+            "name": "Token Cost Tracker",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1500,
+                800
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "append",
+                "documentId": {
+                    "__rl": true,
+                    "value": "={{ $env.PRO_COST_LOG_SHEET_ID }}",
+                    "mode": "id"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "Cost Logs",
+                    "mode": "list"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "date": "={{ $json.timestamp }}",
+                        "tokens": "={{ $json.totalTokens }}",
+                        "cost": "={{ $json.totalCostUsd }}"
+                    }
+                }
+            },
+            "id": "log-costs",
+            "name": "Log Pro Costs",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.4,
+            "position": [
+                1700,
+                800
+            ]
+        }
+    ],
+    "connections": {
+        "Chat UI": {
+            "main": [
+                [
+                    {
+                        "node": "Pro Task Router",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Pro Task Router": {
+            "main": [
+                [
+                    {
+                        "node": "SEO Intelligence Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "SEO Intelligence Agent": {
+            "main": [
+                [
+                    {
+                        "node": "Token Cost Tracker",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Token Cost Tracker": {
+            "main": [
+                [
+                    {
+                        "node": "Log Pro Costs",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

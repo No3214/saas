@@ -1,0 +1,350 @@
+{
+  "name": "Grain Recruitment AI Agent v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-j1g3zyp7s",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 🧑‍💼 Recruitment AI Agent\nAutomated resume screening, candidate scoring, and interview scheduling assistant.",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "submit-application",
+        "options": {}
+      },
+      "id": "webhook-app",
+      "name": "New Application",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        400
+      ],
+      "webhookId": "submit-application"
+    },
+    {
+      "parameters": {
+        "jsCode": "const app = $input.item.json;\nconst resumeText = app.resume_text || '';\nconst jobDesc = app.job_description || '';\n\nreturn {\n  json: {\n    ...app,\n    resume_text_clean: resumeText.replace(/\\s+/g, ' ').trim(),\n    job_description_clean: jobDesc.replace(/\\s+/g, ' ').trim()\n  }\n};"
+      },
+      "id": "clean-text",
+      "name": "Clean Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an expert HR recruiter. Analyze the resume against the job description.\n\nOutput JSON:\n{\n  \"match_score\": 0-100,\n  \"skills_match\": [\"skill1\", \"skill2\"],\n  \"missing_skills\": [\"skill3\"],\n  \"experience_summary\": \"...\",\n  \"culture_fit_indicators\": \"...\",\n  \"recommendation\": \"interview/reject/hold\",\n  \"interview_questions\": [\"q1\", \"q2\", \"q3\"]\n}"
+            },
+            {
+              "role": "user",
+              "content": "Job Description:\n{{ $json.job_description_clean }}\n\nResume:\n{{ $json.resume_text_clean }}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "ai-screen",
+      "name": "AI Screen Resume",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        750,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.recommendation }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "interview",
+              "output": 0
+            },
+            {
+              "value2": "reject",
+              "output": 1
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "id": "route-candidate",
+      "name": "Route Candidate",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('New Application').first().json.email }}",
+        "subject": "Interview Request: {{ $('New Application').first().json.position }}",
+        "message": "=Hi {{ $('New Application').first().json.name }},\n\nWe were impressed by your profile! We'd like to invite you to an interview.\n\nPlease book a slot here: {{ $env.CALENDLY_URL }}\n\nBest,\nRecruiting Team",
+        "options": {}
+      },
+      "id": "email-interview",
+      "name": "Send Interview Invite",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_BASE_URL }}/webhook/onboarding-prep",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"candidate_name\": \"{{ $('New Application').first().json.name }}\", \"email\": \"{{ $('New Application').first().json.email }}\", \"position\": \"{{ $('New Application').first().json.position }}\", \"status\": \"interview_scheduled\" }"
+      },
+      "id": "trigger-onboarding",
+      "name": "→ Prep Onboarding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('New Application').first().json.email }}",
+        "subject": "Update on your application for {{ $('New Application').first().json.position }}",
+        "message": "=Hi {{ $('New Application').first().json.name }},\n\nThank you for your interest. Unfortunately, we have decided to move forward with other candidates at this time.\n\nWe will keep your resume on file.\n\nBest,\nRecruiting Team",
+        "options": {}
+      },
+      "id": "email-reject",
+      "name": "Send Rejection",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1250,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Candidates"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $('New Application').first().json.name }}",
+            "email": "={{ $('New Application').first().json.email }}",
+            "score": "={{ $json.match_score }}",
+            "recommendation": "={{ $json.recommendation }}",
+            "interview_questions": "={{ $json.interview_questions.join('\\n') }}",
+            "screened_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "save-candidate",
+      "name": "Save Candidate",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#hiring-updates",
+        "text": "=👤 **New Candidate Screened**\n\nName: {{ $('New Application').first().json.name }}\nPosition: {{ $('New Application').first().json.position }}\nScore: {{ $json.match_score }}/100\nResult: {{ $json.recommendation }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Hiring Mgr",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1750,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        750,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 Recruitment Agent Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        650
+      ]
+    }
+  ],
+  "connections": {
+    "New Application": {
+      "main": [
+        [
+          {
+            "node": "Clean Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Text": {
+      "main": [
+        [
+          {
+            "node": "AI Screen Resume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Screen Resume": {
+      "main": [
+        [
+          {
+            "node": "Route Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Candidate": {
+      "main": [
+        [
+          {
+            "node": "Send Interview Invite",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Rejection",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Candidate": {
+      "main": [
+        [
+          {
+            "node": "Notify Hiring Mgr",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

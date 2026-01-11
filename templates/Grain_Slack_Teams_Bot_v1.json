@@ -1,0 +1,572 @@
+{
+  "name": "Grain Slack Teams Bot Builder v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack/events",
+        "options": {}
+      },
+      "id": "slack-events",
+      "name": "Slack Events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "slack-events"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack/commands",
+        "options": {}
+      },
+      "id": "slack-commands",
+      "name": "Slack Commands",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 500],
+      "webhookId": "slack-commands"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack/actions",
+        "options": {}
+      },
+      "id": "slack-actions",
+      "name": "Slack Actions",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 700],
+      "webhookId": "slack-actions"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "teams/webhook",
+        "options": {}
+      },
+      "id": "teams-webhook",
+      "name": "Teams Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 900],
+      "webhookId": "teams-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle Slack URL verification challenge\nconst body = $input.first().json.body || $input.first().json;\n\n// URL Verification for Slack\nif (body.type === 'url_verification') {\n  return [{ json: { challenge: body.challenge, isChallenge: true } }];\n}\n\n// Parse Slack event\nconst event = body.event || body;\n\nconst slackEvent = {\n  platform: 'slack',\n  eventType: event.type,\n  \n  // Message details\n  text: event.text || '',\n  userId: event.user,\n  channelId: event.channel,\n  threadTs: event.thread_ts || event.ts,\n  messageTs: event.ts,\n  \n  // Bot mention detection\n  isMention: event.type === 'app_mention',\n  isDirectMessage: event.channel_type === 'im',\n  isBotMessage: event.bot_id !== undefined,\n  \n  // Team info\n  teamId: body.team_id,\n  \n  // Original payload\n  rawEvent: body,\n  \n  // Processing flags\n  shouldProcess: event.type === 'message' || event.type === 'app_mention',\n  isChallenge: false,\n  \n  receivedAt: new Date().toISOString()\n};\n\n// Don't process bot's own messages\nif (slackEvent.isBotMessage) {\n  slackEvent.shouldProcess = false;\n}\n\nreturn [{ json: slackEvent }];"
+      },
+      "id": "parse-slack-event",
+      "name": "Parse Slack Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Slack slash command\nconst body = $input.first().json.body || $input.first().json;\n\nconst command = {\n  platform: 'slack',\n  eventType: 'slash_command',\n  \n  // Command details\n  command: body.command, // e.g., /help, /ask, /ticket\n  text: body.text || '',\n  args: (body.text || '').split(' ').filter(a => a),\n  \n  // User info\n  userId: body.user_id,\n  userName: body.user_name,\n  \n  // Channel info\n  channelId: body.channel_id,\n  channelName: body.channel_name,\n  \n  // Response URL for async responses\n  responseUrl: body.response_url,\n  triggerId: body.trigger_id,\n  \n  // Team info\n  teamId: body.team_id,\n  teamDomain: body.team_domain,\n  \n  shouldProcess: true,\n  receivedAt: new Date().toISOString()\n};\n\nreturn [{ json: command }];"
+      },
+      "id": "parse-slack-command",
+      "name": "Parse Slash Command",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Slack interactive action (button click, select menu, etc.)\nconst body = $input.first().json.body || $input.first().json;\nlet payload = body;\n\n// Handle URL-encoded payload\nif (body.payload) {\n  payload = JSON.parse(body.payload);\n}\n\nconst action = {\n  platform: 'slack',\n  eventType: 'interactive_action',\n  \n  // Action details\n  actionType: payload.type, // block_actions, view_submission, shortcut\n  actionId: payload.actions?.[0]?.action_id,\n  actionValue: payload.actions?.[0]?.value,\n  blockId: payload.actions?.[0]?.block_id,\n  \n  // User info\n  userId: payload.user?.id,\n  userName: payload.user?.username,\n  \n  // Channel info\n  channelId: payload.channel?.id,\n  messageTs: payload.message?.ts,\n  \n  // Response URL\n  responseUrl: payload.response_url,\n  triggerId: payload.trigger_id,\n  \n  // View data (for modals)\n  viewId: payload.view?.id,\n  viewState: payload.view?.state?.values,\n  \n  // Original message\n  originalMessage: payload.message,\n  \n  shouldProcess: true,\n  receivedAt: new Date().toISOString()\n};\n\nreturn [{ json: action }];"
+      },
+      "id": "parse-slack-action",
+      "name": "Parse Interactive Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Microsoft Teams incoming webhook/bot message\nconst body = $input.first().json.body || $input.first().json;\n\nconst teamsEvent = {\n  platform: 'teams',\n  eventType: body.type || 'message',\n  \n  // Message details\n  text: body.text || body.value?.text || '',\n  activityId: body.id,\n  \n  // User info\n  userId: body.from?.id,\n  userName: body.from?.name,\n  userAadObjectId: body.from?.aadObjectId,\n  \n  // Conversation info\n  conversationId: body.conversation?.id,\n  conversationType: body.conversation?.conversationType, // personal, groupChat, channel\n  channelId: body.channelId,\n  tenantId: body.channelData?.tenant?.id,\n  \n  // Team info\n  teamId: body.channelData?.team?.id,\n  teamName: body.channelData?.team?.name,\n  \n  // Service URL for responses\n  serviceUrl: body.serviceUrl,\n  \n  // Reply info\n  replyToId: body.replyToId,\n  \n  // Mentions\n  mentions: body.entities?.filter(e => e.type === 'mention') || [],\n  isBotMentioned: body.entities?.some(e => e.type === 'mention' && e.mentioned?.id?.includes('bot')),\n  \n  // Value from adaptive card submissions\n  cardValue: body.value,\n  \n  shouldProcess: body.type === 'message' || body.type === 'invoke',\n  receivedAt: new Date().toISOString()\n};\n\nreturn [{ json: teamsEvent }];"
+      },
+      "id": "parse-teams-event",
+      "name": "Parse Teams Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-challenge",
+              "leftValue": "={{ $json.isChallenge }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-challenge",
+      "name": "Is Challenge?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ challenge: $json.challenge }) }}",
+        "options": {}
+      },
+      "id": "respond-challenge",
+      "name": "Respond Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "should-process",
+              "leftValue": "={{ $json.shouldProcess }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-process",
+      "name": "Should Process?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detect intent and extract entities from message\nconst event = $input.first().json;\nconst text = event.text || '';\nconst textLower = text.toLowerCase();\n\n// Intent patterns (customizable)\nconst intentPatterns = {\n  greeting: /^(hi|hello|hey|good morning|good afternoon)\\b/i,\n  help: /\\b(help|how to|how do i|what can you|assist)\\b/i,\n  status: /\\b(status|progress|update on|check on)\\b/i,\n  create_ticket: /\\b(create|new|open|submit)\\s*(a\\s+)?(ticket|issue|bug|request)/i,\n  search: /\\b(find|search|look for|where is|locate)\\b/i,\n  schedule: /\\b(schedule|book|meeting|calendar|appointment)\\b/i,\n  report: /\\b(report|analytics|metrics|stats|dashboard)\\b/i,\n  approval: /\\b(approve|reject|review|sign off)\\b/i,\n  unknown: null\n};\n\n// Detect primary intent\nlet detectedIntent = 'unknown';\nlet intentConfidence = 0;\n\nfor (const [intent, pattern] of Object.entries(intentPatterns)) {\n  if (pattern && pattern.test(text)) {\n    detectedIntent = intent;\n    intentConfidence = 0.85;\n    break;\n  }\n}\n\n// Extract entities\nconst entities = {\n  // Ticket/issue numbers\n  ticketIds: text.match(/(?:ticket|issue|#)\\s*([A-Z0-9-]+)/gi) || [],\n  \n  // Mentions\n  mentions: text.match(/<@[A-Z0-9]+>/gi) || [],\n  \n  // Dates\n  dates: text.match(/\\b(today|tomorrow|next week|monday|tuesday|wednesday|thursday|friday|\\d{1,2}\\/\\d{1,2}(?:\\/\\d{2,4})?)\\b/gi) || [],\n  \n  // URLs\n  urls: text.match(/https?:\\/\\/[^\\s]+/gi) || [],\n  \n  // Email addresses\n  emails: text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/gi) || []\n};\n\nconst enrichedEvent = {\n  ...event,\n  nlp: {\n    intent: detectedIntent,\n    confidence: intentConfidence,\n    entities,\n    requiresAI: detectedIntent === 'unknown' || intentConfidence < 0.7\n  }\n};\n\nreturn [{ json: enrichedEvent }];"
+      },
+      "id": "detect-intent",
+      "name": "Detect Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needs-ai",
+              "leftValue": "={{ $json.nlp.requiresAI }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "needs-ai",
+      "name": "Needs AI?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.KNOWLEDGE_BASE_URL }}/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"{{ $json.text }}\",\n  \"limit\": 3,\n  \"threshold\": 0.7\n}",
+        "options": {}
+      },
+      "id": "search-kb",
+      "name": "Search Knowledge Base",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kb-api-key",
+          "name": "Knowledge Base API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a helpful workplace assistant bot. Your job is to help employees with their questions and requests.\n\nBe concise, friendly, and professional. If you don't know something, say so and suggest who might help.\n\nRelevant knowledge base context:\n{{ $('Search Knowledge Base').first().json.results?.map(r => r.content).join('\\n\\n') || 'No relevant context found.' }}\n\nRespond in the same language as the user's message.",
+              "role": "system"
+            },
+            {
+              "content": "={{ $('Detect Intent').first().json.text }}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        }
+      },
+      "id": "ai-response",
+      "name": "AI Response",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [2000, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Route to appropriate handler based on intent\nconst event = $input.first().json;\nconst intent = event.nlp.intent;\n\n// Pre-built responses for known intents\nconst responses = {\n  greeting: {\n    text: `Hello! :wave: I'm here to help. You can ask me about:\\n• Creating tickets\\n• Checking status\\n• Searching for information\\n• Scheduling meetings\\n\\nWhat can I help you with?`,\n    blocks: [\n      {\n        type: 'section',\n        text: { type: 'mrkdwn', text: `Hello! :wave: I'm here to help.` }\n      },\n      {\n        type: 'section',\n        text: { type: 'mrkdwn', text: '*What can I do:*\\n• Create tickets\\n• Check status\\n• Search information\\n• Schedule meetings' }\n      },\n      {\n        type: 'actions',\n        elements: [\n          { type: 'button', text: { type: 'plain_text', text: 'Create Ticket' }, action_id: 'create_ticket', style: 'primary' },\n          { type: 'button', text: { type: 'plain_text', text: 'Get Help' }, action_id: 'help' }\n        ]\n      }\n    ]\n  },\n  help: {\n    text: `Here's what I can help with:\\n\\n*Commands:*\\n• \\`/ticket\\` - Create a new ticket\\n• \\`/status [ID]\\` - Check ticket status\\n• \\`/search [query]\\` - Search knowledge base\\n\\n*Just ask me:*\\n• \"Create a ticket for...\"\\n• \"What's the status of...\"\\n• \"How do I...\"`,\n    blocks: null\n  },\n  create_ticket: {\n    text: 'I can help you create a ticket. Let me gather some information...',\n    action: 'open_ticket_modal',\n    blocks: [\n      {\n        type: 'section',\n        text: { type: 'mrkdwn', text: `:ticket: Let's create a ticket. Please provide details:` }\n      },\n      {\n        type: 'input',\n        block_id: 'ticket_title',\n        element: { type: 'plain_text_input', action_id: 'title_input', placeholder: { type: 'plain_text', text: 'Brief description of the issue' } },\n        label: { type: 'plain_text', text: 'Title' }\n      }\n    ]\n  }\n};\n\nconst response = responses[intent] || { text: 'I received your message. Let me process it...', useAI: true };\n\nreturn [{ json: {\n  ...event,\n  response,\n  usePrebuiltResponse: !response.useAI\n}}];"
+      },
+      "id": "route-intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format response for the appropriate platform\nconst event = $input.first().json;\nconst aiResponse = $('AI Response').item?.json?.message?.content || event.response?.text || 'I apologize, I encountered an error processing your request.';\nconst prebuiltResponse = event.response;\n\nconst responseText = event.usePrebuiltResponse ? prebuiltResponse.text : aiResponse;\n\nlet formattedResponse;\n\nif (event.platform === 'slack') {\n  formattedResponse = {\n    platform: 'slack',\n    channelId: event.channelId,\n    threadTs: event.threadTs,\n    text: responseText,\n    blocks: event.usePrebuiltResponse ? prebuiltResponse.blocks : null,\n    responseUrl: event.responseUrl\n  };\n} else if (event.platform === 'teams') {\n  formattedResponse = {\n    platform: 'teams',\n    conversationId: event.conversationId,\n    activityId: event.activityId,\n    serviceUrl: event.serviceUrl,\n    text: responseText,\n    // Adaptive card for rich responses\n    adaptiveCard: {\n      type: 'AdaptiveCard',\n      version: '1.4',\n      body: [\n        {\n          type: 'TextBlock',\n          text: responseText,\n          wrap: true\n        }\n      ]\n    }\n  };\n}\n\nreturn [{ json: formattedResponse }];"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2250, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-slack",
+              "leftValue": "={{ $json.platform }}",
+              "rightValue": "slack",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-platform",
+      "name": "Which Platform?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2500, 400]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channelId }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "thread_ts": "={{ $json.threadTs }}",
+          "mrkdwn": true
+        }
+      },
+      "id": "send-slack",
+      "name": "Send Slack Message",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2750, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-bot-credential",
+          "name": "Slack Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.serviceUrl }}/v3/conversations/{{ $json.conversationId }}/activities",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"message\",\n  \"text\": \"{{ $json.text }}\",\n  \"replyToId\": \"{{ $json.activityId }}\"\n}",
+        "options": {}
+      },
+      "id": "send-teams",
+      "name": "Send Teams Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2750, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "teams-bot-token",
+          "name": "Teams Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log conversation for analytics\nconst event = $input.first().json;\n\nconst log = {\n  platform: event.platform,\n  userId: event.userId,\n  channelId: event.channelId,\n  intent: event.nlp?.intent,\n  confidence: event.nlp?.confidence,\n  text: event.text?.substring(0, 200),\n  responseTime: Date.now() - new Date(event.receivedAt).getTime(),\n  usedAI: event.nlp?.requiresAI,\n  timestamp: new Date().toISOString()\n};\n\nreturn [{ json: log }];"
+      },
+      "id": "log-conversation",
+      "name": "Log Conversation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3000, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.ANALYTICS_URL }}/bot/conversations",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-analytics",
+      "name": "Save Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3250, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "analytics-api-key",
+          "name": "Analytics API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle slash command routing\nconst command = $input.first().json;\nconst cmd = command.command?.replace('/', '');\n\nlet response;\n\nswitch (cmd) {\n  case 'help':\n    response = {\n      response_type: 'ephemeral',\n      text: 'Available commands:\\n• `/ticket` - Create a new ticket\\n• `/status [ID]` - Check ticket status\\n• `/search [query]` - Search knowledge base\\n• `/report` - Get daily report'\n    };\n    break;\n    \n  case 'ticket':\n    response = {\n      response_type: 'in_channel',\n      text: `Creating ticket: ${command.text || 'No description provided'}`,\n      action: 'create_ticket',\n      ticketData: { title: command.text, userId: command.userId, channel: command.channelId }\n    };\n    break;\n    \n  case 'status':\n    response = {\n      response_type: 'ephemeral',\n      text: `Checking status for: ${command.args[0] || 'all'}`,\n      action: 'check_status',\n      ticketId: command.args[0]\n    };\n    break;\n    \n  case 'search':\n    response = {\n      response_type: 'ephemeral',\n      text: `Searching for: ${command.text}`,\n      action: 'search',\n      query: command.text\n    };\n    break;\n    \n  default:\n    response = {\n      response_type: 'ephemeral',\n      text: `Unknown command: ${cmd}. Try /help for available commands.`\n    };\n}\n\nreturn [{ json: { ...command, response } }];"
+      },
+      "id": "handle-command",
+      "name": "Handle Command",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"response_type\": \"{{ $json.response.response_type }}\",\n  \"text\": \"{{ $json.response.text }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-command",
+      "name": "Respond to Command",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle button/action clicks\nconst action = $input.first().json;\nconst actionId = action.actionId;\n\nlet response;\n\nswitch (actionId) {\n  case 'create_ticket':\n    response = {\n      action: 'open_modal',\n      modalType: 'ticket_form',\n      text: 'Opening ticket form...'\n    };\n    break;\n    \n  case 'approve':\n    response = {\n      action: 'approve',\n      text: ':white_check_mark: Approved!',\n      updateOriginal: true\n    };\n    break;\n    \n  case 'reject':\n    response = {\n      action: 'reject', \n      text: ':x: Rejected',\n      updateOriginal: true\n    };\n    break;\n    \n  case 'help':\n    response = {\n      text: 'Here are the things I can help with...',\n      action: 'show_help'\n    };\n    break;\n    \n  default:\n    response = {\n      text: `Action received: ${actionId}`,\n      action: 'unknown'\n    };\n}\n\nreturn [{ json: { ...action, response } }];"
+      },
+      "id": "handle-action",
+      "name": "Handle Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"replace_original\": {{ $json.response.updateOriginal || false }},\n  \"text\": \"{{ $json.response.text }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-action",
+      "name": "Respond to Action",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 700]
+    }
+  ],
+  "connections": {
+    "Slack Events": {
+      "main": [
+        [{ "node": "Parse Slack Event", "type": "main", "index": 0 }]
+      ]
+    },
+    "Slack Commands": {
+      "main": [
+        [{ "node": "Parse Slash Command", "type": "main", "index": 0 }]
+      ]
+    },
+    "Slack Actions": {
+      "main": [
+        [{ "node": "Parse Interactive Action", "type": "main", "index": 0 }]
+      ]
+    },
+    "Teams Webhook": {
+      "main": [
+        [{ "node": "Parse Teams Event", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Slack Event": {
+      "main": [
+        [{ "node": "Is Challenge?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Challenge?": {
+      "main": [
+        [{ "node": "Respond Challenge", "type": "main", "index": 0 }],
+        [{ "node": "Should Process?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Should Process?": {
+      "main": [
+        [{ "node": "Detect Intent", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Parse Teams Event": {
+      "main": [
+        [{ "node": "Should Process?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Detect Intent": {
+      "main": [
+        [{ "node": "Needs AI?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Needs AI?": {
+      "main": [
+        [{ "node": "Search Knowledge Base", "type": "main", "index": 0 }],
+        [{ "node": "Route by Intent", "type": "main", "index": 0 }]
+      ]
+    },
+    "Search Knowledge Base": {
+      "main": [
+        [{ "node": "AI Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Response": {
+      "main": [
+        [{ "node": "Format Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [{ "node": "Format Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [{ "node": "Which Platform?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Which Platform?": {
+      "main": [
+        [{ "node": "Send Slack Message", "type": "main", "index": 0 }],
+        [{ "node": "Send Teams Message", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Slack Message": {
+      "main": [
+        [{ "node": "Log Conversation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Teams Message": {
+      "main": [
+        [{ "node": "Log Conversation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log Conversation": {
+      "main": [
+        [{ "node": "Save Analytics", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Slash Command": {
+      "main": [
+        [{ "node": "Handle Command", "type": "main", "index": 0 }]
+      ]
+    },
+    "Handle Command": {
+      "main": [
+        [{ "node": "Respond to Command", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Interactive Action": {
+      "main": [
+        [{ "node": "Handle Action", "type": "main", "index": 0 }]
+      ]
+    },
+    "Handle Action": {
+      "main": [
+        [{ "node": "Respond to Action", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "slack", "name": "slack" },
+    { "id": "teams", "name": "teams" },
+    { "id": "bot", "name": "bot" },
+    { "id": "ai", "name": "ai" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 4,
+  "updatedAt": "2026-01-08T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,203 @@
+{
+  "name": "Grain_Notion_Content_Hub_v1",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        },
+        "event": "pageUpdatedInDatabase",
+        "databaseId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "04a46df186f249448f3ef66b7a385f1b"
+        },
+        "simple": true
+      },
+      "id": "notion-trigger",
+      "name": "Icerik Degisikligi",
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "status-check",
+              "leftValue": "={{ $json.properties.Durum?.status?.name }}",
+              "rightValue": "Yayinla",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-publish",
+      "name": "Yayinla Filtresi",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "resource": "block",
+        "blockId": "={{ $json.id }}",
+        "returnAll": true
+      },
+      "id": "get-content",
+      "name": "Icerik Al",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [750, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Notion bloklarini markdown'a cevir\nconst blocks = $input.all();\nlet markdown = '';\n\nfor (const item of blocks) {\n  const block = item.json;\n  const type = block.type;\n  \n  if (type === 'paragraph') {\n    const text = block.paragraph?.rich_text?.map(t => t.plain_text).join('') || '';\n    markdown += text + '\\n\\n';\n  } else if (type === 'heading_1') {\n    const text = block.heading_1?.rich_text?.map(t => t.plain_text).join('') || '';\n    markdown += '# ' + text + '\\n\\n';\n  } else if (type === 'heading_2') {\n    const text = block.heading_2?.rich_text?.map(t => t.plain_text).join('') || '';\n    markdown += '## ' + text + '\\n\\n';\n  } else if (type === 'heading_3') {\n    const text = block.heading_3?.rich_text?.map(t => t.plain_text).join('') || '';\n    markdown += '### ' + text + '\\n\\n';\n  } else if (type === 'bulleted_list_item') {\n    const text = block.bulleted_list_item?.rich_text?.map(t => t.plain_text).join('') || '';\n    markdown += '- ' + text + '\\n';\n  } else if (type === 'numbered_list_item') {\n    const text = block.numbered_list_item?.rich_text?.map(t => t.plain_text).join('') || '';\n    markdown += '1. ' + text + '\\n';\n  } else if (type === 'code') {\n    const text = block.code?.rich_text?.map(t => t.plain_text).join('') || '';\n    const lang = block.code?.language || '';\n    markdown += '```' + lang + '\\n' + text + '\\n```\\n\\n';\n  }\n}\n\nreturn [{\n  json: {\n    markdown: markdown.trim(),\n    title: $('Icerik Degisikligi').first().json.properties?.Baslik?.title?.[0]?.plain_text || 'Basliksiz',\n    slug: $('Icerik Degisikligi').first().json.properties?.Slug?.rich_text?.[0]?.plain_text || '',\n    tags: $('Icerik Degisikligi').first().json.properties?.Etiketler?.multi_select?.map(t => t.name) || [],\n    notion_id: $('Icerik Degisikligi').first().json.id\n  }\n}];"
+      },
+      "id": "convert-markdown",
+      "name": "Markdown Cevir",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": "={{ $json.notion_id }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Durum|status",
+              "statusValue": "Yayinlandi"
+            }
+          ]
+        }
+      },
+      "id": "update-status",
+      "name": "Durumu Guncelle",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [1250, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Hata Yakalayici",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [750, 500]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "no-op",
+      "name": "Bildirim Gonder",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1250, 500]
+    }
+  ],
+  "connections": {
+    "Icerik Degisikligi": {
+      "main": [
+        [
+          {
+            "node": "Yayinla Filtresi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yayinla Filtresi": {
+      "main": [
+        [
+          {
+            "node": "Icerik Al",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Icerik Al": {
+      "main": [
+        [
+          {
+            "node": "Markdown Cevir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Markdown Cevir": {
+      "main": [
+        [
+          {
+            "node": "Durumu Guncelle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hata Yakalayici": {
+      "main": [
+        [
+          {
+            "node": "Bildirim Gonder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "grain_module": "notion",
+    "grain_tier": "High",
+    "grain_version": "1.0.0",
+    "grain_features": ["content-management", "markdown", "publishing"],
+    "grain_integrations": ["Notion"],
+    "grain_language": "tr"
+  }
+}

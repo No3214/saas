@@ -1,0 +1,159 @@
+version: '3.8'
+
+# Grain SaaS - Development Docker Compose
+# Usage: docker-compose -f docker-compose.main.yml up -d
+# Includes: n8n, PostgreSQL, Redis, Playwright MCP
+
+services:
+  # ============================================
+  # WORKFLOW ENGINE
+  # ============================================
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: grain-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Host Configuration
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=Europe/Istanbul
+      - TZ=Europe/Istanbul
+      # Database
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-grain_db}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-grain}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # AI & MCP
+      - N8N_AI_ENABLED=true
+      - N8N_MCP_SERVER_ENABLED=true
+      # Security - USE ENV VARS!
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:?N8N_PASSWORD is required}
+      # Community nodes
+      - N8N_COMMUNITY_PACKAGES_ENABLED=true
+      - N8N_REINSTALL_MISSING_PACKAGES=true
+      # Executions
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      # AI Providers
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Playwright MCP Connection
+      - PLAYWRIGHT_MCP_URL=http://playwright:3000
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../templates:/home/node/templates:ro
+    networks:
+      - grain-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
+
+  # ============================================
+  # DATABASE
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: grain-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-grain}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_DB=${POSTGRES_DB:-grain_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - grain-network
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-grain} -d ${POSTGRES_DB:-grain_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  # ============================================
+  # CACHE & QUEUE
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: grain-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - grain-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
+  # ============================================
+  # MCP SERVERS - PLAYWRIGHT
+  # ============================================
+  playwright:
+    image: mcp/playwright:latest
+    container_name: grain-playwright
+    restart: unless-stopped
+    environment:
+      - HEADLESS=true
+      - BROWSER=chromium
+      - TIMEOUT_ACTION=5000
+      - TIMEOUT_NAVIGATION=60000
+    networks:
+      - grain-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  n8n_data:
+  postgres_data:
+  redis_data:
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  grain-network:
+    driver: bridge

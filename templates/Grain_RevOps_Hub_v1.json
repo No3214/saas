@@ -1,0 +1,244 @@
+{
+  "name": "Grain RevOps Hub v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-ycxqck6wd",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "id": "schedule-revops",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Mock CRM Data Fetch\nIn production, replace this with a HubSpot/Salesforce 'Get All Deals' node.",
+        "height": 100,
+        "width": 300
+      },
+      "id": "crm-note",
+      "name": "CRM Stickey Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        450,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { deal_id: \"D-101\", stage: \"negotiation\", amount: 5000, last_activity: \"2025-01-01\", owner: \"John\" } },\n  { json: { deal_id: \"D-102\", stage: \"qualified\", amount: 12000, last_activity: \"2024-12-15\", owner: \"Sarah\" } },\n  { json: { deal_id: \"D-103\", stage: \"proposal\", amount: 3500, last_activity: \"2025-01-05\", owner: \"Mike\" } }\n];"
+      },
+      "id": "fetch-deals",
+      "name": "Fetch CRM Deals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a Revenue Operations Intelligence AI. Analyze the deal health based on amount, stage, and last activity date (Current Date: {{ $now.toFormat('yyyy-MM-dd') }}).\n\nOutput JSON:\n{\n  \"health_score\": 0-100,\n  \"risk_level\": \"low/medium/high\",\n  \"prediction\": \"close/lost/stalled\",\n  \"reasoning\": \"brief explanation\",\n  \"action_item\": \"suggested next step\"\n}"
+            },
+            {
+              "role": "user",
+              "content": "Deal Data: {{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "ai-deal-analysis",
+      "name": "AI Analyze Pipeline",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.risk_level }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "high",
+              "output": 0
+            },
+            {
+              "value2": "medium",
+              "output": 1
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "id": "risk-router",
+      "name": "Risk Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "sales-alerts",
+        "text": "=🚨 **High Risk Deal Alert**\n\nDeal: {{ $json.deal_id }} ($ {{ $json.amount }})\nOwner: {{ $json.owner }}\nRisk Level: {{ $json.risk_level }}\nReason: {{ $json.reasoning }}\n\n👉 Action: {{ $json.action_item }}",
+        "otherOptions": {}
+      },
+      "id": "slack-alert-high",
+      "name": "Alert High Risk",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1150,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Weekly_Forecast"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "deal_id": "={{ $json.deal_id }}",
+            "forecast_score": "={{ $json.health_score }}",
+            "predicted_close": "={{ $json.prediction }}",
+            "last_updated": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "update-forecast",
+      "name": "Update Forecast Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1150,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch CRM Deals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CRM Deals": {
+      "main": [
+        [
+          {
+            "node": "AI Analyze Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analyze Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Risk Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Router": {
+      "main": [
+        [
+          {
+            "node": "Alert High Risk",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Forecast Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Forecast Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

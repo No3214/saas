@@ -1,0 +1,451 @@
+{
+  "name": "Grain ElevenLabs WhatsApp Voice Agent v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "elevenlabs-whatsapp-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-elevenlabs-001",
+      "name": "ElevenLabs Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [-400, 300],
+      "webhookId": "elevenlabs-whatsapp-webhook",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse ElevenLabs webhook payload\nconst payload = $input.first().json;\n\nconst eventType = payload.type || payload.event_type;\nconst conversationId = payload.conversation_id;\nconst agentId = payload.agent_id;\n\n// Extract message data\nlet messageData = {\n  event_type: eventType,\n  conversation_id: conversationId,\n  agent_id: agentId,\n  timestamp: new Date().toISOString(),\n  \n  // Caller info\n  caller_id: payload.caller_id || payload.from,\n  called_number: payload.called_number || payload.to,\n  \n  // Message content\n  message_type: payload.message?.type || 'unknown', // voice, text\n  transcript: payload.message?.transcript || payload.transcript || '',\n  audio_url: payload.message?.audio_url || '',\n  \n  // Conversation state\n  conversation_state: payload.state || 'active',\n  duration_seconds: payload.duration || 0,\n  \n  // Custom data from ElevenLabs\n  custom_data: payload.custom_data || {},\n  metadata: payload.metadata || {}\n};\n\n// Detect language (Turkish check)\nconst turkishPattern = /[çğıöşüÇĞİÖŞÜ]/;\nmessageData.detected_language = turkishPattern.test(messageData.transcript) ? 'tr' : 'en';\n\nreturn messageData;"
+      },
+      "id": "parse-webhook-001",
+      "name": "Parse ElevenLabs Webhook",
+      "type": "n8n-nodes-base.code",
+      "position": [-180, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-event-type",
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "conversation.started",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "route-event-001",
+      "name": "Route by Event Type",
+      "type": "n8n-nodes-base.switch",
+      "position": [40, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "https://api.elevenlabs.io/v1/convai/conversations/{{ $json.conversation_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{ $vars.ELEVENLABS_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-conversation-001",
+      "name": "Get Conversation Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [260, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Customer lookup and personalization\nconst messageData = $('Parse ElevenLabs Webhook').first().json;\nconst callerId = messageData.caller_id;\n\n// This would connect to your CRM/database\n// For now, we'll create a mock customer profile\nlet customerProfile = {\n  phone: callerId,\n  name: null,\n  is_existing_customer: false,\n  previous_interactions: 0,\n  preferred_language: messageData.detected_language,\n  last_visit: null,\n  loyalty_points: 0,\n  notes: [],\n  tags: []\n};\n\n// Personalization context for AI\nlet personalizationContext = {\n  greeting: customerProfile.name \n    ? `Merhaba ${customerProfile.name}!` \n    : 'Merhaba, hoş geldiniz!',\n  context_hints: [],\n  suggested_actions: ['appointment', 'inquiry', 'support']\n};\n\nif (customerProfile.is_existing_customer) {\n  personalizationContext.context_hints.push(\n    `Bu müşteri daha önce ${customerProfile.previous_interactions} kez iletişime geçti.`\n  );\n}\n\nreturn {\n  ...messageData,\n  customer: customerProfile,\n  personalization: personalizationContext\n};"
+      },
+      "id": "customer-lookup-001",
+      "name": "Customer Lookup & Personalization",
+      "type": "n8n-nodes-base.code",
+      "position": [260, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Sen profesyonel bir işletme asistanısın. WhatsApp üzerinden gelen müşteri mesajlarını/sesli aramalarını analiz et ve uygun aksiyonu belirle.\n\nMüşteri Mesajı/Transcript:\n\"{{ $json.transcript }}\"\n\nMüşteri Profili:\n- İsim: {{ $json.customer.name || 'Bilinmiyor' }}\n- Mevcut Müşteri: {{ $json.customer.is_existing_customer }}\n- Dil: {{ $json.customer.preferred_language }}\n\nAnaliz Et ve JSON Döndür:\n{\n  \"intent\": \"appointment|inquiry|support|complaint|order|other\",\n  \"sentiment\": \"positive|neutral|negative\",\n  \"urgency\": \"low|medium|high\",\n  \"extracted_info\": {\n    \"date_mentioned\": null,\n    \"time_mentioned\": null,\n    \"service_requested\": null,\n    \"specific_request\": null\n  },\n  \"suggested_response\": \"Türkçe yanıt önerisi\",\n  \"requires_human\": false,\n  \"escalation_reason\": null\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "temperature": 0.3
+        }
+      },
+      "id": "analyze-intent-001",
+      "name": "Analyze Customer Intent",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [480, 300],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-appointment",
+              "leftValue": "={{ JSON.parse($json.message.content).intent }}",
+              "rightValue": "appointment",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-intent-001",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "position": [700, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "url": "https://api.elevenlabs.io/v1/convai/conversations/{{ $('Parse ElevenLabs Webhook').item.json.conversation_id }}/send-message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{ $vars.ELEVENLABS_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ JSON.parse($json.message.content).suggested_response }}\",\n  \"voice_settings\": {\n    \"stability\": 0.5,\n    \"similarity_boost\": 0.75\n  }\n}",
+        "options": {}
+      },
+      "id": "send-voice-response-001",
+      "name": "Send Voice Response via ElevenLabs",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [920, 200],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $vars.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $vars.WHATSAPP_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": \"{{ $('Parse ElevenLabs Webhook').item.json.caller_id }}\",\n  \"type\": \"text\",\n  \"text\": {\n    \"body\": \"{{ JSON.parse($('Analyze Customer Intent').item.json.message.content).suggested_response }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-whatsapp-text-001",
+      "name": "Send WhatsApp Text Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [920, 400],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare appointment booking request\nconst analysis = JSON.parse($('Analyze Customer Intent').first().json.message.content);\nconst messageData = $('Parse ElevenLabs Webhook').first().json;\nconst customerData = $('Customer Lookup & Personalization').first().json;\n\nreturn {\n  action: 'book_appointment',\n  customer_phone: messageData.caller_id,\n  customer_name: customerData.customer.name,\n  requested_date: analysis.extracted_info.date_mentioned,\n  requested_time: analysis.extracted_info.time_mentioned,\n  service: analysis.extracted_info.service_requested,\n  notes: analysis.extracted_info.specific_request,\n  source: 'whatsapp_voice',\n  conversation_id: messageData.conversation_id\n};"
+      },
+      "id": "prepare-appointment-001",
+      "name": "Prepare Appointment Request",
+      "type": "n8n-nodes-base.code",
+      "position": [920, 600],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#whatsapp-leads",
+        "text": "=📞 *Yeni WhatsApp İletişimi*\n\n*Müşteri:* {{ $('Parse ElevenLabs Webhook').item.json.caller_id }}\n*Tür:* {{ $('Parse ElevenLabs Webhook').item.json.message_type }}\n*Niyet:* {{ JSON.parse($('Analyze Customer Intent').item.json.message.content).intent }}\n*Duygu:* {{ JSON.parse($('Analyze Customer Intent').item.json.message.content).sentiment }}\n*Aciliyet:* {{ JSON.parse($('Analyze Customer Intent').item.json.message.content).urgency }}\n\n*Transcript:*\n{{ $('Parse ElevenLabs Webhook').item.json.transcript }}\n\n*AI Yanıtı:*\n{{ JSON.parse($('Analyze Customer Intent').item.json.message.content).suggested_response }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify-001",
+      "name": "Notify Team on Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [1140, 300],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log conversation for analytics\nconst messageData = $('Parse ElevenLabs Webhook').first().json;\nconst analysis = JSON.parse($('Analyze Customer Intent').first().json.message.content);\n\nreturn {\n  log_type: 'whatsapp_conversation',\n  timestamp: new Date().toISOString(),\n  conversation_id: messageData.conversation_id,\n  caller_id: messageData.caller_id,\n  message_type: messageData.message_type,\n  duration_seconds: messageData.duration_seconds,\n  intent: analysis.intent,\n  sentiment: analysis.sentiment,\n  urgency: analysis.urgency,\n  requires_human: analysis.requires_human,\n  language: messageData.detected_language,\n  transcript_length: messageData.transcript.length,\n  source: 'elevenlabs_whatsapp'\n};"
+      },
+      "id": "log-analytics-001",
+      "name": "Log to Analytics",
+      "type": "n8n-nodes-base.code",
+      "position": [1140, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, processed: true }) }}",
+        "options": {}
+      },
+      "id": "respond-webhook-001",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1360, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "url": "https://api.elevenlabs.io/v1/convai/agents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{ $vars.ELEVENLABS_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"name\": \"Turkish Business Assistant\",\n  \"conversation_config\": {\n    \"agent\": {\n      \"prompt\": {\n        \"prompt\": \"Sen profesyonel bir Türk işletme asistanısın. Müşterilere nazik, profesyonel ve yardımsever bir şekilde yanıt ver. Randevu alma, bilgi verme ve destek konularında yardımcı ol. Her zaman Türkçe konuş.\"\n      },\n      \"first_message\": \"Merhaba! Size nasıl yardımcı olabilirim?\",\n      \"language\": \"tr\"\n    },\n    \"tts\": {\n      \"voice_id\": \"pNInz6obpgDQGcFmaJgB\"\n    }\n  },\n  \"platform_settings\": {\n    \"whatsapp\": {\n      \"enabled\": true\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "create-agent-001",
+      "name": "Create ElevenLabs Agent (Setup)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [-400, 600],
+      "disabled": true,
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "url": "https://api.elevenlabs.io/v1/convai/conversations/{{ $json.conversation_id }}/initiate-outbound",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{ $vars.ELEVENLABS_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"agent_id\": \"{{ $vars.ELEVENLABS_AGENT_ID }}\",\n  \"to\": \"{{ $json.phone_number }}\",\n  \"custom_data\": {\n    \"campaign\": \"{{ $json.campaign_name }}\",\n    \"customer_id\": \"{{ $json.customer_id }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "outbound-call-001",
+      "name": "Initiate Outbound Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [-400, 800],
+      "disabled": true,
+      "typeVersion": 4.2
+    }
+  ],
+  "connections": {
+    "ElevenLabs Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse ElevenLabs Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse ElevenLabs Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route by Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Event Type": {
+      "main": [
+        [
+          {
+            "node": "Get Conversation Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Customer Lookup & Personalization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Lookup & Personalization": {
+      "main": [
+        [
+          {
+            "node": "Analyze Customer Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Customer Intent": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Send Voice Response via ElevenLabs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send WhatsApp Text Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Appointment Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Voice Response via ElevenLabs": {
+      "main": [
+        [
+          {
+            "node": "Notify Team on Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Text Message": {
+      "main": [
+        [
+          {
+            "node": "Notify Team on Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team on Slack": {
+      "main": [
+        [
+          {
+            "node": "Log to Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Analytics": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "ElevenLabs" },
+    { "name": "WhatsApp" },
+    { "name": "Voice AI" },
+    { "name": "Turkish" },
+    { "name": "Grain" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-09T00:00:00.000Z",
+  "versionId": "grain-elevenlabs-whatsapp-v1"
+}

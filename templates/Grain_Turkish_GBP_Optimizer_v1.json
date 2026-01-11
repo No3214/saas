@@ -1,0 +1,300 @@
+{
+  "name": "Grain Turkish GBP Optimizer v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger-001",
+      "name": "Daily Schedule (09:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [-400, 300],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Google Business Profile Configuration for Turkish Businesses\nconst config = {\n  businesses: [\n    {\n      id: 'gbp_1',\n      name: 'İşletme Adı',\n      gbp_account_id: '',\n      location_id: '',\n      category_id: '',\n      primary_category: 'Restaurant',\n      secondary_categories: [],\n      service_area: ['Kadıköy', 'Üsküdar', 'Ataşehir'],\n      language: 'tr',\n      attributes: {\n        wifi: true,\n        outdoor_seating: true,\n        accepts_credit_cards: true,\n        wheelchair_accessible: true\n      }\n    }\n  ],\n  \n  posting_schedule: {\n    frequency: 'weekly',\n    best_times: ['10:00', '14:00', '19:00'],\n    content_types: ['update', 'offer', 'event', 'product']\n  },\n  \n  turkish_content_themes: [\n    { month: 1, theme: 'Yeni Yıl Kampanyaları', keywords: ['yılbaşı', 'indirim', 'fırsat'] },\n    { month: 2, theme: 'Sevgililer Günü', keywords: ['14 şubat', 'romantik', 'çift'] },\n    { month: 3, theme: 'Kadınlar Günü', keywords: ['8 mart', 'kadın', 'özel'] },\n    { month: 4, theme: 'Ramazan', keywords: ['iftar', 'sahur', 'ramazan'] },\n    { month: 5, theme: 'Anneler Günü', keywords: ['anne', 'aile', 'hediye'] },\n    { month: 6, theme: 'Yaz Başlangıcı', keywords: ['yaz', 'serinlik', 'tatil'] },\n    { month: 7, theme: 'Tatil Sezonu', keywords: ['tatil', 'gezi', 'yaz'] },\n    { month: 8, theme: 'Okul Hazırlıkları', keywords: ['okul', 'eğitim', 'öğrenci'] },\n    { month: 9, theme: 'Sonbahar', keywords: ['sonbahar', 'yeni sezon'] },\n    { month: 10, theme: 'Cumhuriyet Bayramı', keywords: ['29 ekim', 'bayram', 'kutlama'] },\n    { month: 11, theme: 'Black Friday', keywords: ['indirim', 'kampanya', 'fırsat'] },\n    { month: 12, theme: 'Yılsonu', keywords: ['yılsonu', 'kutlama', 'parti'] }\n  ],\n  \n  local_seo_keywords: {\n    istanbul: ['istanbul', 'avrupa yakası', 'anadolu yakası', 'merkez'],\n    ankara: ['ankara', 'başkent', 'çankaya', 'kızılay'],\n    izmir: ['izmir', 'ege', 'alsancak', 'kordon'],\n    antalya: ['antalya', 'akdeniz', 'turizm', 'sahil']\n  }\n};\n\nconst currentMonth = new Date().getMonth() + 1;\nconst currentTheme = config.turkish_content_themes.find(t => t.month === currentMonth);\n\nreturn {\n  config,\n  current_theme: currentTheme,\n  execution_time: new Date().toISOString()\n};"
+      },
+      "id": "load-config-001",
+      "name": "Load GBP Configuration",
+      "type": "n8n-nodes-base.code",
+      "position": [-180, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-locations-001",
+      "name": "Split Locations",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [40, 300],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Sen profesyonel bir yerel SEO ve Google Business Profile uzmanısın. Türk işletmeleri için Google paylaşımları oluşturuyorsun.\n\nİşletme Bilgileri:\n- Ad: {{ $json.config.businesses[0].name }}\n- Kategori: {{ $json.config.businesses[0].primary_category }}\n- Hizmet Alanı: {{ $json.config.businesses[0].service_area.join(', ') }}\n\nMevcut Tema: {{ $json.current_theme.theme }}\nAnahtar Kelimeler: {{ $json.current_theme.keywords.join(', ') }}\n\n4 farklı türde GBP paylaşımı oluştur:\n\n1. **Güncelleme (Update)**: İşletme haberi veya duyuru\n2. **Teklif (Offer)**: İndirim veya kampanya\n3. **Etkinlik (Event)**: Yaklaşan etkinlik duyurusu\n4. **Ürün/Hizmet**: Öne çıkan ürün veya hizmet tanıtımı\n\nKurallar:\n- Türkçe yaz\n- Her paylaşım 150-300 karakter\n- CTA (Call-to-Action) ekle\n- Emoji kullan ama abartma\n- Yerel SEO için konum belirt\n- Sezonsal temayı dahil et\n\nJSON formatında yanıt ver:\n{\n  \"posts\": [\n    {\n      \"type\": \"update|offer|event|product\",\n      \"title\": \"Başlık (max 58 karakter)\",\n      \"content\": \"İçerik\",\n      \"cta_type\": \"LEARN_MORE|BOOK|ORDER|SHOP|SIGN_UP|CALL\",\n      \"cta_url\": \"örnek URL yapısı\",\n      \"suggested_image_prompt\": \"Görsel için öneri\",\n      \"best_posting_time\": \"HH:MM\",\n      \"hashtags\": []\n    }\n  ],\n  \"weekly_schedule\": [\n    { \"day\": \"Pazartesi\", \"post_index\": 0 },\n    { \"day\": \"Çarşamba\", \"post_index\": 1 },\n    { \"day\": \"Cuma\", \"post_index\": 2 },\n    { \"day\": \"Pazar\", \"post_index\": 3 }\n  ]\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "maxTokens": 2000,
+          "temperature": 0.8
+        }
+      },
+      "id": "generate-posts-001",
+      "name": "Generate GBP Posts (Turkish)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [260, 300],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Load GBP Configuration').first().json;\nconst aiPosts = $input.first().json;\n\nlet posts = [];\ntry {\n  const parsed = JSON.parse(aiPosts.message?.content || '{}');\n  posts = parsed.posts || [];\n  \n  // Enrich posts with metadata\n  posts = posts.map((post, index) => ({\n    ...post,\n    id: `post_${Date.now()}_${index}`,\n    business_id: config.config.businesses[0].id,\n    business_name: config.config.businesses[0].name,\n    status: 'draft',\n    created_at: new Date().toISOString(),\n    scheduled_for: null,\n    performance: {\n      views: 0,\n      clicks: 0,\n      actions: 0\n    }\n  }));\n} catch(e) {\n  posts = [{ error: 'AI yanıtı işlenemedi', raw: aiPosts }];\n}\n\nreturn {\n  posts,\n  total_posts: posts.length,\n  theme: config.current_theme\n};"
+      },
+      "id": "process-posts-001",
+      "name": "Process Generated Posts",
+      "type": "n8n-nodes-base.code",
+      "position": [480, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=İşletme profili için SEO analizi yap ve öneriler sun.\n\nİşletme: {{ $('Load GBP Configuration').first().json.config.businesses[0].name }}\nKategori: {{ $('Load GBP Configuration').first().json.config.businesses[0].primary_category }}\nHizmet Alanı: {{ $('Load GBP Configuration').first().json.config.businesses[0].service_area.join(', ') }}\n\nAnaliz Et:\n1. Profil tamamlama durumu\n2. Anahtar kelime optimizasyonu\n3. Kategori seçimi uygunluğu\n4. Hizmet alanı genişliği\n5. Öznitelik (attribute) önerileri\n\nJSON formatında yanıt ver:\n{\n  \"profile_completeness\": 0-100,\n  \"seo_score\": 0-100,\n  \"keyword_suggestions\": [],\n  \"category_recommendations\": [],\n  \"attribute_recommendations\": [],\n  \"improvement_actions\": [\n    {\n      \"priority\": \"high|medium|low\",\n      \"action\": \"Yapılacak\",\n      \"impact\": \"Beklenen etki\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json_object",
+          "maxTokens": 1000
+        }
+      },
+      "id": "seo-analysis-001",
+      "name": "SEO Profile Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [480, 500],
+      "typeVersion": 1.8
+    },
+    {
+      "parameters": {
+        "jsCode": "const postsData = $('Process Generated Posts').first().json;\nconst seoAnalysis = $('SEO Profile Analysis').first().json;\n\nlet seoData = {};\ntry {\n  seoData = JSON.parse(seoAnalysis.message?.content || '{}');\n} catch(e) {\n  seoData = { error: 'SEO analizi işlenemedi' };\n}\n\nconst report = {\n  report_id: `gbp_report_${Date.now()}`,\n  generated_at: new Date().toISOString(),\n  business: $('Load GBP Configuration').first().json.config.businesses[0],\n  \n  content_plan: {\n    posts: postsData.posts,\n    total_scheduled: postsData.total_posts,\n    theme: postsData.theme\n  },\n  \n  seo_analysis: seoData,\n  \n  summary: {\n    profile_score: seoData.profile_completeness || 0,\n    seo_score: seoData.seo_score || 0,\n    posts_ready: postsData.total_posts,\n    high_priority_actions: (seoData.improvement_actions || []).filter(a => a.priority === 'high').length\n  },\n  \n  next_steps: [\n    'Oluşturulan paylaşımları inceleyin ve onaylayın',\n    'Görselleri ekleyin',\n    'Yayın takvimini ayarlayın',\n    'SEO önerilerini uygulayın'\n  ]\n};\n\nreturn report;"
+      },
+      "id": "create-report-001",
+      "name": "Create Weekly Report",
+      "type": "n8n-nodes-base.code",
+      "position": [700, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "channel": "#gbp-content",
+        "text": "=📊 *Haftalık GBP İçerik Raporu*\n\n*İşletme:* {{ $json.business.name }}\n*Tarih:* {{ $json.generated_at }}\n\n📝 *İçerik Planı:*\n• {{ $json.content_plan.total_scheduled }} paylaşım hazırlandı\n• Tema: {{ $json.content_plan.theme.theme }}\n\n📈 *SEO Durumu:*\n• Profil Puanı: {{ $json.summary.profile_score }}/100\n• SEO Puanı: {{ $json.summary.seo_score }}/100\n• Acil Eylemler: {{ $json.summary.high_priority_actions }}\n\n✅ *Sonraki Adımlar:*\n{{ $json.next_steps.map((s, i) => `${i+1}. ${s}`).join('\\n') }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "slack-report-001",
+      "name": "Send Weekly Report to Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [920, 400],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "resource": "spreadsheet",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "GBP Posts"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "save-posts-001",
+      "name": "Save Posts to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [920, 600],
+      "disabled": true,
+      "typeVersion": 4.5
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $('Load GBP Configuration').first().json.config.businesses[0].email || 'owner@business.com' }}",
+        "subject": "=Haftalık GBP İçerik Planınız - {{ $json.business.name }}",
+        "emailType": "html",
+        "message": "=<h2>Haftalık Google Business Profile İçerik Raporu</h2>\n\n<p><strong>İşletme:</strong> {{ $json.business.name }}</p>\n<p><strong>Oluşturulma:</strong> {{ $json.generated_at }}</p>\n\n<h3>📝 Hazırlanan Paylaşımlar</h3>\n<p>Bu hafta için <strong>{{ $json.content_plan.total_scheduled }}</strong> paylaşım hazırlandı.</p>\n<p>Tema: {{ $json.content_plan.theme.theme }}</p>\n\n<h3>📊 SEO Analizi</h3>\n<ul>\n<li>Profil Tamamlama: {{ $json.summary.profile_score }}%</li>\n<li>SEO Puanı: {{ $json.summary.seo_score }}/100</li>\n<li>Öncelikli Eylemler: {{ $json.summary.high_priority_actions }}</li>\n</ul>\n\n<h3>✅ Yapılması Gerekenler</h3>\n<ol>\n{{ $json.next_steps.map(s => `<li>${s}</li>`).join('') }}\n</ol>\n\n<p>Paylaşımları incelemek ve onaylamak için dashboard'a giriş yapın.</p>",
+        "options": {}
+      },
+      "id": "send-email-001",
+      "name": "Send Email Report",
+      "type": "n8n-nodes-base.gmail",
+      "position": [1140, 400],
+      "disabled": true,
+      "typeVersion": 2.1
+    }
+  ],
+  "connections": {
+    "Daily Schedule (09:00)": {
+      "main": [
+        [
+          {
+            "node": "Load GBP Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load GBP Configuration": {
+      "main": [
+        [
+          {
+            "node": "Split Locations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Locations": {
+      "main": [
+        [
+          {
+            "node": "Generate GBP Posts (Turkish)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SEO Profile Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate GBP Posts (Turkish)": {
+      "main": [
+        [
+          {
+            "node": "Process Generated Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Generated Posts": {
+      "main": [
+        [
+          {
+            "node": "Create Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEO Profile Analysis": {
+      "main": [
+        [
+          {
+            "node": "Create Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Report to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Posts to Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "GBP",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Local SEO",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Turkish",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Content",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    },
+    {
+      "name": "Grain",
+      "createdAt": "2026-01-09T00:00:00.000Z",
+      "updatedAt": "2026-01-09T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-09T00:00:00.000Z",
+  "versionId": "grain-turkish-gbp-optimizer-v1"
+}

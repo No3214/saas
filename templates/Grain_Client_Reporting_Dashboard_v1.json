@@ -1,0 +1,316 @@
+{
+  "name": "Grain Client Reporting Dashboard v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-fd1ijpmos",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-report",
+      "name": "Weekly Report",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        200,
+        400
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {},
+      "id": "webhook-report",
+      "name": "Manual Report",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        600
+      ],
+      "webhookId": "generate-report"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Clients"
+        },
+        "options": {}
+      },
+      "id": "get-clients",
+      "name": "Get Clients",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        400,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/analytics/v4/reports:batchGet",
+        "authentication": "oAuth2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"reportRequests\": [{\n    \"viewId\": \"{{ $json.ga4_property_id }}\",\n    \"dateRanges\": [{ \"startDate\": \"7daysAgo\", \"endDate\": \"today\" }],\n    \"metrics\": [\n      { \"expression\": \"ga:sessions\" },\n      { \"expression\": \"ga:users\" },\n      { \"expression\": \"ga:pageviews\" },\n      { \"expression\": \"ga:bounceRate\" }\n    ]\n  }]\n}"
+      },
+      "id": "get-ga4-data",
+      "name": "Get GA4 Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        600,
+        400
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/v18.0/act_{{ $json.fb_ad_account_id }}/insights",
+        "authentication": "oAuth2",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date_preset",
+              "value": "last_7d"
+            },
+            {
+              "name": "fields",
+              "value": "spend,impressions,clicks,cpc,ctr,conversions"
+            }
+          ]
+        }
+      },
+      "id": "get-meta-ads",
+      "name": "Get Meta Ads",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        600,
+        600
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "jsCode": "const client = $input.item.json;\nconst ga4 = $('Get GA4 Data').first()?.json?.reports?.[0]?.data?.totals?.[0]?.values || [];\nconst metaAds = $('Get Meta Ads').first()?.json?.data?.[0] || {};\n\nreturn {\n  json: {\n    client_name: client.name,\n    client_email: client.email,\n    period: 'Last 7 Days',\n    analytics: {\n      sessions: parseInt(ga4[0]) || 0,\n      users: parseInt(ga4[1]) || 0,\n      pageviews: parseInt(ga4[2]) || 0,\n      bounce_rate: parseFloat(ga4[3]) || 0\n    },\n    advertising: {\n      spend: parseFloat(metaAds.spend) || 0,\n      impressions: parseInt(metaAds.impressions) || 0,\n      clicks: parseInt(metaAds.clicks) || 0,\n      cpc: parseFloat(metaAds.cpc) || 0,\n      ctr: parseFloat(metaAds.ctr) || 0\n    }\n  }\n};"
+      },
+      "id": "merge-data",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        800,
+        500
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Dijital pazarlama uzmanısın. Müşteri performans verisini analiz et ve kısa özet yaz. İyi, kötü ve geliştirme önerisi içersin. Max 200 kelime."
+            },
+            {
+              "role": "user",
+              "content": "=Client: {{ $json.client_name }}\nPeriod: {{ $json.period }}\n\nAnalytics:\n- Sessions: {{ $json.analytics.sessions }}\n- Users: {{ $json.analytics.users }}\n- Bounce: {{ $json.analytics.bounce_rate }}%\n\nAds:\n- Spend: ${{ $json.advertising.spend }}\n- Clicks: {{ $json.advertising.clicks }}\n- CTR: {{ $json.advertising.ctr }}%"
+            }
+          ]
+        }
+      },
+      "id": "ai-insights",
+      "name": "AI Insights",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        1000,
+        500
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.client_email }}",
+        "subject": "=Haftalık Performans Raporu - {{ $json.client_name }}",
+        "message": "=Merhaba,\n\n{{ $json.period }} dönemi performans özetiniz:\n\n📊 *Web Sitesi*\n• Oturum: {{ $json.analytics.sessions }}\n• Kullanıcı: {{ $json.analytics.users }}\n• Sayfa Görüntüleme: {{ $json.analytics.pageviews }}\n\n💰 *Reklamlar*\n• Harcama: ${{ $json.advertising.spend }}\n• Tıklama: {{ $json.advertising.clicks }}\n• CTR: {{ $json.advertising.ctr }}%\n\n💡 *AI Değerlendirmesi*\n{{ $('AI Insights').first().json.message.content }}\n\nSorularınız için bize ulaşın.\n\nSaygılarımızla",
+        "options": {}
+      },
+      "id": "send-report",
+      "name": "Send Report",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        1200,
+        500
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "channel": "#client-reports",
+        "text": "=📊 *Rapor Gönderildi*\n\nClient: {{ $json.client_name }}\nPeriod: {{ $json.period }}\n\nKey Metrics:\n• Sessions: {{ $json.analytics.sessions }}\n• Ad Spend: ${{ $json.advertising.spend }}\n• CTR: {{ $json.advertising.ctr }}%",
+        "otherOptions": {}
+      },
+      "id": "notify-team",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1200,
+        700
+      ],
+      "typeVersion": 2.1
+    }
+  ],
+  "connections": {
+    "Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Get Clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Report": {
+      "main": [
+        [
+          {
+            "node": "Get Clients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Clients": {
+      "main": [
+        [
+          {
+            "node": "Get GA4 Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Meta Ads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get GA4 Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Meta Ads": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "AI Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Insights": {
+      "main": [
+        [
+          {
+            "node": "Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "agency"
+    },
+    {
+      "name": "reporting"
+    },
+    {
+      "name": "analytics"
+    }
+  ]
+}

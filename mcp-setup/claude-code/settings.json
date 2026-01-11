@@ -1,0 +1,108 @@
+{
+  "mcp_servers": {
+    "n8n-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supergateway",
+        "--streamableHttp",
+        "https://globaldigital.app.n8n.cloud/mcp-server/http",
+        "--header",
+        "authorization:Bearer YOUR_N8N_MCP_JWT_TOKEN"
+      ],
+      "description": "n8n cloud workflow automation - globaldigital"
+    },
+    "spawner-skills": {
+      "command": "npx",
+      "args": ["-y", "github:vibeforge1111/vibeship-spawner-skills", "serve"],
+      "description": "462 production-grade skills MCP server"
+    }
+  },
+  "external_skills": {
+    "anthropic-official": {
+      "skills_repo": "github:anthropics/skills",
+      "plugins_repo": "github:anthropics/claude-plugins-official",
+      "skill_count": 16,
+      "plugin_count": 25,
+      "install_skills": "/plugin install document-skills@anthropic-agent-skills",
+      "install_plugins": "/plugin install [name]@claude-plugin-directory"
+    },
+    "vibeship-spawner": {
+      "repo": "github:vibeforge1111/vibeship-spawner-skills",
+      "install": "npx github:vibeforge1111/vibeship-spawner-skills install --mcp",
+      "skill_count": 462,
+      "categories": 35
+    }
+  },
+  "hooks": {
+    "session_start": ".claude/hooks/session-start.sh",
+    "pre_commit": null,
+    "post_commit": null
+  },
+  "plugins": {
+    "recommended": [
+      "code-simplifier",
+      "code-review",
+      "frontend-design",
+      "commit-commands",
+      "security-guidance",
+      "feature-dev",
+      "pr-review-toolkit",
+      "explanatory-output-style"
+    ],
+    "document_skills": [
+      "pdf",
+      "docx",
+      "pptx",
+      "xlsx"
+    ],
+    "lsp_plugins": [
+      "typescript-lsp",
+      "pyright-lsp"
+    ],
+    "install_commands": [
+      "/plugin install code-simplifier@claude-plugin-directory",
+      "/plugin install code-review@claude-plugin-directory",
+      "/plugin install frontend-design@claude-plugin-directory",
+      "/plugin install commit-commands@claude-plugin-directory",
+      "/plugin install security-guidance@claude-plugin-directory",
+      "/plugin install document-skills@anthropic-agent-skills"
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Read(n8n-templates/**)",
+      "Read(index.json)",
+      "Read(.claude/**)",
+      "Glob(**/*.json)",
+      "Grep(**)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(jq:*)"
+    ],
+    "ask": [
+      "Write(n8n-templates/**)",
+      "Edit(n8n-templates/**)",
+      "Edit(index.json)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ],
+    "deny": [
+      "Read(.env*)",
+      "Read(**/credentials*)",
+      "Read(**/secrets*)",
+      "Bash(rm -rf:*)",
+      "Bash(curl:*POST*)",
+      "Bash(wget:*)"
+    ]
+  },
+  "preferences": {
+    "output_style": "explanatory",
+    "language": "turkish",
+    "commit_style": "conventional"
+  }
+}

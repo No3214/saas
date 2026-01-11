@@ -1,0 +1,317 @@
+{
+  "name": "Grain Document OCR Processing v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ocr/process",
+        "options": {}
+      },
+      "id": "ocr-webhook",
+      "name": "Document Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 400],
+      "webhookId": "ocr-process"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "batch-schedule",
+      "name": "Batch Processing (5min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Initialize OCR processing job\nconst input = $input.first().json.body || $input.first().json;\n\nconst ocrJob = {\n  jobId: `OCR-${Date.now().toString(36).toUpperCase()}`,\n  documentUrl: input.documentUrl || input.fileUrl,\n  documentType: input.documentType || 'auto', // auto, invoice, receipt, contract, id, form\n  fileName: input.fileName,\n  fileType: input.fileType || input.mimeType,\n  pages: input.pages || 'all',\n  language: input.language || 'auto',\n  options: {\n    enhanceImage: input.enhanceImage !== false,\n    deskew: input.deskew !== false,\n    removeNoise: input.removeNoise !== false,\n    detectTables: input.detectTables !== false,\n    detectHandwriting: input.detectHandwriting || false,\n    outputFormat: input.outputFormat || 'structured' // structured, text, json\n  },\n  metadata: {\n    source: input.source || 'api',\n    userId: input.userId,\n    projectId: input.projectId,\n    tags: input.tags || []\n  },\n  status: 'processing',\n  createdAt: new Date().toISOString()\n};\n\nreturn [{ json: ocrJob }];"
+      },
+      "id": "init-ocr",
+      "name": "Initialize OCR Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.OCR_API_URL }}/preprocess",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"documentUrl\": \"{{ $json.documentUrl }}\",\n  \"operations\": [\n    {{ $json.options.enhanceImage ? '\"enhance\",' : '' }}\n    {{ $json.options.deskew ? '\"deskew\",' : '' }}\n    {{ $json.options.removeNoise ? '\"denoise\",' : '' }}\n    \"optimize\"\n  ]\n}",
+        "options": {}
+      },
+      "id": "preprocess-image",
+      "name": "Preprocess Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ocr-api-key",
+          "name": "OCR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.OCR_API_URL }}/extract",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"documentUrl\": \"{{ $json.processedUrl || $('Initialize OCR Job').first().json.documentUrl }}\",\n  \"language\": \"{{ $('Initialize OCR Job').first().json.language }}\",\n  \"detectTables\": {{ $('Initialize OCR Job').first().json.options.detectTables }},\n  \"detectHandwriting\": {{ $('Initialize OCR Job').first().json.options.detectHandwriting }},\n  \"documentType\": \"{{ $('Initialize OCR Job').first().json.documentType }}\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "extract-text",
+      "name": "Extract Text (OCR)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ocr-api-key",
+          "name": "OCR API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detect and classify document type\nconst ocrJob = $('Initialize OCR Job').first().json;\nconst extractedData = $input.first().json;\n\nconst text = extractedData.text || '';\nconst textLower = text.toLowerCase();\n\n// Document type detection if auto\nlet detectedType = ocrJob.documentType;\nif (detectedType === 'auto') {\n  if (/invoice|bill to|due date|total amount|invoice number/i.test(text)) {\n    detectedType = 'invoice';\n  } else if (/receipt|subtotal|tax|change|payment method/i.test(text)) {\n    detectedType = 'receipt';\n  } else if (/contract|agreement|parties|terms and conditions|whereas/i.test(text)) {\n    detectedType = 'contract';\n  } else if (/passport|driver.?s? license|id card|date of birth|expiry/i.test(text)) {\n    detectedType = 'id';\n  } else if (/form|please fill|signature|date:|name:/i.test(text)) {\n    detectedType = 'form';\n  } else {\n    detectedType = 'document';\n  }\n}\n\nreturn [{ json: {\n  ...ocrJob,\n  detectedType,\n  rawText: text,\n  ocrData: extractedData\n}}];"
+      },
+      "id": "classify-document",
+      "name": "Classify Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a document data extraction specialist. Extract structured data from the following {{ $json.detectedType }} document.\n\nFor INVOICES extract:\n- invoiceNumber, date, dueDate\n- vendor: name, address, phone, email, taxId\n- customer: name, address\n- lineItems: array of {description, quantity, unitPrice, total}\n- subtotal, tax, taxRate, total\n- paymentTerms, bankDetails\n\nFor RECEIPTS extract:\n- merchantName, address, phone\n- date, time\n- items: array of {name, quantity, price}\n- subtotal, tax, total\n- paymentMethod, lastFourDigits\n\nFor CONTRACTS extract:\n- contractType, title\n- parties: array of {name, role, address}\n- effectiveDate, expirationDate\n- keyTerms, obligations\n- signatures: array of {name, date, signed}\n\nFor IDs extract:\n- documentType, documentNumber\n- fullName, dateOfBirth, gender\n- address, nationality\n- issueDate, expiryDate\n- issuingAuthority\n\nReturn a JSON object with the extracted fields. Use null for fields not found.",
+              "role": "system"
+            },
+            {
+              "content": "=Extract data from this {{ $json.detectedType }}:\n\n{{ $json.rawText }}",
+              "role": "user"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.1,
+          "maxTokens": 2000
+        }
+      },
+      "id": "ai-extraction",
+      "name": "AI Data Extraction",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1500, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compile final extraction results\nconst ocrJob = $('Classify Document').first().json;\nconst extractedFields = $input.first().json;\n\n// Calculate confidence scores\nconst fieldCount = Object.keys(extractedFields).filter(k => extractedFields[k] !== null).length;\nconst totalFields = Object.keys(extractedFields).length;\nconst completeness = Math.round(fieldCount / totalFields * 100);\n\nconst result = {\n  jobId: ocrJob.jobId,\n  status: 'completed',\n  documentType: ocrJob.detectedType,\n  fileName: ocrJob.fileName,\n  \n  extractedData: extractedFields,\n  \n  rawText: ocrJob.rawText,\n  \n  tables: ocrJob.ocrData.tables || [],\n  \n  quality: {\n    completeness,\n    fieldCount,\n    totalFields,\n    ocrConfidence: ocrJob.ocrData.confidence || 0.95,\n    hasHandwriting: ocrJob.ocrData.hasHandwriting || false\n  },\n  \n  metadata: ocrJob.metadata,\n  \n  exportUrls: {\n    json: `{{ $vars.EXPORT_URL }}/ocr/${ocrJob.jobId}/json`,\n    csv: `{{ $vars.EXPORT_URL }}/ocr/${ocrJob.jobId}/csv`,\n    pdf: `{{ $vars.EXPORT_URL }}/ocr/${ocrJob.jobId}/pdf`\n  },\n  \n  completedAt: new Date().toISOString()\n};\n\nreturn [{ json: result }];"
+      },
+      "id": "compile-results",
+      "name": "Compile Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.OCR_DB_URL }}/documents",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "save-results",
+      "name": "Save to Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ocr-db-api",
+          "name": "OCR DB API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-invoice",
+              "leftValue": "={{ $json.documentType }}",
+              "rightValue": "invoice",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-invoice",
+      "name": "Is Invoice?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.ACCOUNTING_API_URL }}/invoices",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.extractedData) }}",
+        "options": {}
+      },
+      "id": "create-invoice",
+      "name": "Create Invoice in Accounting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 450],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "accounting-api-key",
+          "name": "Accounting API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{ $vars.DOCUMENTS_SLACK_CHANNEL }}",
+        "text": "=📄 *Document Processed*\n\n*Type:* {{ $json.documentType }}\n*File:* {{ $json.fileName }}\n*Status:* ✅ Completed\n\n📊 *Quality:*\n• Completeness: {{ $json.quality.completeness }}%\n• OCR Confidence: {{ Math.round($json.quality.ocrConfidence * 100) }}%\n• Fields Extracted: {{ $json.quality.fieldCount }}/{{ $json.quality.totalFields }}\n\n📥 <{{ $json.exportUrls.json }}|Download JSON> | <{{ $json.exportUrls.csv }}|Download CSV>",
+        "otherOptions": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2000, 700],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credential",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2250, 700]
+    }
+  ],
+  "connections": {
+    "Document Upload": {
+      "main": [
+        [{ "node": "Initialize OCR Job", "type": "main", "index": 0 }]
+      ]
+    },
+    "Initialize OCR Job": {
+      "main": [
+        [{ "node": "Preprocess Image", "type": "main", "index": 0 }]
+      ]
+    },
+    "Preprocess Image": {
+      "main": [
+        [{ "node": "Extract Text (OCR)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Text (OCR)": {
+      "main": [
+        [{ "node": "Classify Document", "type": "main", "index": 0 }]
+      ]
+    },
+    "Classify Document": {
+      "main": [
+        [{ "node": "AI Data Extraction", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Data Extraction": {
+      "main": [
+        [{ "node": "Compile Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compile Results": {
+      "main": [
+        [
+          { "node": "Save to Database", "type": "main", "index": 0 },
+          { "node": "Is Invoice?", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Respond", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Is Invoice?": {
+      "main": [
+        [{ "node": "Create Invoice in Accounting", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    { "id": "ocr", "name": "ocr" },
+    { "id": "document", "name": "document" },
+    { "id": "ai", "name": "ai" },
+    { "id": "automation", "name": "automation" }
+  ],
+  "triggerCount": 2,
+  "updatedAt": "2026-01-08T00:00:00.000Z",
+  "versionId": "1"
+}

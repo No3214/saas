@@ -1,0 +1,408 @@
+{
+  "name": "Grain NPS Feedback Collection v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-45mr7o84w",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {
+        "content": "## 📊 NPS & Feedback Collection\nAutomated Net Promoter Score surveys with AI-powered sentiment analysis.",
+        "height": 100,
+        "width": 350,
+        "color": 4
+      },
+      "id": "note-overview",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-trigger",
+      "name": "Weekly NPS Send",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Customers"
+        }
+      },
+      "id": "get-customers",
+      "name": "Get Customers",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.last_nps_sent }}",
+              "rightValue": "={{ $now.minus({days: 90}).toISO() }}",
+              "operator": {
+                "type": "string",
+                "operation": "lt"
+              }
+            }
+          ]
+        }
+      },
+      "id": "filter-eligible",
+      "name": "Filter Eligible",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        750,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Sizin için ne kadar önemliyiz? (1 dakikalık anket)",
+        "message": "=Merhaba {{ $json.name }},\n\nBizi 0-10 arasında puanlayın:\n\n🔗 Anket Linki: {{ $env.NPS_SURVEY_URL }}?customer_id={{ $json.customer_id }}\n\nTeşekkürler!",
+        "options": {}
+      },
+      "id": "send-survey",
+      "name": "Send NPS Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nps-response",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "NPS Response",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        650
+      ],
+      "webhookId": "nps-response"
+    },
+    {
+      "parameters": {
+        "jsCode": "const score = parseInt($input.item.json.nps_score);\nlet category = 'Passive';\nif (score >= 9) category = 'Promoter';\nelse if (score <= 6) category = 'Detractor';\n\nreturn {\n  json: {\n    ...$input.item.json,\n    nps_score: score,\n    category: category,\n    is_detractor: score <= 6\n  }\n};"
+      },
+      "id": "calc-category",
+      "name": "Calculate Category",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Analyze NPS feedback. Return JSON:\n{ \"sentiment\": \"positive/neutral/negative\", \"themes\": [], \"action_required\": true/false, \"suggested_action\": \"...\" }"
+            },
+            {
+              "role": "user",
+              "content": "Score: {{ $json.nps_score }}\nFeedback: {{ $json.feedback }}"
+            }
+          ]
+        },
+        "jsonOutput": true
+      },
+      "id": "ai-analyze",
+      "name": "AI Analyze Feedback",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        750,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_detractor }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "is-detractor",
+      "name": "Is Detractor?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        650
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#customer-success",
+        "text": "=🚨 **Detractor Alert**\n\nCustomer: {{ $json.customer_id }}\nNPS Score: {{ $json.nps_score }}/10\nFeedback: {{ $json.feedback }}\n\n👉 Action: {{ $json.suggested_action }}",
+        "otherOptions": {}
+      },
+      "id": "alert-cs",
+      "name": "Alert CS Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1250,
+        550
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_BASE_URL }}/webhook/churn-check",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"customer_id\": \"{{ $json.customer_id }}\", \"nps_score\": {{ $json.nps_score }}, \"trigger_source\": \"nps_detractor\" }"
+      },
+      "id": "trigger-churn",
+      "name": "→ Trigger Churn Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        550
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "NPS_Responses"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customer_id": "={{ $json.customer_id }}",
+            "score": "={{ $json.nps_score }}",
+            "category": "={{ $json.category }}",
+            "feedback": "={{ $json.feedback }}",
+            "sentiment": "={{ $json.sentiment }}",
+            "submitted_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "save-response",
+      "name": "Save Response",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.2,
+      "position": [
+        1250,
+        750
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        500,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "channel": "#system-alerts",
+        "text": "=🚨 NPS Collection Error\n\nError: {{ $json.execution.error.message }}",
+        "otherOptions": {}
+      },
+      "id": "error-notify",
+      "name": "Error Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        750,
+        900
+      ]
+    }
+  ],
+  "connections": {
+    "Weekly NPS Send": {
+      "main": [
+        [
+          {
+            "node": "Get Customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Customers": {
+      "main": [
+        [
+          {
+            "node": "Filter Eligible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Eligible": {
+      "main": [
+        [
+          {
+            "node": "Send NPS Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NPS Response": {
+      "main": [
+        [
+          {
+            "node": "Calculate Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Category": {
+      "main": [
+        [
+          {
+            "node": "AI Analyze Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analyze Feedback": {
+      "main": [
+        [
+          {
+            "node": "Is Detractor?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Detractor?": {
+      "main": [
+        [
+          {
+            "node": "Alert CS Team",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

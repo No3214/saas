@@ -1,0 +1,235 @@
+{
+  "name": "Grain Vibe Marketing - Entity Profiler v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vibe-entity-profiler",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Entity Profile Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "grain-vibe-entity-profiler"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse input and prepare for profiling\nconst input = $input.first().json;\n\nreturn [{\n  json: {\n    entity_name: input.entity_name || input.brand_name || 'Entity',\n    website_url: input.website_url || input.url || '',\n    industry: input.industry || 'general',\n    target_market: input.target_market || 'Turkey',\n    language: input.language || 'tr',\n    request_id: `EP-${Date.now()}`,\n    created_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-prepare",
+      "name": "Prepare Entity Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.website_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "http-scrape",
+      "name": "Scrape Entity Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract key info from website\nconst html = $input.first().json.data || '';\n\n// Extract meta info\nconst titleMatch = html.match(/<title>([^<]*)<\\/title>/i);\nconst descMatch = html.match(/<meta name=\"description\" content=\"([^\"]*)\"/i);\n\n// Extract text content (simplified)\nconst textContent = html\n  .replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .substring(0, 5000);\n\nreturn [{\n  json: {\n    title: titleMatch ? titleMatch[1] : '',\n    description: descMatch ? descMatch[1] : '',\n    content_sample: textContent.substring(0, 2000),\n    word_count: textContent.split(' ').length\n  }\n}];"
+      },
+      "id": "code-extract",
+      "name": "Extract Website Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 3000
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Sen bir marka stratejisti ve icerik uzmanisin. Asagidaki web sitesi icerigini analiz ederek detayli bir Entity Profile olustur.\n\nWebsite Icerigi:\nTitle: {{ $json.title }}\nDescription: {{ $json.description }}\nContent Sample: {{ $json.content_sample }}\n\n---\n\nAsagidaki JSON formatinda bir Entity Profile olustur:\n\n```json\n{\n  \"persona\": {\n    \"name\": \"Marka kisiligini tanimlayan isim\",\n    \"adjectives\": [\"5 tanimlayici sifat\"],\n    \"voice\": \"Iletisim tonu aciklamasi\",\n    \"archetype\": \"Marka arketipi (Hero, Sage, Creator, etc.)\"\n  },\n  \"core_messaging\": {\n    \"mission\": \"Misyon cumlesi\",\n    \"value_proposition\": \"Deger onerisi\",\n    \"key_messages\": [\"3-5 ana mesaj\"],\n    \"tagline_options\": [\"3 slogan onerisi\"]\n  },\n  \"target_audience\": {\n    \"primary\": {\n      \"demographics\": \"Yas, cinsiyet, lokasyon\",\n      \"psychographics\": \"Ilgi alanlari, degerler\",\n      \"pain_points\": [\"3 ana sorun\"],\n      \"desires\": [\"3 ana istek\"]\n    },\n    \"secondary\": {\n      \"description\": \"Ikincil hedef kitle\"\n    }\n  },\n  \"communication_style\": {\n    \"tone\": \"formal/informal/playful/professional\",\n    \"language_level\": \"simple/moderate/sophisticated\",\n    \"emoji_usage\": \"none/minimal/moderate/heavy\",\n    \"hashtag_style\": \"branded/trending/mixed\"\n  },\n  \"content_pillars\": [\n    {\n      \"name\": \"Pillar adi\",\n      \"description\": \"Aciklama\",\n      \"percentage\": 30\n    }\n  ],\n  \"competitive_positioning\": {\n    \"differentiators\": [\"3 farklilik\"],\n    \"market_position\": \"Premium/Mid-market/Budget\"\n  }\n}\n```\n\nSadece JSON ciktisi ver, baska bir sey yazma."
+            }
+          ]
+        }
+      },
+      "id": "openai-profile",
+      "name": "AI - Generate Entity Profile",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [1050, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate JSON profile\nconst input = $input.first().json;\nlet profile;\n\ntry {\n  // Extract JSON from response\n  const jsonMatch = input.text?.match(/```json\\n?([\\s\\S]*?)\\n?```/) || \n                    input.text?.match(/\\{[\\s\\S]*\\}/);\n  \n  if (jsonMatch) {\n    profile = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n  } else {\n    profile = JSON.parse(input.text);\n  }\n} catch (e) {\n  profile = { error: 'JSON parse failed', raw: input.text };\n}\n\nreturn [{\n  json: {\n    entity_profile: profile,\n    generated_at: new Date().toISOString(),\n    status: profile.error ? 'failed' : 'success'\n  }\n}];"
+      },
+      "id": "code-parse-profile",
+      "name": "Parse Entity Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "entity_profiles",
+        "columns": "request_id, entity_name, website_url, profile_data, created_at",
+        "values": "={{ $('Prepare Entity Request').item.json.request_id }}, {{ $('Prepare Entity Request').item.json.entity_name }}, {{ $('Prepare Entity Request').item.json.website_url }}, {{ JSON.stringify($json.entity_profile) }}, {{ $now.toISO() }}"
+      },
+      "id": "postgres-save",
+      "name": "Save Profile to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1450, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#marketing-intel",
+        "text": "*Yeni Entity Profile Olusturuldu*\n\nEntity: {{ $('Prepare Entity Request').item.json.entity_name }}\nRequest ID: {{ $('Prepare Entity Request').item.json.request_id }}\n\n*Persona:* {{ $json.entity_profile.persona?.name || 'N/A' }}\n*Archetype:* {{ $json.entity_profile.persona?.archetype || 'N/A' }}\n*Tone:* {{ $json.entity_profile.communication_style?.tone || 'N/A' }}\n\n_Tam profil veritabanina kaydedildi._",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1450, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Return Profile Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "Entity profiling failed"
+      },
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#marketing-alerts",
+        "text": "*Entity Profiler Hatasi*\n\nHata: {{ $json.error.message }}\nZaman: {{ $now.format('DD.MM.YYYY HH:mm') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-error",
+      "name": "Error Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [450, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Entity Profile Request": {
+      "main": [
+        [{ "node": "Prepare Entity Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Entity Request": {
+      "main": [
+        [{ "node": "Scrape Entity Website", "type": "main", "index": 0 }]
+      ]
+    },
+    "Scrape Entity Website": {
+      "main": [
+        [{ "node": "Extract Website Content", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Website Content": {
+      "main": [
+        [{ "node": "AI - Generate Entity Profile", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI - Generate Entity Profile": {
+      "main": [
+        [{ "node": "Parse Entity Profile", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Entity Profile": {
+      "main": [
+        [
+          { "node": "Save Profile to Database", "type": "main", "index": 0 },
+          { "node": "Notify Team", "type": "main", "index": 0 },
+          { "node": "Return Profile Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Error Notification", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "meta": {
+    "grain_module": "vibe_marketing",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_source": "vibemarketingflow",
+    "grain_features": [
+      "entity-profiling",
+      "website-scraping",
+      "ai-analysis",
+      "persona-generation",
+      "content-pillars"
+    ],
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "vibe-marketing" },
+    { "name": "entity-profile" },
+    { "name": "ai-powered" }
+  ]
+}

@@ -1,0 +1,292 @@
+{
+  "name": "Grain Guest Communication Journey v1",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "tenant_id",
+              "value": "={{ $vars.GRAIN_TENANT_ID || 'default' }}"
+            },
+            {
+              "name": "dry_run",
+              "value": "={{ $vars.GRAIN_DRY_RUN || false }}"
+            },
+            {
+              "name": "webhook_prefix",
+              "value": "={{ $vars.GRAIN_WEBHOOK_PREFIX || '/webhook' }}/{{ $workflow.name.toLowerCase().replace(/[^a-z0-9]/g, '-') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "grain-config-0uq9uc9xa",
+      "name": "GRAIN_CONFIG",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -200
+      ],
+      "notesInFlow": true,
+      "notes": "🔧 Central Config"
+    },
+    {
+      "parameters": {},
+      "id": "webhook-booking",
+      "name": "New Booking",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        400
+      ],
+      "webhookId": "guest-booking"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-check",
+      "name": "Daily Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        200,
+        600
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "const booking = $input.item.json;\nconst checkin = new Date(booking.checkin_date);\nconst checkout = new Date(booking.checkout_date);\nconst now = new Date();\nconst daysUntilArrival = Math.ceil((checkin - now) / (1000 * 60 * 60 * 24));\nconst daysUntilCheckout = Math.ceil((checkout - now) / (1000 * 60 * 60 * 24));\n\nlet messageType = null;\nif (daysUntilArrival === 7) messageType = 'pre_arrival_7d';\nelse if (daysUntilArrival === 1) messageType = 'pre_arrival_1d';\nelse if (daysUntilArrival === 0) messageType = 'arrival_day';\nelse if (daysUntilCheckout === 0) messageType = 'checkout_day';\nelse if (daysUntilCheckout === -1) messageType = 'post_checkout';\nelse if (daysUntilCheckout === -3) messageType = 'review_request';\n\nreturn {\n  json: {\n    ...booking,\n    message_type: messageType,\n    days_until_arrival: daysUntilArrival,\n    should_message: messageType !== null\n  }\n};"
+      },
+      "id": "calc-timing",
+      "name": "Calculate Timing",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        450,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.should_message }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        }
+      },
+      "id": "should-msg",
+      "name": "Should Message?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        650,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Otel misafir iletişimi uzmanısın. Mesaj türüne göre kişiselleştirilmiş mesaj yaz:\n\n- pre_arrival_7d: Heyecan verici, upsell fırsatı (spa, transfer)\n- pre_arrival_1d: Check-in detayları, saat bilgisi\n- arrival_day: Hoşgeldin, oda hazır bilgisi\n- checkout_day: Teşekkür, feedback linki\n- post_checkout: Özledik mesajı\n- review_request: Google/Tripadvisor yorum ricası\n\nJSON döndür: {\"subject\": \"\", \"message\": \"\", \"upsell_offer\": null}"
+            },
+            {
+              "role": "user",
+              "content": "=Guest: {{ $json.guest_name }}\nType: {{ $json.message_type }}\nRoom: {{ $json.room_type }}\nNights: {{ $json.nights }}"
+            }
+          ]
+        }
+      },
+      "id": "ai-message",
+      "name": "AI Generate Message",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        850,
+        400
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v18.0/{{ $env.WHATSAPP_PHONE_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $json.guest_phone }}\",\n  \"type\": \"text\",\n  \"text\": { \"body\": \"{{ $json.ai_message }}\" }\n}"
+      },
+      "id": "send-whatsapp",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1050,
+        300
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.guest_email }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "position": [
+        1050,
+        500
+      ],
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Guest_Communications"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ $json.booking_id }}",
+            "guest_name": "={{ $json.guest_name }}",
+            "message_type": "={{ $json.message_type }}",
+            "sent_at": "={{ $now.toISO() }}"
+          }
+        }
+      },
+      "id": "log-msg",
+      "name": "Log Communication",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        1250,
+        400
+      ],
+      "typeVersion": 4.2
+    }
+  ],
+  "connections": {
+    "New Booking": {
+      "main": [
+        [
+          {
+            "node": "Calculate Timing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Check": {
+      "main": [
+        [
+          {
+            "node": "Calculate Timing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Timing": {
+      "main": [
+        [
+          {
+            "node": "Should Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Message?": {
+      "main": [
+        [
+          {
+            "node": "AI Generate Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Generate Message": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Log Communication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Log Communication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "hospitality"
+    },
+    {
+      "name": "guest-communication"
+    }
+  ]
+}
