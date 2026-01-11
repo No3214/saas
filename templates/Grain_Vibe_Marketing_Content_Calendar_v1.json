@@ -1,0 +1,221 @@
+{
+  "name": "Grain Vibe Marketing - Content Calendar Generator v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vibe-content-calendar",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Content Calendar Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "grain-vibe-content-calendar"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT profile_data FROM entity_profiles WHERE entity_name = '{{ $json.entity_name }}' ORDER BY created_at DESC LIMIT 1",
+        "options": {}
+      },
+      "id": "postgres-get-profile",
+      "name": "Get Entity Profile",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare for content generation\nconst input = $input.first().json;\nconst webhookData = $('Webhook - Content Calendar Request').first().json;\n\nlet profile;\ntry {\n  profile = typeof input.profile_data === 'string' \n    ? JSON.parse(input.profile_data) \n    : input.profile_data;\n} catch (e) {\n  profile = {};\n}\n\nconst weeks = webhookData.weeks || 4;\nconst platforms = webhookData.platforms || ['instagram', 'linkedin', 'twitter'];\n\nreturn [{\n  json: {\n    entity_name: webhookData.entity_name,\n    profile: profile,\n    weeks: weeks,\n    platforms: platforms,\n    language: webhookData.language || 'tr',\n    request_id: `CC-${Date.now()}`\n  }\n}];"
+      },
+      "id": "code-prepare",
+      "name": "Prepare Calendar Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 4000
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Sen bir sosyal medya icerik stratejistisin. Asagidaki Entity Profile'a dayanarak {{ $json.weeks }} haftalik icerik takvimi olustur.\n\nEntity Profile:\n{{ JSON.stringify($json.profile, null, 2) }}\n\nPlatformlar: {{ $json.platforms.join(', ') }}\nDil: {{ $json.language }}\n\n---\n\nAsagidaki JSON formatinda icerik takvimi olustur:\n\n```json\n{\n  \"calendar\": [\n    {\n      \"week\": 1,\n      \"theme\": \"Haftalik tema\",\n      \"days\": [\n        {\n          \"day\": 1,\n          \"date_label\": \"Pazartesi\",\n          \"content\": [\n            {\n              \"platform\": \"instagram\",\n              \"type\": \"reels/carousel/story/post\",\n              \"topic\": \"Konu\",\n              \"hook\": \"Dikkat cekici acilis\",\n              \"main_content\": \"Ana icerik\",\n              \"cta\": \"Call-to-action\",\n              \"hashtags\": [\"hashtag1\", \"hashtag2\"],\n              \"best_time\": \"12:00\",\n              \"content_pillar\": \"Educational/Entertaining/Promotional/Community\"\n            }\n          ]\n        }\n      ]\n    }\n  ],\n  \"content_mix\": {\n    \"educational\": 40,\n    \"entertaining\": 25,\n    \"promotional\": 20,\n    \"community\": 15\n  },\n  \"weekly_goals\": [\n    \"Hafta 1: ...\",\n    \"Hafta 2: ...\"\n  ]\n}\n```\n\nHer gun icin en az 1 platform icerigi olustur. Turkce yaz. Sadece JSON ciktisi ver."
+            }
+          ]
+        }
+      },
+      "id": "openai-calendar",
+      "name": "AI - Generate Content Calendar",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [850, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse calendar JSON\nconst input = $input.first().json;\nlet calendar;\n\ntry {\n  const jsonMatch = input.text?.match(/```json\\n?([\\s\\S]*?)\\n?```/) || \n                    input.text?.match(/\\{[\\s\\S]*\\}/);\n  \n  if (jsonMatch) {\n    calendar = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n  } else {\n    calendar = JSON.parse(input.text);\n  }\n} catch (e) {\n  calendar = { error: 'JSON parse failed', raw: input.text?.substring(0, 500) };\n}\n\n// Calculate stats\nlet totalPosts = 0;\nlet platformCounts = {};\n\nif (calendar.calendar) {\n  calendar.calendar.forEach(week => {\n    week.days?.forEach(day => {\n      day.content?.forEach(post => {\n        totalPosts++;\n        platformCounts[post.platform] = (platformCounts[post.platform] || 0) + 1;\n      });\n    });\n  });\n}\n\nreturn [{\n  json: {\n    content_calendar: calendar,\n    stats: {\n      total_posts: totalPosts,\n      by_platform: platformCounts,\n      weeks: calendar.calendar?.length || 0\n    },\n    generated_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-parse",
+      "name": "Parse Content Calendar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "content_calendars",
+        "columns": "request_id, entity_name, weeks, platforms, calendar_data, created_at",
+        "values": "={{ $('Prepare Calendar Request').item.json.request_id }}, {{ $('Prepare Calendar Request').item.json.entity_name }}, {{ $('Prepare Calendar Request').item.json.weeks }}, {{ JSON.stringify($('Prepare Calendar Request').item.json.platforms) }}, {{ JSON.stringify($json.content_calendar) }}, {{ $now.toISO() }}"
+      },
+      "id": "postgres-save",
+      "name": "Save Calendar to Database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-creds",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#content-team",
+        "text": "*Yeni Content Calendar Olusturuldu*\n\nEntity: {{ $('Prepare Calendar Request').item.json.entity_name }}\nSure: {{ $json.stats.weeks }} hafta\nToplam Post: {{ $json.stats.total_posts }}\n\nPlatform Dagilimi:\n{{ Object.entries($json.stats.by_platform).map(([k,v]) => `- ${k}: ${v}`).join('\\n') }}\n\n_Detaylar veritabaninda._",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Notify Content Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1250, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Return Calendar Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "errorMessage": "Content calendar generation failed"
+      },
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "channel": "#content-alerts",
+        "text": "*Content Calendar Hatasi*\n\nHata: {{ $json.error.message }}\nZaman: {{ $now.format('DD.MM.YYYY HH:mm') }}",
+        "otherOptions": {}
+      },
+      "id": "slack-error",
+      "name": "Error Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [450, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-creds",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Content Calendar Request": {
+      "main": [
+        [{ "node": "Get Entity Profile", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Entity Profile": {
+      "main": [
+        [{ "node": "Prepare Calendar Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Calendar Request": {
+      "main": [
+        [{ "node": "AI - Generate Content Calendar", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI - Generate Content Calendar": {
+      "main": [
+        [{ "node": "Parse Content Calendar", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Content Calendar": {
+      "main": [
+        [
+          { "node": "Save Calendar to Database", "type": "main", "index": 0 },
+          { "node": "Notify Content Team", "type": "main", "index": 0 },
+          { "node": "Return Calendar Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Error Notification", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "meta": {
+    "grain_module": "vibe_marketing",
+    "grain_tier": "Critical",
+    "grain_version": "1.0.0",
+    "grain_language": "tr",
+    "grain_source": "vibemarketingflow",
+    "grain_features": [
+      "content-calendar",
+      "multi-platform",
+      "ai-generation",
+      "weekly-planning",
+      "content-pillars"
+    ],
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    { "name": "vibe-marketing" },
+    { "name": "content-calendar" },
+    { "name": "ai-powered" }
+  ]
+}

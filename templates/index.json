@@ -1,8 +1,8 @@
 {
     "suite": "Grain SaaS Automation Suite",
-    "version": "5.6.0",
-    "last_updated": "2026-01-10T22:00:00Z",
-    "total_workflows": 69,
+    "version": "5.7.0",
+    "last_updated": "2026-01-11T00:00:00Z",
+    "total_workflows": 71,
     "enterprise_ready": true,
     "mcp_enabled": true,
     "architecture": {
@@ -527,6 +527,32 @@
                         "AI opportunity insights",
                         "Urgent trend alerts"
                     ]
+                },
+                {
+                    "name": "Vibe Marketing Entity Profiler v1",
+                    "file": "Grain_Vibe_Marketing_Entity_Profiler_v1.json",
+                    "tier": "Critical",
+                    "source": "vibemarketingflow",
+                    "features": [
+                        "Website scraping & analysis",
+                        "AI persona generation",
+                        "Brand archetype detection",
+                        "Content pillars identification",
+                        "Communication style mapping"
+                    ]
+                },
+                {
+                    "name": "Vibe Marketing Content Calendar v1",
+                    "file": "Grain_Vibe_Marketing_Content_Calendar_v1.json",
+                    "tier": "Critical",
+                    "source": "vibemarketingflow",
+                    "features": [
+                        "Multi-week content planning",
+                        "Multi-platform support",
+                        "AI content generation",
+                        "Hook & CTA suggestions",
+                        "Content pillar distribution"
+                    ]
                 }
             ]
         },
@@ -573,13 +599,23 @@
         }
     },
     "statistics": {
-        "total_workflows": 69,
-        "critical_tier": 31,
+        "total_workflows": 71,
+        "critical_tier": 33,
         "high_tier": 30,
         "medium_tier": 8,
         "modules": 19
     },
     "changelog": {
+        "v5.7.0": {
+            "date": "2026-01-11",
+            "changes": [
+                "NEW: Entity Profiler - AI persona & brand archetype generation (from vibemarketingflow)",
+                "NEW: Content Calendar Generator - Multi-week, multi-platform planning",
+                "NEW: 5 Marketing Agents (TikTok Strategist, Growth Hacker, Content Creator, Instagram Curator, Reddit Builder)",
+                "External resources integrated from Willsuarez85/Agents and vibemarketingflow repos",
+                "Total workflows: 71 across 19 modules"
+            ]
+        },
         "v5.6.0": {
             "date": "2026-01-10",
             "changes": [
